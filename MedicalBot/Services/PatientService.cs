@@ -13,16 +13,23 @@ namespace MedicalBot.Services
 
     public class PatientService
     {
+        // 1. Поле для хранения контекста БД
+        private readonly AppDbContext _db;
+        
+        // 2. Конструктор, через который DI-контейнер передает базу
+        public PatientService(AppDbContext db)
+        {
+            _db = db;
+        }
+        
         private const int MaxAutoShowResults = 15;
 
         public SearchResult Search(string query, bool forceShowAll)
         {
             string searchKey = query.Replace(" ", "").ToUpper();
-
-            using var db = new AppDbContextFactory().CreateDbContext(null);
             
             // Загружаем пациентов И их визиты
-            var patients = db.Patients
+            var patients = _db.Patients
                 .Include(p => p.Visits)
                 .Where(p => p.NormalizedName.Contains(searchKey))
                 .ToList();
@@ -42,16 +49,21 @@ namespace MedicalBot.Services
 
             foreach (var p in patients)
             {
+                // Добавим информацию о пациенте (Карта и Телефон) в начало блока
+                sb.AppendLine($"👤 **{p.FullName}**");
+                if (!string.IsNullOrEmpty(p.CardNumber)) sb.AppendLine($"💳 Карта №: {p.CardNumber}");
+                if (!string.IsNullOrEmpty(p.PhoneNumber)) sb.AppendLine($"📞 Тел: {p.PhoneNumber}");
+                if (!string.IsNullOrEmpty(p.Comment)) sb.AppendLine($"📝 Заметка: {p.Comment}");
+                sb.AppendLine("--- Визиты ---");
+
                 foreach (var v in p.Visits.OrderByDescending(v => v.Date))
                 {
-                    totalGlobalSum += v.TotalCost; // 👈 БЫЛО Cost, СТАЛО TotalCost
-                    
-                    sb.AppendLine($"👤 {p.FullName}");
-                    sb.AppendLine($"📅 {v.Date:dd.MM.yyyy}");
-                    sb.AppendLine($"🏥 {v.ServiceName}");
-                    sb.AppendLine($"💰 {v.TotalCost:N0} руб."); // 👈 БЫЛО Cost, СТАЛО TotalCost
+                    totalGlobalSum += v.TotalCost;
+                    sb.AppendLine($"📅 {v.Date:dd.MM.yyyy} — {v.ServiceName}");
+                    sb.AppendLine($"💰 {v.TotalCost:N0} руб.");
                     sb.AppendLine("➖➖➖➖➖➖");
                 }
+                sb.AppendLine(); // Разделитель между разными пациентами
             }
 
             var header = $"🔎 Найдено записей: {totalVisitsCount} (Пациентов: {patients.Count})\n💰 Всего оплачено: {totalGlobalSum:N0} руб.\n\n";
