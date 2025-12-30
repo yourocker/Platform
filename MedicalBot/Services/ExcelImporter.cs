@@ -33,9 +33,24 @@ namespace MedicalBot.Services
             using var reader = ExcelReaderFactory.CreateReader(stream);
             var result = reader.AsDataSet();
 
-            // Кэши
-            var existingPatients = await db.Patients.ToDictionaryAsync(p => p.NormalizedName, p => p);
+            // === БЕЗОПАСНЫЙ КЭШ ПАЦИЕНТОВ ===
+            // Вместо ToDictionary используем цикл, чтобы избежать ошибки при дубликатах NormalizedName
+            var patientsInDb = await db.Patients.ToListAsync();
+            var existingPatients = new Dictionary<string, Patient>();
+
+            foreach (var p in patientsInDb)
+            {
+                if (!string.IsNullOrEmpty(p.NormalizedName))
+                {
+                    // Если в базе каким-то образом оказались дубликаты ФИО, берем только первого встречного
+                    if (!existingPatients.ContainsKey(p.NormalizedName))
+                    {
+                        existingPatients.Add(p.NormalizedName, p);
+                    }
+                }
+            }
             
+            // === КЭШ ВИЗИТОВ ===
             var existingVisits = await db.Visits
                 .Select(v => new { v.PatientId, v.Date, v.ServiceName, v.TotalCost })
                 .ToListAsync();
@@ -50,8 +65,8 @@ namespace MedicalBot.Services
             int newVisitsCount = 0;
             
             // === ЛОГИКА КАЛЕНДАРЯ ===
-            int currentYear = 2023; // Стартуем с 2023 года (по твоему указанию)
-            int lastMonth = 0;      // Чтобы отслеживать переход через Новый Год
+            int currentYear = 2023; // Стартуем с 2023 года
+            int lastMonth = 0;      
 
             foreach (DataTable table in result.Tables)
             {
@@ -60,11 +75,9 @@ namespace MedicalBot.Services
                 // 1. Попытка определить дату листа
                 if (!TryParseSheetDate(tabName, ref currentYear, ref lastMonth, out DateTime sheetDate))
                 {
-                    // Если это не дата (например "ВСК", "ЗЕНИТ") - пропускаем
                     continue; 
                 }
 
-                // Переводим в UTC для базы
                 sheetDate = sheetDate.ToUniversalTime();
                 var visitsToAdd = new List<Visit>();
 
@@ -74,12 +87,10 @@ namespace MedicalBot.Services
                     var row = table.Rows[i];
                     if (row.ItemArray.Length == 0) continue;
 
-                    // Определение сдвига (если есть колонка №)
                     int colOffset = 0;
                     string col0 = row[0]?.ToString()?.Trim();
                     if (int.TryParse(col0, out _)) colOffset = 1;
 
-                    // Чтение ФИО
                     if (table.Columns.Count <= 0 + colOffset) continue;
                     string fioRaw = row[0 + colOffset]?.ToString()?.Trim();
                     
@@ -89,7 +100,7 @@ namespace MedicalBot.Services
 
                     string normalizedName = fioRaw.ToUpper().Replace(" ", "").Replace(".", "");
 
-                    // Пациент
+                    // Поиск пациента в кэше
                     if (!existingPatients.TryGetValue(normalizedName, out Patient patient))
                     {
                         patient = new Patient { Id = Guid.NewGuid(), FullName = fioRaw, NormalizedName = normalizedName };
@@ -97,18 +108,15 @@ namespace MedicalBot.Services
                         db.Patients.Add(patient);
                     }
 
-                    // Услуга
                     string serviceRaw = "-";
                     if (table.Columns.Count > 1 + colOffset) 
                         serviceRaw = row[1 + colOffset]?.ToString() ?? "-";
                     string service = serviceRaw.Trim();
                     if (string.IsNullOrEmpty(service)) service = "не указано";
 
-                    // Деньги
                     decimal cash = 0;     
                     decimal cashless = 0; 
 
-                    // Нал (Колонка 2 + сдвиг)
                     if (table.Columns.Count > 2 + colOffset)
                     {
                         string val = row[2 + colOffset]?.ToString()?.Trim().Replace(".", ",") ?? "0";
@@ -116,7 +124,6 @@ namespace MedicalBot.Services
                         if (decimal.TryParse(val, out decimal c1)) cash = c1;
                     }
 
-                    // Безнал (Колонка 3 + сдвиг)
                     if (table.Columns.Count > 3 + colOffset)
                     {
                         string val = row[3 + colOffset]?.ToString()?.Trim().Replace(".", ",") ?? "0";
@@ -127,7 +134,6 @@ namespace MedicalBot.Services
                     decimal totalCost = cash + cashless;
                     if (totalCost == 0) continue;
 
-                    // Проверка дубля
                     string currentSignature = $"{patient.Id}_{sheetDate:yyyyMMdd}_{service}_{totalCost}";
 
                     if (visitSignatures.Contains(currentSignature))
@@ -167,28 +173,23 @@ namespace MedicalBot.Services
             return sb.ToString();
         }
 
-        // Умный парсер даты, который следит за сменой года
         private bool TryParseSheetDate(string tabName, ref int currentYear, ref int lastMonth, out DateTime date)
         {
             date = DateTime.MinValue;
-            
-            // 1. Чистим имя от мусора (например "01.11 (1)" -> "01.11")
-            // Ищем что-то похожее на дату
             var match = Regex.Match(tabName, @"(\d{1,2})[\.\-\/](\d{1,2})([\.\-\/](\d{2,4}))?");
             
-            if (!match.Success) return false; // Не похоже на дату (например "ЗЕНИТ")
+            if (!match.Success) return false;
 
             int day = int.Parse(match.Groups[1].Value);
             int month = int.Parse(match.Groups[2].Value);
             
-            // Если есть явный год в названии (например 01.01.2025)
             if (match.Groups[4].Success)
             {
                 string yearStr = match.Groups[4].Value;
                 int explicitYear = int.Parse(yearStr);
-                if (explicitYear < 100) explicitYear += 2000; // 24 -> 2024
+                if (explicitYear < 100) explicitYear += 2000;
                 
-                currentYear = explicitYear; // Обновляем текущий год
+                currentYear = explicitYear;
                 lastMonth = month;
                 
                 try {
@@ -197,13 +198,8 @@ namespace MedicalBot.Services
                 } catch { return false; }
             }
 
-            // Если года НЕТ (формат 14.06), используем умную логику
-            // Если месяц стал МЕНЬШЕ предыдущего (был 12, стал 01) -> Новый год
             if (lastMonth != 0 && month < lastMonth)
             {
-                // Проверка на здравый смысл: если разница небольшая (май -> апрель), это может быть ошибка сортировки листов,
-                // но если разница большая (декабрь -> январь), то это точно новый год.
-                // Будем считать переход только если мы были во второй половине года, а стали в первой.
                 if (lastMonth > 6 && month < 6)
                 {
                     currentYear++;

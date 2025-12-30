@@ -6,15 +6,22 @@ namespace MedicalBot.Services
 {
     public class StatisticsService
     {
+        // 1. Добавляем поле для хранения контекста
+        private readonly AppDbContext _db;
+
+        // 2. Добавляем конструктор для DI
+        public StatisticsService(AppDbContext db)
+        {
+            _db = db;
+        }
+
         public string GetPeriodReport(DateTime startDate, DateTime endDate)
         {
-            using var db = new AppDbContextFactory().CreateDbContext(null);
-
             var startUtc = startDate.ToUniversalTime();
-            // Конец дня
-            var endUtc = endDate.AddDays(1).Date.ToUniversalTime(); 
+            var endUtc = endDate.AddDays(1).Date.ToUniversalTime();
 
-            var visitsInPeriod = db.Visits
+            // ✅ ИСПОЛЬЗУЕМ: _db (вместо db)
+            var visitsInPeriod = _db.Visits
                 .Where(v => v.Date >= startUtc && v.Date < endUtc)
                 .ToList();
 
@@ -23,10 +30,9 @@ namespace MedicalBot.Services
                 return $"📉 За период с {startDate:dd.MM} по {endDate:dd.MM} данных нет.";
             }
 
-            // 👇 НОВАЯ ЛОГИКА ПОДСЧЕТА
-            decimal totalRevenue = visitsInPeriod.Sum(v => v.TotalCost); // Общая (Нал + Безнал)
-            decimal totalCash = visitsInPeriod.Sum(v => v.AmountCash);   // Только Наличные
-            decimal totalCashless = visitsInPeriod.Sum(v => v.AmountCashless); // Только Безнал
+            decimal totalRevenue = visitsInPeriod.Sum(v => v.TotalCost);
+            decimal totalCash = visitsInPeriod.Sum(v => v.AmountCash);
+            decimal totalCashless = visitsInPeriod.Sum(v => v.AmountCashless);
 
             int visitsCount = visitsInPeriod.Count;
             int uniquePatients = visitsInPeriod.Select(v => v.PatientId).Distinct().Count();
@@ -36,7 +42,6 @@ namespace MedicalBot.Services
             sb.AppendLine($"📅 Период: {startDate:dd.MM.yyyy} — {endDate:dd.MM.yyyy}");
             sb.AppendLine("➖➖➖➖➖➖➖➖");
             
-            // 👇 ТЕПЕРЬ ВЫВОДИМ ДЕТАЛИЗАЦИЮ
             sb.AppendLine($"💰 **ИТОГО: {totalRevenue:N0} руб.**");
             sb.AppendLine($"💵 Наличные: {totalCash:N0} руб.");
             sb.AppendLine($"💳 Безнал: {totalCashless:N0} руб.");
