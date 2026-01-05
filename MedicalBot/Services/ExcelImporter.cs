@@ -21,7 +21,7 @@ namespace MedicalBot.Services
         public async Task<string> ImportAsync(string filePath)
         {
             var sb = new StringBuilder();
-            sb.AppendLine("🚀 Начинаю ХРОНОЛОГИЧЕСКИЙ импорт...");
+            sb.AppendLine("Начинаю импорт базы данных");
 
             System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
 

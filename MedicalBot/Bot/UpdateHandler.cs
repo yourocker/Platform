@@ -147,12 +147,12 @@ public class UpdateHandler
 
     private async Task ProcessAutoUpdate(ITelegramBotClient bot, long chatId, CancellationToken ct)
     {
-        await bot.SendTextMessageAsync(chatId, "⏳ Начинаю полное обновление из облака...", cancellationToken: ct);
+        await bot.SendTextMessageAsync(chatId, "Начинаю полное обновление из облака", cancellationToken: ct);
 
         // 1. СНАЧАЛА ОБНОВЛЯЕМ ПАЦИЕНТОВ (ЭТАЛОН)
         if (!string.IsNullOrEmpty(_config.PatientsUrl))
         {
-            await bot.SendTextMessageAsync(chatId, "🧬 Синхронизирую мастер-базу пациентов...", cancellationToken: ct);
+            await bot.SendTextMessageAsync(chatId, "Синхронизирую базу пациентов", cancellationToken: ct);
             if (await DownloadYandexFileAsync(_config.PatientsUrl, "auto_patients.xlsx"))
             {
                 string report = await _patientImporter.ImportAsync("auto_patients.xlsx");
@@ -163,7 +163,7 @@ public class UpdateHandler
         // 2. ЗАТЕМ ОБНОВЛЯЕМ КАССУ
         if (!string.IsNullOrEmpty(_config.CashUrl))
         {
-            await bot.SendTextMessageAsync(chatId, "📥 Скачиваю Кассу...", cancellationToken: ct);
+            await bot.SendTextMessageAsync(chatId, "Скачиваю Кассу", cancellationToken: ct);
             if (await DownloadYandexFileAsync(_config.CashUrl, "auto_cash.xlsx"))
             {
                 string report = await _excelImporter.ImportAsync("auto_cash.xlsx");

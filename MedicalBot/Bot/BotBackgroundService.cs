@@ -42,7 +42,7 @@ public class BotBackgroundService : BackgroundService
             cancellationToken: stoppingToken
         );
 
-        Console.WriteLine("🤖 Бот запущен и ожидает сообщений (Scoped Mode)...");
+        Console.WriteLine("Бот запущен и ожидает сообщений (Scoped Mode)...");
         
         await Task.Delay(Timeout.Infinite, stoppingToken);
     }

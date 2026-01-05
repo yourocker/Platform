@@ -8,27 +8,27 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Telegram.Bot;
 
-// 1. Создаем строителя приложения
+// 1. Builder create
 var builder = Host.CreateApplicationBuilder(args);
 
-// 2. Загружаем конфигурацию из appsettings.json
+// 2. Add configs appsettings.json
 builder.Configuration.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true);
 
-// Регистрируем настройки как Singleton, чтобы они были доступны везде
+// Settings reg as Singleton
 var appConfig = builder.Configuration.Get<AppConfig>() 
                 ?? throw new Exception("Не удалось загрузить конфигурацию!");
 builder.Services.AddSingleton(appConfig);
 
-// 3. Настраиваем подключение к базе данных через DI
+// 3. Connect DB DI
 var connectionString = appConfig.ConnectionStrings["DefaultConnection"];
 builder.Services.AddDbContext<AppDbContext>(options => 
     options.UseNpgsql(connectionString));
 
-// 4. Регистрируем Telegram Bot Client
+// 4. Register Telegram Bot Client
 builder.Services.AddSingleton<ITelegramBotClient>(provider => 
     new TelegramBotClient(appConfig.BotToken));
 
-// 5. Регистрируем сервисы логики
+// 5. Service reg
 builder.Services.AddTransient<PatientService>();
 builder.Services.AddTransient<StatisticsService>();
 builder.Services.AddTransient<PatientImporter>();
@@ -45,6 +45,6 @@ builder.Services.AddHostedService<BotBackgroundService>();
 // 7. Собираем и запускаем приложение
 var host = builder.Build();
 
-Console.WriteLine("🚀 Приложение инициализировано. Запуск сервисов...");
+Console.WriteLine("Приложение инициализировано. Запуск сервисов...");
 
 await host.RunAsync();
