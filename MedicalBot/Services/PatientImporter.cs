@@ -19,31 +19,31 @@ namespace MedicalBot.Services
         public async Task<string> ImportAsync(string filePath)
         {
             var sb = new StringBuilder();
-            sb.AppendLine("🧬 Синхронизация мастер-базы пациентов...");
+            sb.AppendLine("Синхронизация мастер-базы пациентов");
 
             System.Text.Encoding.RegisterProvider(System.Text.CodePagesEncodingProvider.Instance);
 
-            using var stream = File.Open(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            await using var stream = File.Open(filePath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
             using var reader = ExcelReaderFactory.CreateReader(stream);
             var result = reader.AsDataSet();
             var table = result.Tables[0]; // Берем первый лист
 
-            int updated = 0;
-            int created = 0;
+            var updated = 0;
+            var created = 0;
 
             // Начинаем со 2-й строки (пропускаем заголовок)
             for (int i = 1; i < table.Rows.Count; i++)
             {
                 var row = table.Rows[i];
-                string fio = row[0]?.ToString()?.Trim() ?? "";
-                string card = row[1]?.ToString()?.Trim() ?? "";
-                string phoneRaw = row[2]?.ToString()?.Trim() ?? "";
-                string comment = row[3]?.ToString()?.Trim() ?? "";
+                var fio = row[0]?.ToString()?.Trim() ?? "";
+                var card = row[1]?.ToString()?.Trim() ?? "";
+                var phoneRaw = row[2]?.ToString()?.Trim() ?? "";
+                var comment = row[3]?.ToString()?.Trim() ?? "";
 
                 if (string.IsNullOrWhiteSpace(fio) || fio == "осотов") continue;
 
-                string normalized = fio.ToUpper().Replace(" ", "").Replace(".", "");
-                string cleanPhone = CleanPhoneNumber(phoneRaw);
+                var normalized = fio.ToUpper().Replace(" ", "").Replace(".", "");
+                var cleanPhone = CleanPhoneNumber(phoneRaw);
 
                 // Ищем: сначала по номеру карты, если он есть, затем по нормализованному имени
                 var patient = await _db.Patients
@@ -82,7 +82,7 @@ namespace MedicalBot.Services
         {
             if (string.IsNullOrWhiteSpace(phone)) return "";
             // Оставляем только цифры
-            string digits = Regex.Replace(phone, @"[^\d]", "");
+            var digits = Regex.Replace(phone, @"[^\d]", "");
             // Если начинается с 8, меняем на 7
             if (digits.StartsWith("8") && digits.Length == 11) digits = "7" + digits.Substring(1);
             return digits;
