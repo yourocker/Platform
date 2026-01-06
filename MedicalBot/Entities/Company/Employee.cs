@@ -15,6 +15,6 @@ namespace MedicalBot.Entities.Company
         public string? Properties { get; set; }
 
         // Связь с назначениями
-        public List<Appointment> Appointments { get; set; } = new();
+        public List<StaffAppointment> Appointments { get; set; } = new();
     }
 }

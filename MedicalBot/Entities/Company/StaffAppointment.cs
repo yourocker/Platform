@@ -2,7 +2,7 @@
 
 namespace MedicalBot.Entities.Company
 {
-    public class Appointment
+    public class StaffAppointment
     {
         public Guid Id { get; set; }
         
