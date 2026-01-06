@@ -1,0 +1,183 @@
+﻿@model MedicalBot.Entities.Company.Employee
+
+@{
+    ViewData["Title"] = "Редактирование сотрудника";
+    bool isLocked = Model.IsDismissed; // Проверяем статус
+}
+
+<div class="row justify-content-center">
+    <div class="col-md-9">
+        <div class="d-flex align-items-center justify-content-between mb-4">
+            <div class="d-flex align-items-center">
+                <a asp-action="Index" class="btn btn-outline-secondary btn-sm me-3">
+                    <i class="bi bi-arrow-left"></i>
+                </a>
+                <h2 class="mb-0">@(isLocked ? "Карточка уволенного сотрудника" : "Редактирование карточки")</h2>
+            </div>
+
+            @* Кнопка Уволить / Восстановить *@
+            <div>
+                @if (isLocked)
+                {
+                    <form asp-action="Restore" asp-route-id="@Model.Id" method="post">
+                        <button type="submit" class="btn btn-success">
+                            <i class="bi bi-person-check me-1"></i> Восстановить в штате
+                        </button>
+                    </form>
+                }
+                else
+                {
+                    <form asp-action="Dismiss" asp-route-id="@Model.Id" method="post" onsubmit="return confirm('Вы уверены, что хотите уволить сотрудника?')">
+                        <button type="submit" class="btn btn-outline-danger">
+                            <i class="bi bi-person-x me-1"></i> Уволить сотрудника
+                        </button>
+                    </form>
+                }
+            </div>
+        </div>
+
+        @if (isLocked)
+        {
+            <div class="alert alert-warning border-0 shadow-sm mb-4">
+                <i class="bi bi-exclamation-triangle me-2"></i> 
+                Сотрудник уволен. Редактирование данных невозможно до момента восстановления.
+            </div>
+        }
+
+        <form asp-action="Edit" method="post">
+            <input type="hidden" asp-for="Id" />
+            
+            @* С помощью fieldset disabled мы выключаем сразу все инпуты внутри *@
+            <fieldset @(isLocked ? "disabled" : "")>
+                
+                @* Личные данные *@
+                <div class="card shadow-sm border-0 mb-4 @(isLocked ? "bg-light" : "")">
+                    <div class="card-header bg-white py-3"><h5 class="mb-0 text-primary">Личные данные</h5></div>
+                    <div class="card-body p-4">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <label class="fw-bold">Фамилия</label>
+                                <input asp-for="LastName" class="form-control" required />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="fw-bold">Имя</label>
+                                <input asp-for="FirstName" class="form-control" required />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="fw-bold">Отчество</label>
+                                <input asp-for="MiddleName" class="form-control" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                @* Контакты *@
+                <div class="card shadow-sm border-0 mb-4 @(isLocked ? "bg-light" : "")">
+                    <div class="card-header bg-white py-3"><h5 class="mb-0 text-primary">Контакты</h5></div>
+                    <div class="card-body p-4">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <label class="fw-bold">Телефоны</label>
+                                <div id="phone-list">
+                                    @foreach (var phone in Model.Phones)
+                                    {
+                                        <div class="input-group mb-2">
+                                            <input name="Phones" class="form-control" value="@phone" />
+                                            @if(!isLocked){ <button type="button" class="btn btn-outline-danger" onclick="this.parentElement.remove()">-</button> }
+                                        </div>
+                                    }
+                                </div>
+                                @if(!isLocked){ <button type="button" class="btn btn-sm btn-link p-0" onclick="addInput('phone-list', 'Phones')">+ Добавить</button> }
+                            </div>
+                            <div class="col-md-6">
+                                <label class="fw-bold">Email</label>
+                                <div id="email-list">
+                                    @foreach (var email in Model.Emails)
+                                    {
+                                        <div class="input-group mb-2">
+                                            <input name="Emails" class="form-control" value="@email" />
+                                            @if(!isLocked){ <button type="button" class="btn btn-outline-danger" onclick="this.parentElement.remove()">-</button> }
+                                        </div>
+                                    }
+                                </div>
+                                @if(!isLocked){ <button type="button" class="btn btn-sm btn-link p-0" onclick="addInput('email-list', 'Emails')">+ Добавить</button> }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                @* Назначения *@
+                <div class="card shadow-sm border-0 mb-4 @(isLocked ? "bg-light" : "")">
+                    <div class="card-header bg-white py-3"><h5 class="mb-0 text-primary">Место работы</h5></div>
+                    <div class="card-body p-4">
+                        <div id="appointments-container">
+                            @foreach (var app in Model.StaffAppointments)
+                            {
+                                <div class="row appointment-row mb-3 align-items-end">
+                                    <div class="col-md-5">
+                                        <label class="small text-muted">Должность</label>
+                                        <select name="selectedPositions" class="form-select">
+                                            @foreach(var p in (ViewBag.Positions as List<MedicalBot.Entities.Company.Position>)) 
+                                            { 
+                                                <option value="@p.Id" selected="@(p.Id == app.PositionId)">@p.Name</option> 
+                                            }
+                                        </select>
+                                    </div>
+                                    <div class="col-md-5">
+                                        <label class="small text-muted">Подразделение</label>
+                                        <select name="selectedDepartments" class="form-select">
+                                            @foreach(var d in (ViewBag.Departments as List<MedicalBot.Entities.Company.Department>)) 
+                                            { 
+                                                <option value="@d.Id" selected="@(d.Id == app.DepartmentId)">@d.Name</option> 
+                                            }
+                                        </select>
+                                    </div>
+                                    @if(!isLocked){ <div class="col-md-2"><button type="button" class="btn btn-outline-danger w-100" onclick="this.closest('.row').remove()"><i class="bi bi-trash"></i></button></div> }
+                                </div>
+                            }
+                        </div>
+                        @if(!isLocked){ <button type="button" class="btn btn-sm btn-outline-primary mt-2" onclick="addAppointment()">+ Добавить совмещение</button> }
+                    </div>
+                </div>
+
+                @if (!isLocked)
+                {
+                    <div class="d-flex justify-content-end gap-2 mb-5">
+                        <a asp-action="Index" class="btn btn-light px-4">Отмена</a>
+                        <button type="submit" class="btn btn-primary px-5">Сохранить изменения</button>
+                    </div>
+                }
+            </fieldset>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        function applyMasks() {
+            Inputmask({"mask": "+7(999)999-99-99"}).mask(document.querySelectorAll('input[name="Phones"]'));
+            Inputmask({"alias": "email"}).mask(document.querySelectorAll('input[name="Emails"]'));
+        }
+
+        // Запускаем при загрузке
+        document.addEventListener("DOMContentLoaded", applyMasks);
+        
+        function addInput(cId, name) {
+            const c = document.getElementById(cId);
+            const d = document.createElement('div'); d.className = 'input-group mb-2';
+            d.innerHTML = `<input name="${name}" class="form-control"><button type="button" class="btn btn-outline-danger" onclick="this.parentElement.remove()">-</button>`;
+            c.appendChild(d);
+            applyMasks();
+        }
+        function addAppointment() {
+            const c = document.getElementById('appointments-container');
+            const rows = c.querySelectorAll('.appointment-row');
+            if(rows.length > 0) {
+                const r = rows[0].cloneNode(true);
+                r.querySelectorAll('select').forEach(s => s.value = "");
+                r.querySelector('.btn-outline-danger').classList.remove('disabled');
+                c.appendChild(r);
+            }
+        }
+    </script>
+}

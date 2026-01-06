@@ -1,20 +1,23 @@
-﻿using System;
-using System.Collections.Generic;
-
-namespace MedicalBot.Entities.Company
+﻿namespace MedicalBot.Entities.Company
 {
     public class Employee
     {
         public Guid Id { get; set; }
-        public string FullName { get; set; }
         
-        // Данные в формате JSON (телефон, почта и т.д.)
-        public string? Contacts { get; set; } 
-        
-        // Кастомные поля
-        public string? Properties { get; set; }
+        // Поля для ввода
+        public string LastName { get; set; } = string.Empty;
+        public string FirstName { get; set; } = string.Empty;
+        public string? MiddleName { get; set; }
 
-        // Связь с назначениями
-        public List<StaffAppointment> Appointments { get; set; } = new();
+        // Вычисляемое поле (только для чтения в коде)
+        public string FullName => $"{LastName} {FirstName} {MiddleName}".Trim();
+
+        // Списки контактов
+        public List<string> Phones { get; set; } = new();
+        public List<string> Emails { get; set; } = new();
+        public bool IsDismissed { get; set; } = false; // По умолчанию работает
+
+        public string? Properties { get; set; }
+        public List<StaffAppointment> StaffAppointments { get; set; } = new();
     }
 }
