@@ -1,0 +1,33 @@
+﻿@model IEnumerable<MedicalBot.Entities.Platform.AppDefinition>
+
+<div class="container mt-4">
+    <h2>Конструктор сущностей</h2>
+    <p class="text-muted">Здесь вы можете расширять базовые карточки или создавать новые приложения.</p>
+
+    <div class="row mt-4">
+        @foreach (var item in Model)
+        {
+            <div class="col-md-4 mb-3">
+                <div class="card h-100 shadow-sm">
+                    <div class="card-body text-center">
+                        <i class="bi bi-@item.Icon fs-1 text-primary"></i>
+                        <h5 class="card-title mt-2">@item.Name</h5>
+                        <p class="card-text small text-muted">
+                            Код: @item.SystemCode <br />
+                            Полей: @item.Fields.Count
+                        </p>
+                        <a asp-action="Fields" asp-route-id="@item.Id" class="btn btn-outline-primary btn-sm">
+                            Настроить поля
+                        </a>
+                    </div>
+                    @if (item.IsSystem)
+                    {
+                        <div class="card-footer bg-light py-1 text-center">
+                            <small class="text-primary fw-bold">Системная</small>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+</div>

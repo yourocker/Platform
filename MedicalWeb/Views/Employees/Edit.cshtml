@@ -5,6 +5,8 @@
     bool isLocked = Model.IsDismissed; // Проверяем статус
 }
 
+<script src="https://cdn.jsdelivr.net/npm/inputmask@5.0.8/dist/inputmask.min.js"></script>
+
 <div class="row justify-content-center">
     <div class="col-md-9">
         <div class="d-flex align-items-center justify-content-between mb-4">
@@ -47,10 +49,9 @@
         <form asp-action="Edit" method="post">
             <input type="hidden" asp-for="Id" />
             
-            @* С помощью fieldset disabled мы выключаем сразу все инпуты внутри *@
             <fieldset @(isLocked ? "disabled" : "")>
                 
-                @* Личные данные *@
+                @* 1. Личные данные *@
                 <div class="card shadow-sm border-0 mb-4 @(isLocked ? "bg-light" : "")">
                     <div class="card-header bg-white py-3"><h5 class="mb-0 text-primary">Личные данные</h5></div>
                     <div class="card-body p-4">
@@ -71,7 +72,7 @@
                     </div>
                 </div>
 
-                @* Контакты *@
+                @* 2. Контакты *@
                 <div class="card shadow-sm border-0 mb-4 @(isLocked ? "bg-light" : "")">
                     <div class="card-header bg-white py-3"><h5 class="mb-0 text-primary">Контакты</h5></div>
                     <div class="card-body p-4">
@@ -105,8 +106,11 @@
                         </div>
                     </div>
                 </div>
+                
+                @* 3. ДИНАМИЧЕСКИЕ ПОЛЯ (Используем наш Partial) *@
+                <partial name="_DynamicFields" model="Model" />
 
-                @* Назначения *@
+                @* 4. Назначения *@
                 <div class="card shadow-sm border-0 mb-4 @(isLocked ? "bg-light" : "")">
                     <div class="card-header bg-white py-3"><h5 class="mb-0 text-primary">Место работы</h5></div>
                     <div class="card-body p-4">
@@ -159,7 +163,6 @@
             Inputmask({"alias": "email"}).mask(document.querySelectorAll('input[name="Emails"]'));
         }
 
-        // Запускаем при загрузке
         document.addEventListener("DOMContentLoaded", applyMasks);
         
         function addInput(cId, name) {
@@ -169,13 +172,15 @@
             c.appendChild(d);
             applyMasks();
         }
+
         function addAppointment() {
             const c = document.getElementById('appointments-container');
             const rows = c.querySelectorAll('.appointment-row');
             if(rows.length > 0) {
                 const r = rows[0].cloneNode(true);
                 r.querySelectorAll('select').forEach(s => s.value = "");
-                r.querySelector('.btn-outline-danger').classList.remove('disabled');
+                const delBtn = r.querySelector('.btn-outline-danger');
+                if(delBtn) delBtn.classList.remove('disabled');
                 c.appendChild(r);
             }
         }

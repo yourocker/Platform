@@ -2,6 +2,7 @@
 using MedicalBot.Entities.Company;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Text.Json; // Нужно для работы с JSON
 
 namespace MedicalWeb.Controllers
 {
@@ -14,6 +15,16 @@ namespace MedicalWeb.Controllers
             _context = context;
         }
 
+        // Вспомогательный метод, чтобы не дублировать код загрузки полей
+        private async Task LoadDynamicFields()
+        {
+            var dynamicFields = await _context.AppFieldDefinitions
+                .Where(f => f.AppDefinition.SystemCode == "Employee")
+                .OrderBy(f => f.SortOrder)
+                .ToListAsync();
+            ViewBag.DynamicFields = dynamicFields;
+        }
+
         // 1. СПИСОК СОТРУДНИКОВ
         public async Task<IActionResult> Index()
         {
@@ -22,7 +33,6 @@ namespace MedicalWeb.Controllers
                 .ThenInclude(a => a.Position)
                 .Include(e => e.StaffAppointments)
                 .ThenInclude(a => a.Department)
-                // Сначала работающие (false), потом уволенные (true)
                 .OrderBy(e => e.IsDismissed) 
                 .ThenBy(e => e.LastName)
                 .ToListAsync();
@@ -32,6 +42,7 @@ namespace MedicalWeb.Controllers
         // 2. СОЗДАНИЕ: СТРАНИЦА (GET)
         public async Task<IActionResult> Create()
         {
+            await LoadDynamicFields(); // Загружаем поля для формы создания
             ViewBag.Positions = await _context.Positions.OrderBy(p => p.Name).ToListAsync();
             ViewBag.Departments = await _context.Departments.OrderBy(d => d.Name).ToListAsync();
             return View();
@@ -40,10 +51,16 @@ namespace MedicalWeb.Controllers
         // 3. СОЗДАНИЕ: СОХРАНЕНИЕ (POST)
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create(Employee employee, Guid[] selectedPositions, Guid[] selectedDepartments, string[] Phones, string[] Emails)
+        public async Task<IActionResult> Create(Employee employee, Guid[] selectedPositions, Guid[] selectedDepartments, string[] Phones, string[] Emails, Dictionary<string, string> DynamicProps)
         {
             employee.Phones = Phones?.Where(p => !string.IsNullOrWhiteSpace(p)).ToList() ?? new List<string>();
             employee.Emails = Emails?.Where(e => !string.IsNullOrWhiteSpace(e)).ToList() ?? new List<string>();
+
+            // Сохраняем динамические поля в JSON
+            if (DynamicProps != null && DynamicProps.Any())
+            {
+                employee.Properties = JsonSerializer.Serialize(DynamicProps);
+            }
 
             if (ModelState.IsValid)
             {
@@ -72,49 +89,53 @@ namespace MedicalWeb.Controllers
                 return RedirectToAction(nameof(Index));
             }
 
+            await LoadDynamicFields();
             ViewBag.Positions = await _context.Positions.OrderBy(p => p.Name).ToListAsync();
             ViewBag.Departments = await _context.Departments.OrderBy(d => d.Name).ToListAsync();
             return View(employee);
         }
 
         // 4. РЕДАКТИРОВАНИЕ: СТРАНИЦА (GET)
-        public async Task<IActionResult> Edit(Guid id)
+        public async Task<IActionResult> Edit(Guid? id)
         {
+            if (id == null) return NotFound();
+
             var employee = await _context.Employees
                 .Include(e => e.StaffAppointments)
-                .FirstOrDefaultAsync(m => m.Id == id);
+                .FirstOrDefaultAsync(e => e.Id == id);
 
-            if (employee == null)
-            {
-                return NotFound();
-            }
+            if (employee == null) return NotFound();
 
-            ViewBag.Positions = await _context.Positions.OrderBy(p => p.Name).ToListAsync();
-            ViewBag.Departments = await _context.Departments.OrderBy(d => d.Name).ToListAsync();
+            await LoadDynamicFields(); // Загружаем поля для формы редактирования
+
+            ViewBag.Departments = await _context.Departments.ToListAsync();
+            ViewBag.Positions = await _context.Positions.ToListAsync();
+
             return View(employee);
         }
 
         // 5. РЕДАКТИРОВАНИЕ: СОХРАНЕНИЕ (POST)
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(Guid id, Employee employee, Guid[] selectedPositions, Guid[] selectedDepartments, string[] Phones, string[] Emails)
+        public async Task<IActionResult> Edit(Guid id, Employee employee, Guid[] selectedPositions, Guid[] selectedDepartments, string[] Phones, string[] Emails, Dictionary<string, string> DynamicProps)
         {
-            if (id != employee.Id)
-            {
-                return NotFound();
-            }
+            if (id != employee.Id) return NotFound();
 
             if (ModelState.IsValid)
             {
                 try
                 {
-                    // Обновляем базовые поля и контакты
                     employee.Phones = Phones?.Where(p => !string.IsNullOrWhiteSpace(p)).ToList() ?? new List<string>();
                     employee.Emails = Emails?.Where(e => !string.IsNullOrWhiteSpace(e)).ToList() ?? new List<string>();
                     
+                    // Сохраняем динамические поля в JSON
+                    if (DynamicProps != null && DynamicProps.Any())
+                    {
+                        employee.Properties = JsonSerializer.Serialize(DynamicProps);
+                    }
+
                     _context.Update(employee);
 
-                    // Обновляем назначения: удаляем старые, пишем новые
                     var existingApps = _context.StaffAppointments.Where(a => a.EmployeeId == id);
                     _context.StaffAppointments.RemoveRange(existingApps);
 
@@ -146,6 +167,7 @@ namespace MedicalWeb.Controllers
                 return RedirectToAction(nameof(Index));
             }
 
+            await LoadDynamicFields();
             ViewBag.Positions = await _context.Positions.OrderBy(p => p.Name).ToListAsync();
             ViewBag.Departments = await _context.Departments.OrderBy(d => d.Name).ToListAsync();
             return View(employee);
@@ -156,7 +178,6 @@ namespace MedicalWeb.Controllers
             return _context.Employees.Any(e => e.Id == id);
         }
         
-        // Метод для увольнения
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Dismiss(Guid id)
@@ -170,7 +191,6 @@ namespace MedicalWeb.Controllers
             return RedirectToAction(nameof(Edit), new { id = id });
         }
 
-// Метод для восстановления
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Restore(Guid id)

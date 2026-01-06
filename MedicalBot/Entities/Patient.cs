@@ -16,6 +16,8 @@ namespace MedicalBot.Entities
         public string? PhoneNumber { get; set; } // Номер телефона
         
         public string? Comment { get; set; } // Примечания (например, контакты родственников)
+        
+        public string? Properties { get; set; } // Хранилище кастомных полей в JSONB
 
         // Связь: у одного пациента может быть много визитов
         public List<Visit> Visits { get; set; } = new();
