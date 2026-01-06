@@ -18,6 +18,6 @@ namespace MedicalBot.Entities.Company
         public Employee? Manager { get; set; }
 
         // Кто числится в отделе
-        public List<Appointment> Appointments { get; set; } = new();
+        public List<StaffAppointment> Appointments { get; set; } = new();
     }
 }
