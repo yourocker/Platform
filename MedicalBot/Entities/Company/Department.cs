@@ -13,7 +13,6 @@ namespace MedicalBot.Entities.Company
         public Department? Parent { get; set; }
         public List<Department> Children { get; set; } = new();
 
-        // Руководитель (пока просто поля, логику прикрутим позже)
         public Guid? ManagerId { get; set; }
         public Employee? Manager { get; set; }
 

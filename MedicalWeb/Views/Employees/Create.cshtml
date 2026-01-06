@@ -12,6 +12,7 @@
         </div>
 
         <form asp-action="Create" method="post">
+            @* 1. Личные данные *@
             <div class="card shadow-sm border-0 mb-4">
                 <div class="card-header bg-white py-3"><h5 class="mb-0 text-primary">Личные данные</h5></div>
                 <div class="card-body p-4">
@@ -23,6 +24,7 @@
                 </div>
             </div>
 
+            @* 2. Контакты *@
             <div class="card shadow-sm border-0 mb-4">
                 <div class="card-header bg-white py-3"><h5 class="mb-0 text-primary">Контакты</h5></div>
                 <div class="card-body p-4">
@@ -39,6 +41,7 @@
                 </div>
             </div>
 
+            @* 3. Место работы *@
             <div class="card shadow-sm border-0 mb-4">
                 <div class="card-header bg-white py-3"><h5 class="mb-0 text-primary">Место работы</h5></div>
                 <div class="card-body p-4">
@@ -62,7 +65,11 @@
                     <button type="button" class="btn btn-sm btn-outline-primary mt-2" onclick="addAppointment()">+ Добавить совмещение</button>
                 </div>
             </div>
+            
+            @* 4. ДИНАМИЧЕСКИЕ ПОЛЯ ИЗ КОНСТРУКТОРА *@
+            <partial name="_DynamicFields" model="null" />
 
+            @* Кнопки действий *@
             <div class="d-flex justify-content-end gap-2 mb-5">
                 <a asp-action="Index" class="btn btn-light px-4">Отмена</a>
                 <button type="submit" class="btn btn-primary px-5">Создать сотрудника</button>
@@ -73,30 +80,32 @@
 
 @section Scripts {
     <script>
+        // Функция применения масок
         function applyMasks() {
             Inputmask({"mask": "+7(999)999-99-99"}).mask(document.querySelectorAll('input[name="Phones"]'));
             Inputmask({"alias": "email"}).mask(document.querySelectorAll('input[name="Emails"]'));
         }
 
-        // Запускаем при загрузке
+        // Запускаем при загрузке страницы
         document.addEventListener("DOMContentLoaded", applyMasks);
         
+        // Добавление инпутов для контактов
         function addInput(cId, name) {
-            function applyMasks() {
-                Inputmask({"mask": "+7(999)999-99-99"}).mask(document.querySelectorAll('input[name="Phones"]'));
-                Inputmask({"alias": "email"}).mask(document.querySelectorAll('input[name="Emails"]'));
-                applyMasks();
-            }
-            
             const c = document.getElementById(cId);
-            const d = document.createElement('div'); d.className = 'input-group mb-2';
+            const d = document.createElement('div'); 
+            d.className = 'input-group mb-2';
             d.innerHTML = `<input name="${name}" class="form-control"><button type="button" class="btn btn-outline-danger" onclick="this.parentElement.remove()">-</button>`;
             c.appendChild(d);
+            applyMasks(); // Переприменяем маски для новых элементов
         }
+
+        // Добавление совмещений
         function addAppointment() {
             const c = document.getElementById('appointments-container');
             const r = c.querySelector('.appointment-row').cloneNode(true);
             r.querySelector('.btn-outline-danger').classList.remove('disabled');
+            // Сбрасываем выбранные значения в клоне
+            r.querySelectorAll('select').forEach(s => s.selectedIndex = 0);
             c.appendChild(r);
         }
     </script>
