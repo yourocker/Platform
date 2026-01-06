@@ -28,11 +28,14 @@ namespace MedicalBot.Data
         {
             base.OnModelCreating(modelBuilder);
 
-            // Настройка JSONB для Employee
             modelBuilder.Entity<Employee>(entity =>
             {
-                entity.Property(e => e.Contacts).HasColumnType("jsonb");
-                entity.Property(e => e.Properties).HasColumnType("jsonb");
+                // Указываем, что списки будут храниться как JSONB для гибкости
+                entity.Property(e => e.Phones).HasColumnType("jsonb");
+                entity.Property(e => e.Emails).HasColumnType("jsonb");
+    
+                // Игнорируем FullName при маппинге в БД, так как это вычисляемое свойство в коде
+                entity.Ignore(e => e.FullName);
             });
 
             // Настройка иерархии отделов
