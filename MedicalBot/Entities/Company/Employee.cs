@@ -1,6 +1,6 @@
 ﻿namespace MedicalBot.Entities.Company
 {
-    public class Employee
+    public class Employee : IHasDynamicProperties
     {
         public Guid Id { get; set; }
         
