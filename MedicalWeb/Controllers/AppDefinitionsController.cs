@@ -20,7 +20,7 @@ namespace MedicalWeb.Controllers
         {
             var apps = await _context.AppDefinitions
                 .Include(a => a.Fields)
-                .Include(a => a.Category) // Важно: подгружаем раздел для связи
+                .Include(a => a.Category) // Подгружаем раздел для связи
                 .OrderByDescending(a => a.IsSystem)
                 .ToListAsync();
             return View(apps);
@@ -29,12 +29,8 @@ namespace MedicalWeb.Controllers
         // GET: AppDefinitions/Create
         public async Task<IActionResult> Create()
         {
-            // Загружаем разделы для выпадающего списка
-            var categories = await _context.AppCategories
-                .OrderBy(c => c.SortOrder)
-                .ToListAsync();
-
-            ViewBag.Categories = new SelectList(categories, "Id", "Name");
+            // Используем вспомогательный метод для загрузки категорий
+            await PopulateCategoriesViewBag();
 
             // Инициализируем модель (иконка по умолчанию "gear")
             return View(new AppDefinition { Icon = "gear", IsSystem = false });
@@ -47,11 +43,11 @@ namespace MedicalWeb.Controllers
         {
             if (ModelState.IsValid)
             {
-                // Логика: проверяем уникальность системного кода
+                // Проверяем уникальность системного кода
                 if (await _context.AppDefinitions.AnyAsync(a => a.EntityCode == appDefinition.EntityCode))
                 {
                     ModelState.AddModelError("EntityCode", "Сущность с таким кодом уже существует.");
-                    await PopulateCategoriesViewBag(); // Перезаполняем список при ошибке
+                    await PopulateCategoriesViewBag();
                     return View(appDefinition);
                 }
 
@@ -65,11 +61,59 @@ namespace MedicalWeb.Controllers
             return View(appDefinition);
         }
 
-        // Вспомогательный метод для заполнения списка категорий (чтобы не дублировать код)
-        private async Task PopulateCategoriesViewBag()
+        // GET: AppDefinitions/Edit/5
+        public async Task<IActionResult> Edit(Guid? id)
+        {
+            if (id == null) return NotFound();
+
+            var appDefinition = await _context.AppDefinitions
+                .Include(a => a.Fields)
+                .FirstOrDefaultAsync(m => m.Id == id);
+
+            if (appDefinition == null) return NotFound();
+
+            // Загружаем категории для выпадающего списка
+            await PopulateCategoriesViewBag(appDefinition.AppCategoryId);
+            
+            return View(appDefinition);
+        }
+
+        // POST: AppDefinitions/Edit/5
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Edit(Guid id, [Bind("Id,Name,EntityCode,Description,Icon,IsSystem,AppCategoryId")] AppDefinition appDefinition)
+        {
+            if (id != appDefinition.Id) return NotFound();
+
+            if (ModelState.IsValid)
+            {
+                try
+                {
+                    _context.Update(appDefinition);
+                    await _context.SaveChangesAsync();
+                }
+                catch (DbUpdateConcurrencyException)
+                {
+                    if (!AppDefinitionExists(appDefinition.Id)) return NotFound();
+                    else throw;
+                }
+                return RedirectToAction(nameof(Index));
+            }
+
+            await PopulateCategoriesViewBag(appDefinition.AppCategoryId);
+            return View(appDefinition);
+        }
+
+        // Вспомогательный метод для заполнения списка категорий
+        private async Task PopulateCategoriesViewBag(Guid? selectedId = null)
         {
             var categories = await _context.AppCategories.OrderBy(c => c.SortOrder).ToListAsync();
-            ViewBag.Categories = new SelectList(categories, "Id", "Name");
+            ViewBag.Categories = new SelectList(categories, "Id", "Name", selectedId);
+        }
+
+        private bool AppDefinitionExists(Guid id)
+        {
+            return _context.AppDefinitions.Any(e => e.Id == id);
         }
 
         // 2. Список полей конкретной сущности

@@ -7,7 +7,11 @@
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <style>
-        :root { --main-bg: #1e2229; --sub-bg: #ffffff; --accent: #0d6efd; }
+        :root {
+            --main-bg: #1e2229;
+            --sub-bg: #ffffff;
+            --accent: #0d6efd;
+        }
         body { background-color: #f4f7f6; overflow: hidden; height: 100vh; display: flex; margin: 0; font-family: 'Segoe UI', sans-serif; }
 
         /* Уровень 1: Только иконки */
@@ -60,8 +64,7 @@
         <a href="/Patients" class="main-btn @(ViewContext.RouteData.Values["Controller"]?.ToString() == "Patients" ? "active" : "")" data-id="patients" title="Пациенты">
             <i class="bi bi-people"></i>
         </a>
-        @* --- ДОБАВИЛИ ИКОНКУ КОНСТРУКТОРА ТУТ --- *@
-        <a href="/AppDefinitions" class="main-btn @(ViewContext.RouteData.Values["Controller"]?.ToString() == "AppDefinitions" ? "active" : "")" data-id="settings" title="Конструктор">
+        <a href="/AppDefinitions" class="main-btn @(ViewContext.RouteData.Values["Controller"]?.ToString() == "AppDefinitions" || ViewContext.RouteData.Values["Controller"]?.ToString() == "AppCategories" ? "active" : "")" data-id="settings" title="Конструктор">
             <i class="bi bi-gear"></i>
         </a>
     </div>
@@ -69,33 +72,33 @@
 
 <nav id="nav-sub">
     @{
-        var controller = ViewContext.RouteData.Values["Controller"]?.ToString();
+    var controller = ViewContext.RouteData.Values["Controller"]?.ToString();
     }
 
     @if (controller == "Positions" || controller == "Departments" || controller == "Employees")
     {
-        <div class="sub-header">Компания</div>
-        <a href="/Departments" class="sub-link"><i class="bi bi-diagram-3"></i> Оргструктура</a>
-        <a href="/Employees" class="sub-link @(controller == "Employees" ? "active" : "")"><i class="bi bi-person-badge"></i> Сотрудники</a>
-        <a href="/Positions" class="sub-link @(controller == "Positions" ? "active" : "")"><i class="bi bi-briefcase"></i> Должности</a>
+    <div class="sub-header">Компания</div>
+    <a href="/Departments" class="sub-link"><i class="bi bi-diagram-3"></i> Оргструктура</a>
+    <a href="/Employees" class="sub-link @(controller == "Employees" ? "active" : "")"><i class="bi bi-person-badge"></i> Сотрудники</a>
+    <a href="/Positions" class="sub-link @(controller == "Positions" ? "active" : "")"><i class="bi bi-briefcase"></i> Должности</a>
     }
     else if (controller == "Patients")
     {
-        <div class="sub-header">Пациенты</div>
-        <a href="/Patients" class="sub-link active"><i class="bi bi-person-lines-fill"></i> Реестр пациентов</a>
-        <a href="#" class="sub-link"><i class="bi bi-calendar-event"></i> Запись на прием</a>
+    <div class="sub-header">Пациенты</div>
+    <a href="/Patients" class="sub-link active"><i class="bi bi-person-lines-fill"></i> Реестр пациентов</a>
+    <a href="#" class="sub-link"><i class="bi bi-calendar-event"></i> Запись на прием</a>
     }
-    @* --- ДОБАВИЛИ ПОДМЕНЮ КОНСТРУКТОРА ТУТ --- *@
-    else if (controller == "AppDefinitions")
+    else if (controller == "AppDefinitions" || controller == "AppCategories")
     {
-        <div class="sub-header">Конструктор</div>
-        <a href="/AppDefinitions" class="sub-link active"><i class="bi bi-layers"></i> Список сущностей</a>
-        <a href="#" class="sub-link text-muted"><i class="bi bi-database-gear"></i> Импорт данных</a>
+    <div class="sub-header">Конструктор</div>
+    <a href="/AppDefinitions" class="sub-link @(controller == "AppDefinitions" ? "active" : "")"><i class="bi bi-layers"></i> Список сущностей</a>
+    <a href="/AppCategories" class="sub-link @(controller == "AppCategories" ? "active" : "")"><i class="bi bi-folder2-open"></i> Разделы меню</a>
+    <a href="#" class="sub-link text-muted"><i class="bi bi-database-gear"></i> Импорт данных</a>
     }
     else
     {
-        <div class="sub-header">Главная</div>
-        <a href="/" class="sub-link active"><i class="bi bi-house"></i> Рабочий стол</a>
+    <div class="sub-header">Главная</div>
+    <a href="/" class="sub-link active"><i class="bi bi-house"></i> Рабочий стол</a>
     }
 </nav>
 
@@ -111,14 +114,16 @@
 
 <script>
     const el = document.getElementById('sortable-menu');
-    Sortable.create(el, {
-        animation: 150,
-        ghostClass: 'sortable-ghost',
-        store: {
-            get: (s) => localStorage.getItem('main-menu-order')?.split('|') || [],
-            set: (s) => localStorage.setItem('main-menu-order', s.toArray().join('|'))
-        }
-    });
+    if (el) {
+        Sortable.create(el, {
+            animation: 150,
+            ghostClass: 'sortable-ghost',
+            store: {
+                get: (s) => localStorage.getItem('main-menu-order')?.split('|') || [],
+                set: (s) => localStorage.setItem('main-menu-order', s.toArray().join('|'))
+            }
+        });
+    }
 
     $(document).ready(function() {
         const order = localStorage.getItem('main-menu-order');
@@ -133,7 +138,5 @@
 </script>
 
 @await RenderSectionAsync("Scripts", required: false)
-<script src="https://cdn.jsdelivr.net/npm/inputmask@5.0.8/dist/inputmask.min.js"></script>
-
 </body>
 </html>

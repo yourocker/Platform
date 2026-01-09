@@ -1,7 +1,7 @@
 ﻿@model MedicalBot.Entities.Platform.AppDefinition
 
 @{
-    ViewData["Title"] = "Создание сущности";
+    ViewData["Title"] = "Редактирование сущности";
 }
 
 <div class="container mt-4">
@@ -9,30 +9,30 @@
         <div class="col-md-8">
             <div class="card shadow-sm border-0">
                 <div class="card-header bg-primary text-white py-3">
-                    <h4 class="mb-0"><i class="bi bi-plus-square me-2"></i>Создание новой сущности</h4>
+                    <h4 class="mb-0"><i class="bi bi-pencil-square me-2"></i>Редактирование сущности: @Model.Name</h4>
                 </div>
                 <div class="card-body p-4">
-                    <form asp-action="Create">
+                    <form asp-action="Edit">
                         <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+                        <input type="hidden" asp-for="Id" />
 
                         <div class="row mb-3">
                             <div class="col-md-6">
                                 <label asp-for="Name" class="form-label fw-bold">Название (отображение в меню)</label>
-                                <input asp-for="Name" class="form-control" placeholder="Напр: Оборудование" required />
+                                <input asp-for="Name" class="form-control" required />
                                 <span asp-validation-for="Name" class="text-danger"></span>
                             </div>
                             <div class="col-md-6">
-                                <label asp-for="EntityCode" class="form-label fw-bold">Системный код (латиница)</label>
-                                <input asp-for="EntityCode" class="form-control" placeholder="Equipment" required />
+                                <label asp-for="EntityCode" class="form-label fw-bold">Системный код (только чтение)</label>
+                                <input asp-for="EntityCode" class="form-control bg-light" readonly />
                                 <span asp-validation-for="EntityCode" class="text-danger"></span>
                             </div>
                         </div>
 
                         <div class="mb-3">
                             <label asp-for="AppCategoryId" class="form-label fw-bold">Раздел меню</label>
-                            @* Исправлено: используем ViewBag.Categories из контроллера *@
                             <select asp-for="AppCategoryId" class="form-select" asp-items="ViewBag.Categories">
-                                <option value="">-- Без раздела (не отображать в меню) --</option>
+                                <option value="">-- Не отображать в меню --</option>
                             </select>
                             <span asp-validation-for="AppCategoryId" class="text-danger"></span>
                         </div>
@@ -47,7 +47,7 @@
                                 <div class="flex-grow-1">
                                     <input type="hidden" asp-for="Icon" id="icon-input" />
                                     <button type="button" class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#iconModal">
-                                        <i class="bi bi-search me-2"></i>Открыть библиотеку иконок
+                                        <i class="bi bi-search me-2"></i>Сменить иконку
                                     </button>
                                     <div class="small text-muted mt-1">Выбрано: <span id="icon-name-display">@Model.Icon</span></div>
                                 </div>
@@ -56,7 +56,7 @@
 
                         <div class="mb-3">
                             <label asp-for="Description" class="form-label fw-bold">Описание сущности</label>
-                            <textarea asp-for="Description" class="form-control" rows="2" placeholder="Краткое описание назначения..."></textarea>
+                            <textarea asp-for="Description" class="form-control" rows="2"></textarea>
                         </div>
 
                         <div class="mb-4">
@@ -67,9 +67,14 @@
                         </div>
 
                         <hr />
-                        <div class="d-flex justify-content-end gap-2">
-                            <a asp-action="Index" class="btn btn-light px-4">Отмена</a>
-                            <button type="submit" class="btn btn-primary px-5">Создать приложение</button>
+                        <div class="d-flex justify-content-between">
+                            <a asp-action="Fields" asp-route-id="@Model.Id" class="btn btn-outline-info">
+                                <i class="bi bi-list-check me-2"></i>Настроить поля
+                            </a>
+                            <div class="d-flex gap-2">
+                                <a asp-action="Index" class="btn btn-light px-4">Отмена</a>
+                                <button type="submit" class="btn btn-primary px-5">Сохранить</button>
+                            </div>
                         </div>
                     </form>
                 </div>
@@ -78,7 +83,7 @@
     </div>
 </div>
 
-@* Модальное окно и скрипты *@
+@* Модальное окно иконок (точно такое же, как в Create) *@
 <div class="modal fade" id="iconModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-scrollable">
         <div class="modal-content">
@@ -86,7 +91,7 @@
                 <h5 class="modal-title">Библиотека Bootstrap Icons</h5>
                 <div class="input-group ms-4" style="max-width: 400px;">
                     <span class="input-group-text bg-white border-end-0"><i class="bi bi-search"></i></span>
-                    <input type="text" id="icon-search" class="form-control border-start-0" placeholder="Поиск среди всех иконок...">
+                    <input type="text" id="icon-search" class="form-control border-start-0" placeholder="Поиск иконок...">
                 </div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
@@ -94,12 +99,10 @@
                 <div id="icon-grid" class="row row-cols-2 row-cols-sm-4 row-cols-md-6 row-cols-lg-8 g-3 text-center">
                     <div class="col-12 py-5 text-center" id="icon-loader">
                         <div class="spinner-border text-primary" role="status"></div>
-                        <p class="mt-2">Загрузка полного списка иконок...</p>
                     </div>
                 </div>
             </div>
             <div class="modal-footer bg-light">
-                <span class="me-auto text-muted">Всего в базе: <span id="total-count">0</span></span>
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
             </div>
         </div>
@@ -117,34 +120,26 @@
             .then(res => res.json())
             .then(data => {
                 allIconNames = Object.keys(data);
-                $('#total-count').text(allIconNames.length);
                 renderIcons(allIconNames);
-            })
-            .catch(err => {
-                $grid.html('<div class="col-12 alert alert-danger">Не удалось загрузить иконки.</div>');
             });
 
         function renderIcons(list) {
             $loader.hide();
             $grid.find('.icon-card').remove();
-            const toShow = list.slice(0, 400);
-
-            toShow.forEach(name => {
-                const html = `
-                        <div class="col icon-card">
-                            <div class="p-3 border rounded btn-icon-select h-100" data-name="${name}" style="cursor: pointer; transition: 0.2s;">
-                                <i class="bi bi-${name} fs-2 mb-1 d-block text-dark"></i>
-                                <div class="text-truncate small" style="font-size: 0.7rem;">${name}</div>
-                            </div>
-                        </div>`;
-                $grid.append(html);
+            list.slice(0, 400).forEach(name => {
+                $grid.append(`
+                    <div class="col icon-card">
+                        <div class="p-3 border rounded btn-icon-select h-100" data-name="${name}" style="cursor: pointer;">
+                            <i class="bi bi-${name} fs-2 mb-1 d-block text-dark"></i>
+                            <div class="text-truncate small" style="font-size: 0.7rem;">${name}</div>
+                        </div>
+                    </div>`);
             });
         }
 
         $('#icon-search').on('input', function() {
             const term = $(this).val().toLowerCase();
-            const filtered = allIconNames.filter(n => n.includes(term));
-            renderIcons(filtered);
+            renderIcons(allIconNames.filter(n => n.includes(term)));
         });
 
         $(document).on('click', '.btn-icon-select', function() {
@@ -159,6 +154,5 @@
 
 <style>
     .btn-icon-select:hover { background-color: #e7f1ff; border-color: #0d6efd !important; transform: scale(1.05); }
-    .btn-icon-select:hover i { color: #0d6efd !important; }
 </style>
 }
