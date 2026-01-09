@@ -17,8 +17,8 @@ namespace MedicalWeb.Controllers
             var departments = await _context.Departments
                 .Include(d => d.Manager)
                 .Include(d => d.Parent)
-                .Include(d => d.StaffAppointments) // Подгружаем связи
-                    .ThenInclude(sa => sa.Employee) // Подгружаем сотрудников для отображения в списке
+                .Include(d => d.StaffAppointments)
+                    .ThenInclude(sa => sa.Employee)
                 .OrderBy(d => d.Name)
                 .ToListAsync();
 
@@ -89,6 +89,69 @@ namespace MedicalWeb.Controllers
             await LoadDynamicFields("Department");
             await LoadLookupLists(department.Id);
             return View(department);
+        }
+
+        // GET: Departments/Delete/5
+        public async Task<IActionResult> Delete(Guid? id)
+        {
+            if (id == null)
+            {
+                return NotFound();
+            }
+
+            var department = await _context.Departments
+                .FirstOrDefaultAsync(m => m.Id == id);
+    
+            if (department == null)
+            {
+                return NotFound();
+            }
+
+            // Проверка наличия АКТИВНЫХ сотрудников (тех, у кого IsDismissed == false)
+            bool hasActiveEmployees = await _context.StaffAppointments
+                .AnyAsync(sa => sa.DepartmentId == id && sa.Employee != null && !sa.Employee.IsDismissed);
+    
+            // Проверка наличия дочерних подразделений
+            bool hasSubDepartments = await _context.Departments
+                .AnyAsync(d => d.ParentId == id);
+
+            if (hasActiveEmployees || hasSubDepartments)
+            {
+                ViewBag.CanDelete = false;
+                ViewBag.Reason = hasActiveEmployees 
+                    ? "В подразделении есть действующие сотрудники. Удаление невозможно." 
+                    : "У данного подразделения есть дочерние структуры. Удаление невозможно.";
+            }
+            else
+            {
+                ViewBag.CanDelete = true;
+            }
+
+            return View(department);
+        }
+
+        // POST: Departments/Delete/5
+        [HttpPost, ActionName("Delete")]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DeleteConfirmed(Guid id)
+        {
+            var department = await _context.Departments
+                .Include(d => d.StaffAppointments)
+                .FirstOrDefaultAsync(d => d.Id == id);
+
+            if (department != null)
+            {
+                // Если в подразделении остались только уволенные сотрудники, 
+                // удаляем их связи (назначения), чтобы "очистить" им место работы
+                if (department.StaffAppointments != null && department.StaffAppointments.Any())
+                {
+                    _context.StaffAppointments.RemoveRange(department.StaffAppointments);
+                }
+
+                _context.Departments.Remove(department);
+                await _context.SaveChangesAsync();
+            }
+            return RedirectToAction(nameof(Index));
         }
 
         private async Task LoadLookupLists(Guid? currentDeptId = null)

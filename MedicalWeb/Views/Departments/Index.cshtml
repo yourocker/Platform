@@ -43,13 +43,18 @@
                                         </div>
                                     }
 
-                                    @* Список сотрудников в этом отделе *@
+                                    @* Список только АКТИВНЫХ сотрудников в этом отделе *@
                                     @{
-                                        var staff = dept.StaffAppointments?.Select(sa => sa.Employee).Distinct().ToList();
-                                        if (staff != null && staff.Any())
+                                        var activeStaff = dept.StaffAppointments?
+                                            .Where(sa => sa.Employee != null && !sa.Employee.IsDismissed)
+                                            .Select(sa => sa.Employee)
+                                            .Distinct()
+                                            .ToList();
+
+                                        if (activeStaff != null && activeStaff.Any())
                                         {
                                             <div class="mt-1">
-                                                @foreach (var emp in staff)
+                                                @foreach (var emp in activeStaff)
                                                 {
                                                     <span class="badge bg-white text-dark border me-1">
                                                         <i class="bi bi-person"></i> @emp.LastName @emp.FirstName[0].
@@ -63,6 +68,9 @@
                                 <div class="btn-group btn-group-sm">
                                     <a asp-action="Edit" asp-route-id="@dept.Id" class="btn btn-outline-secondary" title="Редактировать">
                                         <i class="bi bi-pencil"></i>
+                                    </a>
+                                    <a asp-action="Delete" asp-route-id="@dept.Id" class="btn btn-outline-danger" title="Удалить">
+                                        <i class="bi bi-trash"></i>
                                     </a>
                                 </div>
                             </div>
