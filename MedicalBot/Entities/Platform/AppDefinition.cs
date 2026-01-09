@@ -13,7 +13,7 @@ namespace MedicalBot.Entities.Platform
 
         [Required]
         [MaxLength(50)]
-        public string SystemCode { get; set; }
+        public string EntityCode { get; set; }
 
         public bool IsSystem { get; set; } // true для Employee, false для кастомных
 
