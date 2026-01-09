@@ -7,6 +7,37 @@
 
 <script src="https://cdn.jsdelivr.net/npm/inputmask@5.0.8/dist/inputmask.min.js"></script>
 
+@* Скрытый шаблон для добавления новых строк. Он всегда существует в DOM, даже если список пуст *@
+<div id="appointment-template" style="display:none;">
+    <div class="row appointment-row mb-3 align-items-end">
+        <div class="col-md-5">
+            <label class="small text-muted">Должность</label>
+            <select name="selectedPositions" class="form-select">
+                <option value="">-- Выберите должность --</option>
+                @foreach(var p in (ViewBag.Positions as List<MedicalBot.Entities.Company.Position>)) 
+                { 
+                    <option value="@p.Id">@p.Name</option> 
+                }
+            </select>
+        </div>
+        <div class="col-md-5">
+            <label class="small text-muted">Подразделение</label>
+            <select name="selectedDepartments" class="form-select">
+                <option value="">-- Выберите подразделение --</option>
+                @foreach(var d in (ViewBag.Departments as List<MedicalBot.Entities.Company.Department>)) 
+                { 
+                    <option value="@d.Id">@d.Name</option> 
+                }
+            </select>
+        </div>
+        <div class="col-md-2">
+            <button type="button" class="btn btn-outline-danger w-100" onclick="this.closest('.row').remove()">
+                <i class="bi bi-trash"></i>
+            </button>
+        </div>
+    </div>
+</div>
+
 <div class="row justify-content-center">
     <div class="col-md-9">
         <div class="d-flex align-items-center justify-content-between mb-4">
@@ -107,7 +138,7 @@
                     </div>
                 </div>
                 
-                @* 3. ДИНАМИЧЕСКИЕ ПОЛЯ (Используем наш Partial) *@
+                @* 3. ДИНАМИЧЕСКИЕ ПОЛЯ *@
                 <partial name="_DynamicFields" model="Model" />
 
                 @* 4. Назначения *@
@@ -174,15 +205,19 @@
         }
 
         function addAppointment() {
-            const c = document.getElementById('appointments-container');
-            const rows = c.querySelectorAll('.appointment-row');
-            if(rows.length > 0) {
-                const r = rows[0].cloneNode(true);
-                r.querySelectorAll('select').forEach(s => s.value = "");
-                const delBtn = r.querySelector('.btn-outline-danger');
-                if(delBtn) delBtn.classList.remove('disabled');
-                c.appendChild(r);
-            }
+            const container = document.getElementById('appointments-container');
+            const template = document.getElementById('appointment-template');
+            
+            // Находим строку внутри шаблона и клонируем её
+            const templateRow = template.querySelector('.appointment-row');
+            const newRow = templateRow.cloneNode(true);
+            
+            // Очищаем выбранные значения в новой строке
+            newRow.querySelectorAll('select').forEach(select => {
+                select.value = "";
+            });
+
+            container.appendChild(newRow);
         }
     </script>
 }
