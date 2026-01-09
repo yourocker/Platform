@@ -1,0 +1,53 @@
+﻿@model IEnumerable<MedicalBot.Entities.Platform.AppCategory>
+
+@{
+    ViewData["Title"] = "Разделы меню";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>Разделы меню</h2>
+    <a asp-action="Create" class="btn btn-primary">
+        <i class="bi bi-plus-lg"></i> Добавить раздел
+    </a>
+</div>
+
+<div class="card shadow-sm border-0">
+    <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+            <thead class="bg-light">
+            <tr>
+                <th class="ps-4">Порядок</th>
+                <th>Иконка</th>
+                <th>Название</th>
+                <th class="text-end pe-4">Действия</th>
+            </tr>
+            </thead>
+            <tbody>
+            @foreach (var item in Model.OrderBy(c => c.SortOrder))
+            {
+                <tr>
+                    <td class="ps-4">@item.SortOrder</td>
+                    <td><i class="bi bi-@item.Icon"></i> (@item.Icon)</td>
+                    <td class="fw-bold">@item.Name</td>
+                    <td class="text-end pe-4">
+                        <div class="btn-group btn-group-sm">
+                            <a asp-action="Edit" asp-route-id="@item.Id" class="btn btn-outline-secondary" title="Редактировать">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            <a asp-action="Delete" asp-route-id="@item.Id" class="btn btn-outline-danger" title="Удалить">
+                                <i class="bi bi-trash"></i>
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+            }
+            @if (!Model.Any())
+            {
+                <tr>
+                    <td colspan="4" class="text-center py-4 text-muted">Разделы еще не созданы</td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</div>

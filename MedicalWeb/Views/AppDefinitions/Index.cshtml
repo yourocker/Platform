@@ -1,42 +1,82 @@
 ﻿@model IEnumerable<MedicalBot.Entities.Platform.AppDefinition>
 
-<div class="container mt-4">
-    <div class="d-flex justify-content-between align-items-center">
-        <div>
-            <h2>Конструктор сущностей</h2>
-            <p class="text-muted">Здесь вы можете расширять базовые карточки или создавать новые приложения.</p>
-        </div>
-        <div>
-            <a asp-action="Create" class="btn btn-primary shadow-sm">
-                <i class="bi bi-plus-circle me-1"></i> Создать новую сущность
-            </a>
-        </div>
-    </div>
+@{
+    ViewData["Title"] = "Список сущностей";
+}
 
-    <div class="row mt-4">
-        @foreach (var item in Model)
-        {
-            <div class="col-md-4 mb-3">
-                <div class="card h-100 shadow-sm">
-                    <div class="card-body text-center">
-                        <i class="bi bi-@item.Icon fs-1 text-primary"></i>
-                        <h5 class="card-title mt-2">@item.Name</h5>
-                        <p class="card-text small text-muted">
-                            Код: @item.EntityCode <br />
-                            Полей: @(item.Fields?.Count ?? 0)
-                        </p>
-                        <a asp-action="Fields" asp-route-id="@item.Id" class="btn btn-outline-primary btn-sm">
-                            Настроить поля
-                        </a>
-                    </div>
-                    @if (item.IsSystem)
-                    {
-                        <div class="card-footer bg-light py-1 text-center">
-                            <small class="text-primary fw-bold">Системная</small>
-                        </div>
-                    }
-                </div>
-            </div>
-        }
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>Конструктор сущностей</h2>
+    <a asp-action="Create" class="btn btn-primary">
+        <i class="bi bi-plus-lg"></i> Создать сущность
+    </a>
+</div>
+
+<div class="card shadow-sm border-0">
+    <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+            <thead class="bg-light">
+                <tr>
+                    <th class="ps-4">Название</th>
+                    <th>Системный код</th>
+                    <th>Раздел меню</th>
+                    <th>Поля</th>
+                    <th class="text-end pe-4">Действия</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in Model)
+                {
+                    <tr>
+                        <td class="ps-4">
+                            <i class="bi bi-@item.Icon text-primary me-2"></i>
+                            <span class="fw-bold">@item.Name</span>
+                            @if (item.IsSystem)
+                            {
+                                <span class="badge bg-light text-muted border ms-1">Системная</span>
+                            }
+                        </td>
+                        <td><code>@item.EntityCode</code></td>
+                        <td>
+                            @if (item.Category != null)
+                            {
+                                <span class="badge bg-info text-dark">
+                                    <i class="bi bi-@item.Category.Icon me-1"></i> @item.Category.Name
+                                </span>
+                            }
+                            else
+                            {
+                                <span class="text-muted small">Не отображается</span>
+                            }
+                        </td>
+                        <td>
+                            <a asp-action="Fields" asp-route-id="@item.Id" class="text-decoration-none">
+                                <span class="badge bg-light text-primary border">
+                                    <i class="bi bi-list-check me-1"></i> @(item.Fields?.Count ?? 0) полей
+                                </span>
+                            </a>
+                        </td>
+                        <td class="text-end pe-4">
+                            <div class="btn-group btn-group-sm">
+                                @* Кнопка настройки полей *@
+                                <a asp-action="Fields" asp-route-id="@item.Id" class="btn btn-outline-primary" title="Настроить поля">
+                                    <i class="bi bi-gear-fill"></i>
+                                </a>
+                                @* Кнопка редактирования сущности (привязка к разделу, смена иконки) *@
+                                <a asp-action="Edit" asp-route-id="@item.Id" class="btn btn-outline-secondary" title="Редактировать параметры">
+                                    <i class="bi bi-pencil"></i>
+                                </a>
+                                @* Удаление только для несистемных *@
+                                @if (!item.IsSystem)
+                                {
+                                    <a asp-action="Delete" asp-route-id="@item.Id" class="btn btn-outline-danger" title="Удалить">
+                                        <i class="bi bi-trash"></i>
+                                    </a>
+                                }
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
     </div>
 </div>
