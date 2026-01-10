@@ -75,7 +75,7 @@ namespace MedicalBot.Data
             modelBuilder.Entity<AppFieldDefinition>(entity =>
             {
                 // Настройки поля тоже будем хранить в JSON (для типов Table, Link и т.д.)
-                entity.Property(f => f.SettingsJson).HasColumnType("jsonb");
+                //entity.Property(f => f.SettingsJson).HasColumnType("jsonb");
             });
             
         }

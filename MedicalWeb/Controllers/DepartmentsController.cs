@@ -1,5 +1,9 @@
-﻿using MedicalBot.Data;
+﻿using System;
+using System.Linq;
+using System.Threading.Tasks;
+using MedicalBot.Data;
 using MedicalBot.Entities.Company;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
@@ -34,9 +38,11 @@ namespace MedicalWeb.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create(Department department, Dictionary<string, string> dynamicProps)
+        // ИСПРАВЛЕНО: Принимаем IFormCollection
+        public async Task<IActionResult> Create(Department department, IFormCollection form)
         {
-            SaveDynamicProperties(department, dynamicProps);
+            // ИСПРАВЛЕНО: await + форма + код сущности
+            await SaveDynamicProperties(department, form, "Department");
 
             if (ModelState.IsValid)
             {
@@ -65,11 +71,13 @@ namespace MedicalWeb.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(Guid id, Department department, Dictionary<string, string> dynamicProps)
+        // ИСПРАВЛЕНО: Принимаем IFormCollection
+        public async Task<IActionResult> Edit(Guid id, Department department, IFormCollection form)
         {
             if (id != department.Id) return NotFound();
 
-            SaveDynamicProperties(department, dynamicProps);
+            // ИСПРАВЛЕНО: await + форма + код сущности
+            await SaveDynamicProperties(department, form, "Department");
 
             if (ModelState.IsValid)
             {
@@ -91,27 +99,18 @@ namespace MedicalWeb.Controllers
             return View(department);
         }
 
-        // GET: Departments/Delete/5
         public async Task<IActionResult> Delete(Guid? id)
         {
-            if (id == null)
-            {
-                return NotFound();
-            }
+            if (id == null) return NotFound();
 
             var department = await _context.Departments
                 .FirstOrDefaultAsync(m => m.Id == id);
     
-            if (department == null)
-            {
-                return NotFound();
-            }
+            if (department == null) return NotFound();
 
-            // Проверка наличия АКТИВНЫХ сотрудников (тех, у кого IsDismissed == false)
             bool hasActiveEmployees = await _context.StaffAppointments
                 .AnyAsync(sa => sa.DepartmentId == id && sa.Employee != null && !sa.Employee.IsDismissed);
     
-            // Проверка наличия дочерних подразделений
             bool hasSubDepartments = await _context.Departments
                 .AnyAsync(d => d.ParentId == id);
 
@@ -130,7 +129,6 @@ namespace MedicalWeb.Controllers
             return View(department);
         }
 
-        // POST: Departments/Delete/5
         [HttpPost, ActionName("Delete")]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteConfirmed(Guid id)
@@ -141,8 +139,6 @@ namespace MedicalWeb.Controllers
 
             if (department != null)
             {
-                // Если в подразделении остались только уволенные сотрудники, 
-                // удаляем их связи (назначения), чтобы "очистить" им место работы
                 if (department.StaffAppointments != null && department.StaffAppointments.Any())
                 {
                     _context.StaffAppointments.RemoveRange(department.StaffAppointments);

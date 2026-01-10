@@ -1,103 +1,132 @@
 ﻿@using MedicalBot.Entities.Platform
-@using MedicalBot.Entities
 @using System.Text.Json
 @model MedicalBot.Entities.IHasDynamicProperties
+@using Microsoft.AspNetCore.Html
 
 @{
     var fields = ViewBag.DynamicFields as List<AppFieldDefinition>;
-    var values = new Dictionary<string, string>();
+    var values = new Dictionary<string, object>();
     
     if (!string.IsNullOrEmpty(Model?.Properties))
     {
-        try 
-        { 
-            values = JsonSerializer.Deserialize<Dictionary<string, string>>(Model.Properties) ?? new Dictionary<string, string>(); 
+        try { 
+            // Теперь десериализуем в object, так как там могут быть массивы
+            values = JsonSerializer.Deserialize<Dictionary<string, object>>(Model.Properties) ?? new Dictionary<string, object>(); 
         }
-        catch { /* Ошибка парсинга JSON */ }
+        catch { }
     }
 }
 
 @if (fields != null && fields.Any())
 {
-    <div class="card mb-4 border-info shadow-sm">
-        <div class="card-header bg-info text-white d-flex align-items-center">
-            <i class="bi bi-cpu-fill me-2"></i>
-            <h5 class="mb-0">Дополнительные параметры</h5>
-        </div>
-        <div class="card-body">
-            <div class="row">
-                @foreach (var field in fields)
-                {
-                    values.TryGetValue(field.SystemName, out var currentValue);
-                    currentValue ??= "";
-                    
-                    <div class="col-md-4 mb-3">
-                        <label class="form-label fw-bold text-secondary">@field.Label</label>
-                        
-                        @switch (field.DataType)
+    <div class="mt-4 mb-3 pt-3 border-top">
+        <h5 class="text-secondary mb-3">Дополнительные параметры</h5>
+    </div>
+
+    <div class="container-fluid px-0">
+        @foreach (var field in fields.OrderBy(f => f.SortOrder))
+        {
+            values.TryGetValue(field.SystemName, out var rawValue);
+            
+            // Подготовка списка значений (даже если значение одно, превращаем в список для единообразия)
+            var currentValues = new List<string>();
+            if (rawValue is JsonElement element)
+            {
+                if (element.ValueKind == JsonValueKind.Array)
+                    currentValues = element.EnumerateArray().Select(x => x.ToString()).ToList();
+                else
+                    currentValues.Add(element.ToString());
+            }
+            else if (rawValue != null)
+            {
+                currentValues.Add(rawValue.ToString());
+            }
+
+            if (!currentValues.Any()) currentValues.Add(""); // Хотя бы одно пустое поле
+
+            <div class="row mb-3 align-items-start">
+                <label class="col-sm-2 col-form-label text-muted text-sm-end fw-bold">
+                    @field.Label
+                    @if (field.IsRequired) { <span class="text-danger">*</span> }
+                </label>
+
+                <div class="col-sm-10">
+                    <div id="container_@field.SystemName" class="dynamic-field-container">
+                        @foreach (var val in currentValues)
                         {
-                            @* Обычная строка *@
-                            case FieldDataType.String:
-                                <input type="text" name="DynamicProps[@field.SystemName]" value="@currentValue" 
-                                       class="form-control" @(field.IsRequired ? "required" : "") />
-                                break;
-
-                            @* Многострочный текст *@
-                            case FieldDataType.Text:
-                                <textarea name="DynamicProps[@field.SystemName]" class="form-control" 
-                                          rows="3" @(field.IsRequired ? "required" : "")>@currentValue</textarea>
-                                break;
-
-                            @* Число *@
-                            case FieldDataType.Number:
-                                <input type="number" name="DynamicProps[@field.SystemName]" value="@currentValue" 
-                                       class="form-control" step="any" @(field.IsRequired ? "required" : "") />
-                                break;
-
-                            @* Деньги *@
-                            case FieldDataType.Money:
-                                <div class="input-group">
-                                    <span class="input-group-text">₽</span>
-                                    <input type="number" name="DynamicProps[@field.SystemName]" value="@currentValue" 
-                                           class="form-control" step="0.01" @(field.IsRequired ? "required" : "") />
-                                </div>
-                                break;
-
-                            @* Дата *@
-                            case FieldDataType.DateTime:
-                                <input type="date" name="DynamicProps[@field.SystemName]" value="@currentValue" 
-                                       class="form-control" @(field.IsRequired ? "required" : "") />
-                                break;
-
-                            @* Да/Нет *@
-                            case FieldDataType.Boolean:
-                                <div class="form-check form-switch mt-2">
-                                    <input type="hidden" name="DynamicProps[@field.SystemName]" value="false" id="hidden_@field.SystemName" />
-                                    <input type="checkbox" name="DynamicProps[@field.SystemName]" value="true" 
-                                           class="form-check-input" id="check_@field.SystemName"
-                                           @(currentValue.ToLower() == "true" ? "checked" : "") 
-                                           onclick="document.getElementById('hidden_@field.SystemName').disabled = this.checked;" />
-                                    <label class="form-check-label" for="check_@field.SystemName"></label>
-                                </div>
-                                break;
-
-                            @* Ссылки и Таблицы (на будущее) *@
-                            case FieldDataType.EntityLink:
-                            case FieldDataType.Table:
-                            case FieldDataType.File:
-                                <div class="alert alert-light border py-1 mb-0 small">
-                                    <i class="bi bi-info-circle"></i> Тип @field.DataType в разработке
-                                    <input type="hidden" name="DynamicProps[@field.SystemName]" value="@currentValue" />
-                                </div>
-                                break;
-
-                            default:
-                                <input type="text" name="DynamicProps[@field.SystemName]" value="@currentValue" class="form-control" />
-                                break;
+                            <div class="input-group mb-2 dynamic-field-item">
+                                @renderField(field, val)
+                                
+                                @if (field.IsArray)
+                                {
+                                    <button type="button" class="btn btn-outline-danger" onclick="this.closest('.dynamic-field-item').remove()">
+                                        <i class="bi bi-x"></i>
+                                    </button>
+                                }
+                            </div>
                         }
                     </div>
-                }
+
+                    @if (field.IsArray)
+                    {
+                        <button type="button" class="btn btn-sm btn-outline-secondary mt-1" 
+                                onclick="addDynamicField('@field.SystemName', '@field.DataType')">
+                            <i class="bi bi-plus-lg"></i> Добавить еще
+                        </button>
+                    }
+                </div>
             </div>
-        </div>
+        }
     </div>
+
+    @* Шаблоны для JavaScript (скрыты) *@
+    <div id="field_templates" style="display:none;">
+        <div data-type="String"><input type="text" class="form-control" /></div>
+        <div data-type="Number"><input type="number" step="any" class="form-control" /></div>
+        <div data-type="Date"><input type="date" class="form-control" /></div>
+        @* Добавь другие типы по аналогии, если нужно *@
+    </div>
+
+    <script>
+        function addDynamicField(systemName, dataType) {
+            const container = document.getElementById('container_' + systemName);
+            const template = document.querySelector(`#field_templates [data-type="${dataType}"]`) 
+                          || document.querySelector(`#field_templates [data-type="String"]`);
+            
+            const wrapper = document.createElement('div');
+            wrapper.className = 'input-group mb-2 dynamic-field-item';
+            
+            const input = template.firstElementChild.cloneNode(true);
+            input.name = `DynamicProps[${systemName}]`;
+            
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'btn btn-outline-danger';
+            btn.innerHTML = '<i class="bi bi-x"></i>';
+            btn.onclick = function() { this.closest('.dynamic-field-item').remove(); };
+            
+            wrapper.appendChild(input);
+            wrapper.appendChild(btn);
+            container.appendChild(wrapper);
+        }
+    </script>
+}
+
+@functions {
+    // Вспомогательная функция для отрисовки поля в зависимости от типа
+    IHtmlContent renderField(AppFieldDefinition field, string value)
+    {
+        var fieldName = $"DynamicProps[{field.SystemName}]";
+        var required = field.IsRequired ? "required" : "";
+        
+        switch (field.DataType)
+        {
+            case FieldDataType.Number:
+                return new HtmlString($"<input type=\"number\" step=\"any\" name=\"{fieldName}\" value=\"{value}\" class=\"form-control\" {required} />");
+            case FieldDataType.Date:
+                return new HtmlString($"<input type=\"date\" name=\"{fieldName}\" value=\"{value}\" class=\"form-control\" {required} />");
+            default:
+                return new HtmlString($"<input type=\"text\" name=\"{fieldName}\" value=\"{value}\" class=\"form-control\" {required} />");
+        }
+    }
 }

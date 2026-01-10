@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Microsoft.AspNetCore.Mvc;
 using MedicalWeb.Models;
+using Microsoft.Extensions.Logging;
 
 namespace MedicalWeb.Controllers;
 

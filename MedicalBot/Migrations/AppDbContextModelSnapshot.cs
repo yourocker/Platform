@@ -295,6 +295,9 @@ namespace MedicalBot.Migrations
                     b.Property<int>("DataType")
                         .HasColumnType("integer");
 
+                    b.Property<bool>("IsArray")
+                        .HasColumnType("boolean");
+
                     b.Property<bool>("IsRequired")
                         .HasColumnType("boolean");
 
@@ -303,14 +306,15 @@ namespace MedicalBot.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
-                    b.Property<string>("SettingsJson")
-                        .HasColumnType("jsonb");
-
                     b.Property<int>("SortOrder")
                         .HasColumnType("integer");
 
                     b.Property<string>("SystemName")
                         .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<string>("TargetEntityCode")
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
