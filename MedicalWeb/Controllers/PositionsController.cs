@@ -1,5 +1,9 @@
-﻿using MedicalBot.Data;
+﻿using System;
+using System.Linq;
+using System.Threading.Tasks;
+using MedicalBot.Data;
 using MedicalBot.Entities.Company;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -20,7 +24,6 @@ namespace MedicalWeb.Controllers
         // GET: Positions/Create
         public async Task<IActionResult> Create()
         {
-            // Загружаем поля для сущности "Position"
             await LoadDynamicFields("Position");
             return View();
         }
@@ -28,10 +31,11 @@ namespace MedicalWeb.Controllers
         // POST: Positions/Create
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create(Position position, Dictionary<string, string> DynamicProps)
+        // ИСПРАВЛЕНО: Принимаем IFormCollection вместо Dictionary
+        public async Task<IActionResult> Create(Position position, IFormCollection form)
         {
-            // Сохраняем динамические свойства
-            SaveDynamicProperties(position, DynamicProps);
+            // ИСПРАВЛЕНО: Добавлен await и новый параметр "Position"
+            await SaveDynamicProperties(position, form, "Position");
 
             if (ModelState.IsValid)
             {
@@ -41,7 +45,6 @@ namespace MedicalWeb.Controllers
                 return RedirectToAction(nameof(Index));
             }
             
-            // Если ошибка, перезагружаем поля
             await LoadDynamicFields("Position");
             return View(position);
         }
@@ -54,7 +57,6 @@ namespace MedicalWeb.Controllers
             var position = await _context.Positions.FindAsync(id);
             if (position == null) return NotFound();
 
-            // Загружаем поля
             await LoadDynamicFields("Position");
             return View(position);
         }
@@ -62,12 +64,13 @@ namespace MedicalWeb.Controllers
         // POST: Positions/Edit/5
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(Guid id, Position position, Dictionary<string, string> DynamicProps)
+        // ИСПРАВЛЕНО: Принимаем IFormCollection
+        public async Task<IActionResult> Edit(Guid id, Position position, IFormCollection form)
         {
             if (id != position.Id) return NotFound();
 
-            // Сохраняем динамические свойства
-            SaveDynamicProperties(position, DynamicProps);
+            // ИСПРАВЛЕНО: Добавлен await и новый параметр "Position"
+            await SaveDynamicProperties(position, form, "Position");
 
             if (ModelState.IsValid)
             {
@@ -84,7 +87,6 @@ namespace MedicalWeb.Controllers
                 return RedirectToAction(nameof(Index));
             }
             
-            // Если ошибка, перезагружаем поля
             await LoadDynamicFields("Position");
             return View(position);
         }

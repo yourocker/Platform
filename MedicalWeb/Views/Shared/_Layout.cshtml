@@ -10,8 +10,9 @@
         .ToListAsync();
 
     var controller = ViewContext.RouteData.Values["Controller"]?.ToString();
-    var entityCodeFromUrl = ViewContext.RouteData.Values["entityCode"]?.ToString();
-}
+    // Сначала ищем в URL, если нет — берем из контроллера (ViewBag)
+    var entityCodeFromUrl = ViewContext.RouteData.Values["entityCode"]?.ToString() 
+                            ?? ViewBag.EntityCode?.ToString();}
 <!DOCTYPE html>
 <html lang="ru">
 <head>

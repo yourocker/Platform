@@ -1,5 +1,9 @@
-﻿using MedicalBot.Data;
+﻿using System;
+using System.Linq;
+using System.Threading.Tasks;
+using MedicalBot.Data;
 using MedicalBot.Entities.Platform;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
@@ -10,7 +14,7 @@ public class GenericObjectsController(AppDbContext context) : BasePlatformContro
     public async Task<IActionResult> Index(string entityCode)
     {
         if (string.IsNullOrEmpty(entityCode)) return NotFound();
-
+        
         var definition = await _context.AppDefinitions
             .Include(d => d.Fields)
             .FirstOrDefaultAsync(d => d.EntityCode == entityCode);
@@ -18,7 +22,7 @@ public class GenericObjectsController(AppDbContext context) : BasePlatformContro
         if (definition == null) return NotFound();
 
         ViewBag.Definition = definition;
-        
+
         var objects = await _context.GenericObjects
             .Where(o => o.EntityCode == entityCode)
             .OrderByDescending(o => o.CreatedAt)
@@ -30,20 +34,20 @@ public class GenericObjectsController(AppDbContext context) : BasePlatformContro
     public async Task<IActionResult> Create(string entityCode)
     {
         if (string.IsNullOrEmpty(entityCode)) return NotFound();
-        
+
         await LoadDynamicFields(entityCode);
         ViewBag.EntityCode = entityCode;
-        
+
         return View();
     }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Create(GenericObject obj, Dictionary<string, string> dynamicProps)
+    public async Task<IActionResult> Create(GenericObject obj, IFormCollection form)
     {
         obj.CreatedAt = DateTime.UtcNow;
-        // Передаем свойства в метод базового контроллера (он запишет их в Properties)
-        SaveDynamicProperties(obj, dynamicProps);
+
+        await SaveDynamicProperties(obj, form, obj.EntityCode);
 
         if (ModelState.IsValid)
         {
@@ -51,40 +55,51 @@ public class GenericObjectsController(AppDbContext context) : BasePlatformContro
             _context.Add(obj);
             await _context.SaveChangesAsync();
             
-            return Redirect($"/Data/{obj.EntityCode}");
+            return RedirectToAction(nameof(Index), new { entityCode = obj.EntityCode });
         }
 
         await LoadDynamicFields(obj.EntityCode);
         ViewBag.EntityCode = obj.EntityCode;
         return View(obj);
     }
-
+    
     public async Task<IActionResult> Edit(Guid id)
     {
         var obj = await _context.GenericObjects.FindAsync(id);
         if (obj == null) return NotFound();
 
         await LoadDynamicFields(obj.EntityCode);
+        ViewBag.EntityCode = obj.EntityCode;
+        
         return View(obj);
     }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Edit(Guid id, GenericObject obj, Dictionary<string, string> dynamicProps)
+    public async Task<IActionResult> Edit(Guid id, GenericObject obj, IFormCollection form)
     {
         if (id != obj.Id) return NotFound();
 
-        SaveDynamicProperties(obj, dynamicProps);
+        await SaveDynamicProperties(obj, form, obj.EntityCode);
 
         if (ModelState.IsValid)
         {
-            _context.Update(obj);
-            await _context.SaveChangesAsync();
+            try 
+            {
+                _context.Update(obj);
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                if (!_context.GenericObjects.Any(e => e.Id == id)) return NotFound();
+                else throw;
+            }
             
-            return Redirect($"/Data/{obj.EntityCode}");
+            return RedirectToAction(nameof(Index), new { entityCode = obj.EntityCode });
         }
 
         await LoadDynamicFields(obj.EntityCode);
+        ViewBag.EntityCode = obj.EntityCode;
         return View(obj);
     }
 
@@ -96,9 +111,10 @@ public class GenericObjectsController(AppDbContext context) : BasePlatformContro
         if (obj == null) return NotFound();
 
         var entityCode = obj.EntityCode;
+
         _context.GenericObjects.Remove(obj);
         await _context.SaveChangesAsync();
 
-        return Redirect($"/Data/{entityCode}");
+        return RedirectToAction(nameof(Index), new { entityCode = entityCode });
     }
 }

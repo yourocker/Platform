@@ -1,4 +1,6 @@
-﻿using MedicalBot.Data;
+﻿using System.Linq;
+using System.Threading.Tasks;
+using MedicalBot.Data;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 

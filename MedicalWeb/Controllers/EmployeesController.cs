@@ -1,17 +1,17 @@
-﻿using MedicalBot.Data;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading.Tasks;
+using MedicalBot.Data;
 using MedicalBot.Entities.Company;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-// System.Text.Json больше не нужен здесь, так как сериализация ушла в базовый контроллер
 
 namespace MedicalWeb.Controllers
 {
-    // 1. Наследуемся от BasePlatformController
     public class EmployeesController : BasePlatformController
     {
-        // Локальное поле _context удалено, так как оно есть в родительском классе (protected)
-
-        // 2. Передаем context в базовый конструктор
         public EmployeesController(AppDbContext context) : base(context)
         {
         }
@@ -33,7 +33,6 @@ namespace MedicalWeb.Controllers
         // --- СОЗДАНИЕ (GET) ---
         public async Task<IActionResult> Create()
         {
-            // 3. Загружаем поля через универсальный метод родителя
             await LoadDynamicFields("Employee"); 
             
             ViewBag.Positions = await _context.Positions.OrderBy(p => p.Name).ToListAsync();
@@ -44,13 +43,14 @@ namespace MedicalWeb.Controllers
         // --- СОЗДАНИЕ (POST) ---
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create(Employee employee, Guid[] selectedPositions, Guid[] selectedDepartments, string[] Phones, string[] Emails, Dictionary<string, string> DynamicProps)
+        // ИСПРАВЛЕНО: DynamicProps заменен на IFormCollection form
+        public async Task<IActionResult> Create(Employee employee, Guid[] selectedPositions, Guid[] selectedDepartments, string[] Phones, string[] Emails, IFormCollection form)
         {
             employee.Phones = Phones?.Where(p => !string.IsNullOrWhiteSpace(p)).ToList() ?? new List<string>();
             employee.Emails = Emails?.Where(e => !string.IsNullOrWhiteSpace(e)).ToList() ?? new List<string>();
 
-            // 4. Сохраняем динамические данные одной строкой (метод родителя)
-            SaveDynamicProperties(employee, DynamicProps);
+            // ИСПРАВЛЕНО: await + форма + код сущности
+            await SaveDynamicProperties(employee, form, "Employee");
 
             if (ModelState.IsValid)
             {
@@ -79,9 +79,7 @@ namespace MedicalWeb.Controllers
                 return RedirectToAction(nameof(Index));
             }
 
-            // Если ошибка, перезагружаем поля, чтобы форма не сломалась
             await LoadDynamicFields("Employee");
-            
             ViewBag.Positions = await _context.Positions.OrderBy(p => p.Name).ToListAsync();
             ViewBag.Departments = await _context.Departments.OrderBy(d => d.Name).ToListAsync();
             return View(employee);
@@ -98,9 +96,7 @@ namespace MedicalWeb.Controllers
 
             if (employee == null) return NotFound();
 
-            // 5. Загружаем поля для редактирования
             await LoadDynamicFields("Employee");
-
             ViewBag.Departments = await _context.Departments.ToListAsync();
             ViewBag.Positions = await _context.Positions.ToListAsync();
 
@@ -110,12 +106,13 @@ namespace MedicalWeb.Controllers
         // --- РЕДАКТИРОВАНИЕ (POST) ---
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(Guid id, Employee employee, Guid[] selectedPositions, Guid[] selectedDepartments, string[] Phones, string[] Emails, Dictionary<string, string> DynamicProps)
+        // ИСПРАВЛЕНО: DynamicProps заменен на IFormCollection form
+        public async Task<IActionResult> Edit(Guid id, Employee employee, Guid[] selectedPositions, Guid[] selectedDepartments, string[] Phones, string[] Emails, IFormCollection form)
         {
             if (id != employee.Id) return NotFound();
 
-            // Сохраняем динамические данные перед проверкой модели
-            SaveDynamicProperties(employee, DynamicProps);
+            // ИСПРАВЛЕНО: await + форма + код сущности
+            await SaveDynamicProperties(employee, form, "Employee");
 
             if (ModelState.IsValid)
             {
@@ -157,9 +154,7 @@ namespace MedicalWeb.Controllers
                 return RedirectToAction(nameof(Index));
             }
 
-            // При ошибке снова грузим поля
             await LoadDynamicFields("Employee");
-
             ViewBag.Positions = await _context.Positions.OrderBy(p => p.Name).ToListAsync();
             ViewBag.Departments = await _context.Departments.OrderBy(d => d.Name).ToListAsync();
             return View(employee);

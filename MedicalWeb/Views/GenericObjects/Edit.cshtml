@@ -2,26 +2,32 @@
 @{ ViewData["Title"] = "Редактирование"; }
 
 <div class="row justify-content-center">
-    <div class="col-md-8">
+    <div class="col-md-10">
         <h2 class="mb-4">Редактирование объекта</h2>
+        
         <form asp-action="Edit" method="post">
             <input type="hidden" asp-for="Id" />
             <input type="hidden" asp-for="EntityCode" />
             
-            <div class="card shadow-sm mb-4">
-                <div class="card-body">
-                    <div class="mb-3">
-                        <label asp-for="Name" class="form-label fw-bold">Основное наименование</label>
-                        <input asp-for="Name" class="form-control form-control-lg" required />
+            @* --- ОСНОВНЫЕ ПОЛЯ --- *@
+            <div class="container-fluid px-0">
+                <div class="row mb-3">
+                    <label asp-for="Name" class="col-sm-2 col-form-label text-muted text-sm-end fw-bold">
+                        Наименование <span class="text-danger">*</span>
+                    </label>
+                    <div class="col-sm-10">
+                        <input asp-for="Name" class="form-control" required />
+                        <span asp-validation-for="Name" class="text-danger"></span>
                     </div>
                 </div>
             </div>
 
+            @* --- ДОПОЛНИТЕЛЬНЫЕ ПОЛЯ --- *@
             <partial name="_DynamicFields" />
 
-            <div class="mt-4 border-top pt-3">
-                <button type="submit" class="btn btn-primary px-5">Сохранить</button>
-                <a asp-action="Index" asp-route-entityCode="@Model.EntityCode" class="btn btn-link">Отмена</a>
+            <div class="mt-4 pt-3 border-top">
+                <button type="submit" class="btn btn-primary px-4">Сохранить</button>
+                <a href="/Data/@Model.EntityCode" class="btn btn-link text-decoration-none">Отмена</a>
             </div>
         </form>
     </div>

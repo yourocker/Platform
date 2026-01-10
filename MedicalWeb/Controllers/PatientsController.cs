@@ -1,30 +1,65 @@
-﻿using MedicalBot.Data;
+﻿using System;
+using MedicalBot.Data;
+using MedicalBot.Entities.Platform;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Http;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace MedicalWeb.Controllers
 {
-    public class PatientsController : Controller
+    public class PatientsController(AppDbContext context) : BasePlatformController(context)
     {
-        private readonly AppDbContext _context;
-
-        public PatientsController(AppDbContext context)
-        {
-            _context = context;
-        }
-
         public async Task<IActionResult> Index()
         {
-            // Загружаем ВСЕХ пациентов для таблицы
-            // Сортировку и пагинацию сделает интерфейс
             var patients = await _context.Patients
                 .OrderBy(p => p.FullName)
                 .ToListAsync();
 
             return View(patients);
         }
+
+        [HttpGet]
+        public async Task<IActionResult> Create()
+        {
+            // Используем стандартизированный метод загрузки полей
+            await LoadDynamicFields("patient");
+            
+            var definition = await _context.AppDefinitions
+                .Include(a => a.Fields)
+                .FirstOrDefaultAsync(a => a.EntityCode.ToLower() == "patient");
+
+            ViewBag.Definition = definition;
+            ViewBag.EntityCode = "patient";
+
+            return View("~/Views/GenericObjects/Create.cshtml", new GenericObject());
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Create(GenericObject obj, IFormCollection form)
+        {
+            obj.EntityCode = "patient";
+            
+            // ИСПРАВЛЕНО: Убрана ручная конвертация в Dictionary.
+            // Теперь вызываем асинхронный метод из базового контроллера.
+            await SaveDynamicProperties(obj, form, "patient");
+            
+            if (ModelState.IsValid)
+            {
+                obj.Id = Guid.NewGuid();
+                obj.CreatedAt = DateTime.UtcNow;
+                _context.GenericObjects.Add(obj);
+                await _context.SaveChangesAsync();
+                return RedirectToAction(nameof(Index));
+            }
+            
+            await LoadDynamicFields("patient");
+            ViewBag.EntityCode = "patient";
+            return View("~/Views/GenericObjects/Create.cshtml", obj);
+        }
         
-        // Исправили тип id на Guid, как в твоей базе
         public async Task<IActionResult> Details(Guid id)
         {
             var patient = await _context.Patients.FindAsync(id);
