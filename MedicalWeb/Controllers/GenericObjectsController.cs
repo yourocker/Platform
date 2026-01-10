@@ -22,6 +22,7 @@ public class GenericObjectsController(AppDbContext context) : BasePlatformContro
         if (definition == null) return NotFound();
 
         ViewBag.Definition = definition;
+        ViewBag.EntityCode = entityCode;
 
         var objects = await _context.GenericObjects
             .Where(o => o.EntityCode == entityCode)
@@ -55,7 +56,7 @@ public class GenericObjectsController(AppDbContext context) : BasePlatformContro
             _context.Add(obj);
             await _context.SaveChangesAsync();
             
-            return RedirectToAction(nameof(Index), new { entityCode = obj.EntityCode });
+            return Redirect($"/Data/{obj.EntityCode}");
         }
 
         await LoadDynamicFields(obj.EntityCode);
@@ -95,7 +96,7 @@ public class GenericObjectsController(AppDbContext context) : BasePlatformContro
                 else throw;
             }
             
-            return RedirectToAction(nameof(Index), new { entityCode = obj.EntityCode });
+            return Redirect($"/Data/{obj.EntityCode}");
         }
 
         await LoadDynamicFields(obj.EntityCode);
@@ -115,6 +116,6 @@ public class GenericObjectsController(AppDbContext context) : BasePlatformContro
         _context.GenericObjects.Remove(obj);
         await _context.SaveChangesAsync();
 
-        return RedirectToAction(nameof(Index), new { entityCode = entityCode });
+        return Redirect($"/Data/{entityCode}");
     }
 }
