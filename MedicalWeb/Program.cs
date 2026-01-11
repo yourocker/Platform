@@ -1,8 +1,10 @@
 using MedicalBot.Data;
-using MedicalBot.Entities.Company; 
+using MedicalBot.Entities.Company;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
+using Microsoft.AspNetCore.Authorization;   
+using Microsoft.AspNetCore.Mvc.Authorization;
 
 #pragma warning disable CS0618
 NpgsqlConnection.GlobalTypeMapper.EnableDynamicJson(); 
@@ -10,7 +12,14 @@ NpgsqlConnection.GlobalTypeMapper.EnableDynamicJson();
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddControllersWithViews();
+// !!! ИЗМЕНЕНО: Добавляем политику "Вход обязателен для всего"
+builder.Services.AddControllersWithViews(options =>
+{
+    var policy = new AuthorizationPolicyBuilder()
+        .RequireAuthenticatedUser()
+        .Build();
+    options.Filters.Add(new AuthorizeFilter(policy));
+});
 
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
@@ -39,7 +48,6 @@ builder.Services.ConfigureApplicationCookie(options =>
 
 var app = builder.Build();
 
-// Настройка обработки ошибок
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Home/Error");
@@ -58,19 +66,15 @@ app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}");
 
-// --- БЛОК ИНИЦИАЛИЗАЦИИ ПЛАТФОРМЫ ---
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
     try
     {
         var context = services.GetRequiredService<AppDbContext>();
-        
         await context.Database.MigrateAsync();
-        
-        await DbInitializer.Initialize(context);
-        
-        Console.WriteLine(">>> База данных и платформенные сущности успешно инициализированы.");
+        // await DbInitializer.Initialize(context); 
+        Console.WriteLine(">>> База данных готова.");
     }
     catch (Exception ex)
     {
