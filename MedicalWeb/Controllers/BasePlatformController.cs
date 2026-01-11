@@ -12,6 +12,7 @@ using System;
 using System.Globalization;
 using System.IO;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc.Rendering; // ДОБАВЛЕНО для SelectListItem
 
 namespace MedicalWeb.Controllers
 {
@@ -34,9 +35,30 @@ namespace MedicalWeb.Controllers
                 .ToListAsync();
 
             ViewBag.DynamicFields = fields;
+
+            // Подготовка данных для полей типа EntityLink (Связь с объектом)
+            var lookupData = new Dictionary<string, List<SelectListItem>>();
+            foreach (var field in fields.Where(f => f.DataType == FieldDataType.EntityLink))
+            {
+                if (!string.IsNullOrEmpty(field.TargetEntityCode))
+                {
+                    // Получаем записи целевой сущности, используя физическое свойство Name для заголовка
+                    var data = await _context.GenericObjects
+                        .Where(o => o.EntityCode == field.TargetEntityCode)
+                        .OrderBy(o => o.Name) // Сортируем по имени для удобства выбора
+                        .Select(o => new SelectListItem
+                        {
+                            Value = o.Id.ToString(),
+                            Text = o.Name // Используем поле Name из вашей модели GenericObject
+                        })
+                        .ToListAsync();
+                    
+                    lookupData[field.SystemName] = data;
+                }
+            }
+            ViewBag.LookupData = lookupData;
         }
 
-        // Вспомогательный метод для удаления файла с диска
         protected void DeletePhysicalFile(string webPath)
         {
             if (string.IsNullOrEmpty(webPath)) return;
@@ -51,12 +73,10 @@ namespace MedicalWeb.Controllers
             catch { }
         }
 
-        // Метод для удаления файла из свойств объекта (тот самый "крестик")
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteFileProperty(Guid id, string entityCode, string propertyName, string filePath)
         {
-            // Ищем объект в GenericObjects или по таблицам (упрощенно для GenericObject)
             var entity = await _context.GenericObjects.FindAsync(id);
             if (entity == null || string.IsNullOrEmpty(entity.Properties)) return Json(new { success = false });
 
@@ -90,7 +110,6 @@ namespace MedicalWeb.Controllers
             return Json(new { success = false });
         }
 
-        // Этап 1: Сохранение во временную папку (temp)
         protected async Task SaveDynamicProperties(IHasDynamicProperties entity, IFormCollection form, string entityCode)
         {
             var definitions = await _context.AppFieldDefinitions
@@ -318,6 +337,8 @@ namespace MedicalWeb.Controllers
                     throw new FormatException();
                 case FieldDataType.Boolean:
                     return val.Contains("true", StringComparison.OrdinalIgnoreCase);
+                case FieldDataType.EntityLink:
+                    return val;
                 default:
                     return val;
             }

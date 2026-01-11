@@ -43,12 +43,17 @@ public class AppDefinitionsController(AppDbContext context) : Controller
 
         if (app == null) return NotFound();
 
+        // Добавлено: Загружаем все сущности для выбора цели связи в модальном окне
+        ViewBag.AllDefinitions = await _context.AppDefinitions
+            .OrderBy(a => a.Name)
+            .ToListAsync();
+
         return View(app);
     }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> AddField(Guid appDefinitionId, string label, string systemName, FieldDataType dataType, bool isRequired, bool isArray)
+    public async Task<IActionResult> AddField(Guid appDefinitionId, string label, string systemName, FieldDataType dataType, bool isRequired, bool isArray, string? targetEntityCode)
     {
         var app = await _context.AppDefinitions
             .Include(a => a.Fields)
@@ -93,7 +98,8 @@ public class AppDefinitionsController(AppDbContext context) : Controller
             DataType = dataType,
             IsRequired = isRequired,
             IsArray = isArray,
-            SortOrder = nextSortOrder
+            SortOrder = nextSortOrder,
+            TargetEntityCode = targetEntityCode // Добавлено: сохранение кода целевой сущности
         };
 
         _context.AppFieldDefinitions.Add(newField);
