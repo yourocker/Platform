@@ -8,12 +8,12 @@ namespace MedicalBot.Data
         public static async Task Initialize(AppDbContext context)
         {
             // --- ШАГ 1: Инициализация разделов меню (AppCategories) ---
-            // Эти записи определяют заголовки в левом меню (Компания, Пациенты и т.д.)
             var categories = new List<AppCategory>
             {
                 new AppCategory { Id = Guid.Parse("a1111111-1111-1111-1111-111111111111"), Name = "Компания", Icon = "building", SortOrder = 1, IsSystem = true },
                 new AppCategory { Id = Guid.Parse("b2222222-2222-2222-2222-222222222222"), Name = "Пациенты", Icon = "people", SortOrder = 2, IsSystem = true },
-                new AppCategory { Id = Guid.Parse("c3333333-3333-3333-3333-333333333333"), Name = "Конструктор", Icon = "gear", SortOrder = 3, IsSystem = true }
+                new AppCategory { Id = Guid.Parse("c3333333-3333-3333-3333-333333333333"), Name = "Конструктор", Icon = "gear", SortOrder = 3, IsSystem = true },
+                new AppCategory { Id = Guid.Parse("d4444444-4444-4444-4444-444444444444"), Name = "Сервисы", Icon = "grid", SortOrder = 4, IsSystem = true }
             };
 
             foreach (var cat in categories)
@@ -25,7 +25,6 @@ namespace MedicalBot.Data
                 }
                 else
                 {
-                    // Гарантируем, что разделы помечены как системные и имеют верные иконки
                     existingCat.IsSystem = true;
                     existingCat.Icon = cat.Icon;
                     existingCat.SortOrder = cat.SortOrder;
@@ -34,17 +33,18 @@ namespace MedicalBot.Data
             await context.SaveChangesAsync();
 
             // --- ШАГ 2: Инициализация системных сущностей (AppDefinitions) ---
-            // Это описание таблиц, к которым вы сможете добавлять свои поля через шестеренку.
             
             var catCompany = await context.AppCategories.FirstOrDefaultAsync(c => c.Name == "Компания");
             var catPatients = await context.AppCategories.FirstOrDefaultAsync(c => c.Name == "Пациенты");
+            var catServices = await context.AppCategories.FirstOrDefaultAsync(c => c.Name == "Сервисы");
 
             var systemApps = new List<AppDefinition>
             {
                 new AppDefinition { Name = "Сотрудники", EntityCode = "Employee", Icon = "person-badge", IsSystem = true, AppCategoryId = catCompany?.Id },
                 new AppDefinition { Name = "Пациенты", EntityCode = "Patient", Icon = "person-heart", IsSystem = true, AppCategoryId = catPatients?.Id },
                 new AppDefinition { Name = "Должности", EntityCode = "Position", Icon = "briefcase", IsSystem = true, AppCategoryId = catCompany?.Id },
-                new AppDefinition { Name = "Подразделения", EntityCode = "Department", Icon = "diagram-3", IsSystem = true, AppCategoryId = catCompany?.Id }
+                new AppDefinition { Name = "Подразделения", EntityCode = "Department", Icon = "diagram-3", IsSystem = true, AppCategoryId = catCompany?.Id },
+                new AppDefinition { Name = "Задачи", EntityCode = "TASK", Icon = "check2-all", IsSystem = true, AppCategoryId = catServices?.Id }
             };
 
             foreach (var app in systemApps)
@@ -57,8 +57,6 @@ namespace MedicalBot.Data
                 }
                 else
                 {
-                    // Если сущность уже была в базе как "пользовательская" (IsSystem = false),
-                    // мы принудительно делаем её системной, чтобы убрать кнопки редактирования/удаления.
                     existingApp.IsSystem = true; 
                     existingApp.Name = app.Name;
                     existingApp.Icon = app.Icon;

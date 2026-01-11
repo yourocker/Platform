@@ -3,6 +3,8 @@ using Microsoft.EntityFrameworkCore;
 using MedicalBot.Entities; 
 using MedicalBot.Entities.Company;
 using MedicalBot.Entities.Platform;
+using MedicalBot.Entities.Tasks;
+using MedicalBot.Entities.Tasks;
 
 namespace MedicalBot.Data
 {
@@ -13,7 +15,7 @@ namespace MedicalBot.Data
             AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
         }
 
-        // --- ПЛАТФОРМЕННОЕ ЯДРО (Путь А) ---
+        // --- ПЛАТФОРМЕННОЕ ЯДРО ---
         public DbSet<AppDefinition> AppDefinitions { get; set; }
         public DbSet<AppFieldDefinition> AppFieldDefinitions { get; set; }
 
@@ -32,11 +34,46 @@ namespace MedicalBot.Data
         // --- УНИВЕРСАЛЬНЫЕ ОБЪЕКТЫ ---
         public DbSet<GenericObject> GenericObjects { get; set; }
         
+        // --- ЗАДАЧИ ---
+        public DbSet<EmployeeTask> EmployeeTasks { get; set; }
+        public DbSet<TaskComment> TaskComments { get; set; }
+        public DbSet<TaskEntityRelation> TaskEntityRelations { get; set; }
+        
+        // --- КАТЕГОРИИ ПРИЛОЖЕНИЙ (пункты меню по сути) ---
         public DbSet<AppCategory> AppCategories { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+            
+            // Конфигурация задачи
+            modelBuilder.Entity<EmployeeTask>(entity =>
+            {
+                // entity.HasQueryFilter(t => !t.IsDeleted); 
+
+                entity.HasOne(t => t.Author)
+                    .WithMany()
+                    .HasForeignKey(t => t.AuthorId)
+                    .OnDelete(DeleteBehavior.Restrict);
+
+                entity.HasOne(t => t.Assignee)
+                    .WithMany()
+                    .HasForeignKey(t => t.AssigneeId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<GenericObject>()
+                .HasQueryFilter(b => 
+                    !(b is EmployeeTask) || !((EmployeeTask)b).IsDeleted);
+
+            // Конфигурация комментариев
+            modelBuilder.Entity<TaskComment>(entity =>
+            {
+                entity.HasOne(t => t.Task)
+                    .WithMany(t => t.Comments)
+                    .HasForeignKey(t => t.TaskId)
+                    .OnDelete(DeleteBehavior.Cascade); // Если удалили задачу совсем, удаляем и комменты
+            });
 
             // Настройка Сотрудника
             modelBuilder.Entity<Employee>(entity =>
@@ -74,7 +111,6 @@ namespace MedicalBot.Data
             // Настройка Платформенных определений
             modelBuilder.Entity<AppFieldDefinition>(entity =>
             {
-                // Настройки поля тоже будем хранить в JSON (для типов Table, Link и т.д.)
                 //entity.Property(f => f.SettingsJson).HasColumnType("jsonb");
 
                 entity.HasIndex(f => new { f.AppDefinitionId, f.SystemName })

@@ -335,6 +335,11 @@ namespace MedicalBot.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp without time zone");
 
+                    b.Property<string>("Discriminator")
+                        .IsRequired()
+                        .HasMaxLength(13)
+                        .HasColumnType("character varying(13)");
+
                     b.Property<string>("EntityCode")
                         .IsRequired()
                         .HasColumnType("text");
@@ -349,6 +354,69 @@ namespace MedicalBot.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("GenericObjects");
+
+                    b.HasDiscriminator().HasValue("GenericObject");
+
+                    b.UseTphMappingStrategy();
+                });
+
+            modelBuilder.Entity("MedicalBot.Entities.Tasks.TaskComment", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<Guid>("AuthorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid>("TaskId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Text")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AuthorId");
+
+                    b.HasIndex("TaskId");
+
+                    b.ToTable("TaskComments");
+                });
+
+            modelBuilder.Entity("MedicalBot.Entities.Tasks.TaskEntityRelation", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("EntityCode")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.Property<Guid>("EntityId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("EntityName")
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("TaskId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TaskId");
+
+                    b.ToTable("TaskEntityRelations");
                 });
 
             modelBuilder.Entity("MedicalBot.Entities.Visit", b =>
@@ -386,6 +454,43 @@ namespace MedicalBot.Migrations
                     b.HasIndex("PatientId");
 
                     b.ToTable("Visits");
+                });
+
+            modelBuilder.Entity("MedicalBot.Entities.Tasks.EmployeeTask", b =>
+                {
+                    b.HasBaseType("MedicalBot.Entities.Platform.GenericObject");
+
+                    b.Property<Guid>("AssigneeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AuthorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("Deadline")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.HasIndex("AssigneeId");
+
+                    b.HasIndex("AuthorId");
+
+                    b.HasDiscriminator().HasValue("EmployeeTask");
                 });
 
             modelBuilder.Entity("MedicalBot.Entities.Company.Department", b =>
@@ -450,6 +555,36 @@ namespace MedicalBot.Migrations
                     b.Navigation("AppDefinition");
                 });
 
+            modelBuilder.Entity("MedicalBot.Entities.Tasks.TaskComment", b =>
+                {
+                    b.HasOne("MedicalBot.Entities.Company.Employee", "Author")
+                        .WithMany()
+                        .HasForeignKey("AuthorId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("MedicalBot.Entities.Tasks.EmployeeTask", "Task")
+                        .WithMany("Comments")
+                        .HasForeignKey("TaskId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Author");
+
+                    b.Navigation("Task");
+                });
+
+            modelBuilder.Entity("MedicalBot.Entities.Tasks.TaskEntityRelation", b =>
+                {
+                    b.HasOne("MedicalBot.Entities.Tasks.EmployeeTask", "Task")
+                        .WithMany("Relations")
+                        .HasForeignKey("TaskId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Task");
+                });
+
             modelBuilder.Entity("MedicalBot.Entities.Visit", b =>
                 {
                     b.HasOne("MedicalBot.Entities.Doctor", null)
@@ -463,6 +598,25 @@ namespace MedicalBot.Migrations
                         .IsRequired();
 
                     b.Navigation("Patient");
+                });
+
+            modelBuilder.Entity("MedicalBot.Entities.Tasks.EmployeeTask", b =>
+                {
+                    b.HasOne("MedicalBot.Entities.Company.Employee", "Assignee")
+                        .WithMany()
+                        .HasForeignKey("AssigneeId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("MedicalBot.Entities.Company.Employee", "Author")
+                        .WithMany()
+                        .HasForeignKey("AuthorId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.Navigation("Assignee");
+
+                    b.Navigation("Author");
                 });
 
             modelBuilder.Entity("MedicalBot.Entities.Company.Department", b =>
@@ -495,6 +649,13 @@ namespace MedicalBot.Migrations
             modelBuilder.Entity("MedicalBot.Entities.Platform.AppDefinition", b =>
                 {
                     b.Navigation("Fields");
+                });
+
+            modelBuilder.Entity("MedicalBot.Entities.Tasks.EmployeeTask", b =>
+                {
+                    b.Navigation("Comments");
+
+                    b.Navigation("Relations");
                 });
 #pragma warning restore 612, 618
         }

@@ -3,16 +3,19 @@
 @inject AppDbContext Context
 
 @{
-    // 1. Загружаем категории со всеми приложениями из базы
-    var customCategories = await Context.AppCategories
-        .Include(c => c.Apps)
-        .OrderBy(c => c.SortOrder)
-        .ToListAsync();
+// 1. Загружаем категории со всеми приложениями из базы
+var customCategories = await Context.AppCategories
+.Include(c => c.Apps)
+.OrderBy(c => c.SortOrder)
+.ToListAsync();
 
-    var controller = ViewContext.RouteData.Values["Controller"]?.ToString();
-    // Сначала ищем в URL, если нет — берем из контроллера (ViewBag)
-    var entityCodeFromUrl = ViewContext.RouteData.Values["entityCode"]?.ToString() 
-                            ?? ViewBag.EntityCode?.ToString();}
+var controller = ViewContext.RouteData.Values["Controller"]?.ToString();
+var action = ViewContext.RouteData.Values["Action"]?.ToString();
+
+// Сначала ищем в URL, если нет — берем из контроллера (ViewBag)
+var entityCodeFromUrl = ViewContext.RouteData.Values["entityCode"]?.ToString()
+?? ViewBag.EntityCode?.ToString();
+}
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -52,11 +55,11 @@
 
         @* Логика определения активности разделов *@
         @{
-            var isCompanyActive = controller == "Positions" || controller == "Departments" || controller == "Employees" ||
-                                  customCategories.Any(c => c.IsSystem && c.Name == "Компания" && c.Apps.Any(a => a.EntityCode == entityCodeFromUrl));
-            
-            var isPatientsActive = controller == "Patients" ||
-                                   customCategories.Any(c => c.IsSystem && c.Name == "Пациенты" && c.Apps.Any(a => a.EntityCode == entityCodeFromUrl));
+        var isCompanyActive = controller == "Positions" || controller == "Departments" || controller == "Employees" ||
+        customCategories.Any(c => c.IsSystem && c.Name == "Компания" && c.Apps.Any(a => a.EntityCode == entityCodeFromUrl));
+
+        var isPatientsActive = controller == "Patients" ||
+        customCategories.Any(c => c.IsSystem && c.Name == "Пациенты" && c.Apps.Any(a => a.EntityCode == entityCodeFromUrl));
         }
 
         @* 2. КОМПАНИЯ *@
@@ -69,16 +72,21 @@
             <i class="bi bi-people"></i>
         </a>
 
-        @* 4. КАСТОМНЫЕ РАЗДЕЛЫ *@
+        @* 4. ЗАДАЧИ *@
+        <a href="/Tasks" class="main-btn @(controller == "Tasks" ? "active" : "")" data-id="tasks" title="Задачи">
+            <i class="bi bi-list-check"></i>
+        </a>
+
+        @* 5. КАСТОМНЫЕ РАЗДЕЛЫ *@
         @foreach (var cat in customCategories.Where(c => !c.IsSystem))
         {
-            var isActive = cat.Apps.Any(a => a.EntityCode == entityCodeFromUrl);
-            <a href="/Data/@cat.Apps.FirstOrDefault()?.EntityCode" class="main-btn @(isActive ? "active" : "")" data-id="@cat.Id" title="@cat.Name">
-                <i class="bi bi-@cat.Icon"></i>
-            </a>
+        var isActive = cat.Apps.Any(a => a.EntityCode == entityCodeFromUrl);
+        <a href="/Data/@cat.Apps.FirstOrDefault()?.EntityCode" class="main-btn @(isActive ? "active" : "")" data-id="@cat.Id" title="@cat.Name">
+            <i class="bi bi-@cat.Icon"></i>
+        </a>
         }
 
-        @* 5. КОНСТРУКТОР *@
+        @* 6. КОНСТРУКТОР *@
         <a href="/AppDefinitions" class="main-btn @(controller == "AppDefinitions" || controller == "AppCategories" ? "active" : "")" data-id="settings" title="Конструктор">
             <i class="bi bi-gear"></i>
         </a>
@@ -88,58 +96,66 @@
 <nav id="nav-sub">
     @if (isCompanyActive)
     {
-        <div class="sub-header">Компания</div>
-        @* ТВОЯ РОДНАЯ СТРУКТУРА С ТВОИМИ КОНТРОЛЛЕРАМИ *@
-        <a href="/Departments" class="sub-link @(controller == "Departments" ? "active" : "")"><i class="bi bi-diagram-3"></i> Оргструктура</a>
-        <a href="/Employees" class="sub-link @(controller == "Employees" ? "active" : "")"><i class="bi bi-person-badge"></i> Сотрудники</a>
-        <a href="/Positions" class="sub-link @(controller == "Positions" ? "active" : "")"><i class="bi bi-briefcase"></i> Должности</a>
-        
-        @* Динамические (кастомные) сущности, которые ты добавил в этот раздел через конструктор *@
-        var compCat = customCategories.FirstOrDefault(c => c.Name == "Компания");
-        if (compCat != null) {
-            var systemCodes = new[] { "Employee", "Department", "Position" };
-            foreach (var app in compCat.Apps.Where(a => !systemCodes.Contains(a.EntityCode))) {
-                <a href="/Data/@app.EntityCode" class="sub-link @(entityCodeFromUrl == app.EntityCode ? "active" : "")">
-                    <i class="bi bi-@app.Icon"></i> @app.Name
-                </a>
-            }
-        }
+    <div class="sub-header">Компания</div>
+    <a href="/Departments" class="sub-link @(controller == "Departments" ? "active" : "")"><i class="bi bi-diagram-3"></i> Оргструктура</a>
+    <a href="/Employees" class="sub-link @(controller == "Employees" ? "active" : "")"><i class="bi bi-person-badge"></i> Сотрудники</a>
+    <a href="/Positions" class="sub-link @(controller == "Positions" ? "active" : "")"><i class="bi bi-briefcase"></i> Должности</a>
+
+    var compCat = customCategories.FirstOrDefault(c => c.Name == "Компания");
+    if (compCat != null) {
+    var systemCodes = new[] { "Employee", "Department", "Position" };
+    foreach (var app in compCat.Apps.Where(a => !systemCodes.Contains(a.EntityCode))) {
+    <a href="/Data/@app.EntityCode" class="sub-link @(entityCodeFromUrl == app.EntityCode ? "active" : "")">
+        <i class="bi bi-@app.Icon"></i> @app.Name
+    </a>
+    }
+    }
     }
     else if (isPatientsActive)
     {
-        <div class="sub-header">Пациенты</div>
-        <a href="/Patients" class="sub-link @(controller == "Patients" ? "active" : "")"><i class="bi bi-person-lines-fill"></i> Реестр пациентов</a>
-        
-        var patCat = customCategories.FirstOrDefault(c => c.Name == "Пациенты");
-        if (patCat != null) {
-            foreach (var app in patCat.Apps.Where(a => a.EntityCode != "Patient")) {
-                <a href="/Data/@app.EntityCode" class="sub-link @(entityCodeFromUrl == app.EntityCode ? "active" : "")">
-                    <i class="bi bi-@app.Icon"></i> @app.Name
-                </a>
-            }
-        }
+    <div class="sub-header">Пациенты</div>
+    <a href="/Patients" class="sub-link @(controller == "Patients" ? "active" : "")"><i class="bi bi-person-lines-fill"></i> Реестр пациентов</a>
+
+    var patCat = customCategories.FirstOrDefault(c => c.Name == "Пациенты");
+    if (patCat != null) {
+    foreach (var app in patCat.Apps.Where(a => a.EntityCode != "Patient")) {
+    <a href="/Data/@app.EntityCode" class="sub-link @(entityCodeFromUrl == app.EntityCode ? "active" : "")">
+        <i class="bi bi-@app.Icon"></i> @app.Name
+    </a>
+    }
+    }
+    }
+    else if (controller == "Tasks")
+    {
+    <div class="sub-header">Задачи</div>
+    <a href="/Tasks/CreatedByMe" class="sub-link @(action == "CreatedByMe" ? "active" : "")"><i class="bi bi-person-up"></i> Поставленные мной</a>
+    <a href="/Tasks/AssignedToMe" class="sub-link @(action == "AssignedToMe" ? "active" : "")"><i class="bi bi-person-check"></i> Назначенные мне</a>
+    <a href="/Tasks/CompletedTasks" class="sub-link @(action == "CompletedTasks" ? "active" : "")"><i class="bi bi-check2-all"></i> Выполненные</a>
+    <a href="/Tasks/OverdueTasks" class="sub-link @(action == "OverdueTasks" ? "active" : "")"><i class="bi bi-calendar-x text-danger"></i> Просроченные</a>
+    <hr />
+    <a href="/Tasks" class="sub-link @(action == "Index" ? "active" : "")"><i class="bi bi-list-ul"></i> Все задачи</a>
     }
     else if (controller == "AppDefinitions" || controller == "AppCategories")
     {
-        <div class="sub-header">Конструктор</div>
-        <a href="/AppDefinitions" class="sub-link @(controller == "AppDefinitions" ? "active" : "")"><i class="bi bi-layers"></i> Список сущностей</a>
-        <a href="/AppCategories" class="sub-link @(controller == "AppCategories" ? "active" : "")"><i class="bi bi-folder2-open"></i> Разделы меню</a>
+    <div class="sub-header">Конструктор</div>
+    <a href="/AppDefinitions" class="sub-link @(controller == "AppDefinitions" ? "active" : "")"><i class="bi bi-layers"></i> Список сущностей</a>
+    <a href="/AppCategories" class="sub-link @(controller == "AppCategories" ? "active" : "")"><i class="bi bi-folder2-open"></i> Разделы меню</a>
     }
     else if (customCategories.Any(c => !c.IsSystem && c.Apps.Any(a => a.EntityCode == entityCodeFromUrl)))
     {
-        var activeCat = customCategories.First(c => !c.IsSystem && c.Apps.Any(a => a.EntityCode == entityCodeFromUrl));
-        <div class="sub-header">@activeCat.Name</div>
-        @foreach (var app in activeCat.Apps)
-        {
-            <a href="/Data/@app.EntityCode" class="sub-link @(entityCodeFromUrl == app.EntityCode ? "active" : "")">
-                <i class="bi bi-@app.Icon"></i> @app.Name
-            </a>
-        }
+    var activeCat = customCategories.First(c => !c.IsSystem && c.Apps.Any(a => a.EntityCode == entityCodeFromUrl));
+    <div class="sub-header">@activeCat.Name</div>
+    @foreach (var app in activeCat.Apps)
+    {
+    <a href="/Data/@app.EntityCode" class="sub-link @(entityCodeFromUrl == app.EntityCode ? "active" : "")">
+        <i class="bi bi-@app.Icon"></i> @app.Name
+    </a>
+    }
     }
     else
     {
-        <div class="sub-header">Главная</div>
-        <a href="/" class="sub-link active"><i class="bi bi-house"></i> Рабочий стол</a>
+    <div class="sub-header">Главная</div>
+    <a href="/" class="sub-link active"><i class="bi bi-house"></i> Рабочий стол</a>
     }
 </nav>
 

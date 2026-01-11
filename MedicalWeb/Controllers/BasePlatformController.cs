@@ -12,10 +12,18 @@ using System;
 using System.Globalization;
 using System.IO;
 using Microsoft.AspNetCore.Hosting;
-using Microsoft.AspNetCore.Mvc.Rendering; // ДОБАВЛЕНО для SelectListItem
+using Microsoft.AspNetCore.Mvc.Rendering;
+using MedicalBot.Entities.Tasks;
 
 namespace MedicalWeb.Controllers
 {
+    // Класс для жесткой типизации выборки имен
+    public class LookupItem
+    {
+        public Guid Id { get; set; }
+        public string Name { get; set; } = string.Empty;
+    }
+
     public abstract class BasePlatformController : Controller
     {
         protected readonly AppDbContext _context;
@@ -341,6 +349,44 @@ namespace MedicalWeb.Controllers
                     return val;
                 default:
                     return val;
+            }
+        }
+        protected async Task ResolveRelatedEntityNames(List<EmployeeTask> tasks)
+        {
+            // Собираем все связи из всех задач в один плоский список
+            var allRelations = tasks.SelectMany(t => t.Relations).ToList();
+            if (!allRelations.Any()) return;
+
+            // Группируем по коду сущности (Patient, Employee и т.д.), чтобы дергать базу один раз для каждого типа
+            var groupedRelations = allRelations.GroupBy(r => r.EntityCode);
+
+            foreach (var group in groupedRelations)
+            {
+                var entityCode = group.Key;
+                var entityIds = group.Select(r => r.EntityId).Distinct().ToList();
+
+                // Динамически получаем таблицу через DbContext
+                var dbSet = _context.GetType().GetProperties()
+                    .FirstOrDefault(p => p.Name.Contains(entityCode + "s"))?.GetValue(_context) as IQueryable<object>;
+
+                if (dbSet != null)
+                {
+                    // Вытягиваем ID и Имя (FullName или Name)
+                    var namesMap = await dbSet
+                        .Where(e => entityIds.Contains((Guid)e.GetType().GetProperty("Id").GetValue(e)))
+                        .ToListAsync();
+
+                    foreach (var relation in group)
+                    {
+                        var entity = namesMap.FirstOrDefault(e => (Guid)e.GetType().GetProperty("Id").GetValue(e) == relation.EntityId);
+                        if (entity != null)
+                        {
+                            // Пробуем взять FullName, если нет — Name
+                            relation.EntityName = entity.GetType().GetProperty("FullName")?.GetValue(entity)?.ToString() 
+                                                  ?? entity.GetType().GetProperty("Name")?.GetValue(entity)?.ToString();
+                        }
+                    }
+                }
             }
         }
     }

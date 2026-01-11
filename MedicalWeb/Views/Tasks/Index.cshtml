@@ -1,0 +1,89 @@
+﻿@model IEnumerable<MedicalBot.Entities.Tasks.EmployeeTask>
+
+@{
+    ViewData["Title"] = "Задачи сотрудников";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="bi bi-list-check"></i> Задачи сотрудников</h2>
+    <a asp-action="Create" class="btn btn-primary">
+        <i class="bi bi-plus-lg"></i> Новая задача
+    </a>
+</div>
+
+<div class="card shadow-sm border-0">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Дата</th>
+                    <th>Название</th>
+                    <th>Исполнитель</th>
+                    <th>Связанные объекты</th>
+                    <th>Срок</th>
+                    <th>Статус</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var item in Model)
+                {
+                    <tr>
+                        <td class="text-muted" style="font-size: 0.9rem;">
+                            @item.CreatedAt.ToString("dd.MM.yyyy HH:mm")
+                        </td>
+                        <td>
+                            <a asp-action="Details" asp-route-id="@item.Id" class="fw-bold text-decoration-none">
+                                @item.Title
+                            </a>
+                        </td>
+                        <td>
+                            <span class="badge bg-light text-dark border">
+                                <i class="bi bi-person"></i> @item.Assignee.FullName
+                            </span>
+                        </td>
+                        <td>
+                            @if (item.Relations != null && item.Relations.Any())
+                            {
+                                @foreach (var rel in item.Relations)
+                                {
+                                    <span class="badge bg-info text-dark fw-normal mb-1" title="@rel.EntityCode">
+                                        @rel.EntityName
+                                    </span>
+                                }
+                            }
+                            else
+                            {
+                                <span class="text-muted">—</span>
+                            }
+                        </td>
+                        <td>
+                            @if (item.Deadline.HasValue)
+                            {
+                                <span class="@(item.Deadline < DateTime.UtcNow && item.Status != MedicalBot.Entities.Tasks.TaskStatus.Completed ? "text-danger fw-bold" : "")">
+                                    @item.Deadline.Value.ToString("dd.MM.yyyy")
+                                </span>
+                            }
+                        </td>
+                        <td>
+                            @switch (item.Status)
+                            {
+                                case MedicalBot.Entities.Tasks.TaskStatus.Created:
+                                    <span class="badge bg-secondary">Создана</span> break;
+                                case MedicalBot.Entities.Tasks.TaskStatus.InProgress:
+                                    <span class="badge bg-primary">В работе</span> break;
+                                case MedicalBot.Entities.Tasks.TaskStatus.Completed:
+                                    <span class="badge bg-success">Готова</span> break;
+                            }
+                        </td>
+                        <td class="text-end">
+                            <a asp-action="Details" asp-route-id="@item.Id" class="btn btn-sm btn-outline-secondary">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+</div>
