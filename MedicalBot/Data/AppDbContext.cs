@@ -4,7 +4,6 @@ using MedicalBot.Entities;
 using MedicalBot.Entities.Company;
 using MedicalBot.Entities.Platform;
 using MedicalBot.Entities.Tasks;
-using MedicalBot.Entities.Tasks;
 
 namespace MedicalBot.Data
 {
@@ -46,10 +45,17 @@ namespace MedicalBot.Data
         {
             base.OnModelCreating(modelBuilder);
             
+            // Настройка иерархии: привязываем все неопознанные записи к GenericObject
+            modelBuilder.Entity<GenericObject>()
+                .HasDiscriminator<string>("ObjectType")
+                .HasValue<GenericObject>("Base")
+                .HasValue<EmployeeTask>("Task");
+
             // Конфигурация задачи
             modelBuilder.Entity<EmployeeTask>(entity =>
             {
-                // entity.HasQueryFilter(t => !t.IsDeleted); 
+                // Сопоставление CreatedAt, чтобы не было конфликта полей
+                entity.Property(t => t.CreatedAt).HasColumnName("CreatedAt");
 
                 entity.HasOne(t => t.Author)
                     .WithMany()
@@ -72,7 +78,7 @@ namespace MedicalBot.Data
                 entity.HasOne(t => t.Task)
                     .WithMany(t => t.Comments)
                     .HasForeignKey(t => t.TaskId)
-                    .OnDelete(DeleteBehavior.Cascade); // Если удалили задачу совсем, удаляем и комменты
+                    .OnDelete(DeleteBehavior.Cascade);
             });
 
             // Настройка Сотрудника
@@ -80,19 +86,14 @@ namespace MedicalBot.Data
             {
                 entity.Property(e => e.Phones).HasColumnType("jsonb");
                 entity.Property(e => e.Emails).HasColumnType("jsonb");
-                
-                // Настройка гибкого хранилища для сотрудников
                 entity.Property(e => e.Properties).HasColumnType("jsonb");
-    
                 entity.Ignore(e => e.FullName);
             });
 
             // Настройка Пациента
             modelBuilder.Entity<Patient>(entity =>
             {
-                // Настройка гибкого хранилища для пациентов
                 entity.Property(p => p.Properties).HasColumnType("jsonb");
-                
                 entity.HasIndex(p => p.NormalizedName);
             });
 
@@ -111,8 +112,6 @@ namespace MedicalBot.Data
             // Настройка Платформенных определений
             modelBuilder.Entity<AppFieldDefinition>(entity =>
             {
-                //entity.Property(f => f.SettingsJson).HasColumnType("jsonb");
-
                 entity.HasIndex(f => new { f.AppDefinitionId, f.SystemName })
                       .IsUnique();
             });
