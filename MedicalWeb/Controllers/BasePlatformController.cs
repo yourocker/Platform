@@ -36,6 +36,60 @@ namespace MedicalWeb.Controllers
             ViewBag.DynamicFields = fields;
         }
 
+        // Вспомогательный метод для удаления файла с диска
+        protected void DeletePhysicalFile(string webPath)
+        {
+            if (string.IsNullOrEmpty(webPath)) return;
+            try
+            {
+                var fullPath = Path.Combine(_hostingEnvironment.WebRootPath, webPath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
+                if (System.IO.File.Exists(fullPath)) 
+                {
+                    System.IO.File.Delete(fullPath);
+                }
+            }
+            catch { }
+        }
+
+        // Метод для удаления файла из свойств объекта (тот самый "крестик")
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> DeleteFileProperty(Guid id, string entityCode, string propertyName, string filePath)
+        {
+            // Ищем объект в GenericObjects или по таблицам (упрощенно для GenericObject)
+            var entity = await _context.GenericObjects.FindAsync(id);
+            if (entity == null || string.IsNullOrEmpty(entity.Properties)) return Json(new { success = false });
+
+            var props = JsonSerializer.Deserialize<Dictionary<string, object>>(entity.Properties);
+            if (props != null && props.ContainsKey(propertyName))
+            {
+                var val = props[propertyName];
+                if (val is JsonElement el)
+                {
+                    if (el.ValueKind == JsonValueKind.Array)
+                    {
+                        var list = el.EnumerateArray().Select(x => x.GetString()).ToList();
+                        if (list.Remove(filePath))
+                        {
+                            props[propertyName] = list.ToArray();
+                            DeletePhysicalFile(filePath);
+                        }
+                    }
+                    else if (el.GetString() == filePath)
+                    {
+                        props.Remove(propertyName);
+                        DeletePhysicalFile(filePath);
+                    }
+                }
+
+                entity.Properties = JsonSerializer.Serialize(props);
+                await _context.SaveChangesAsync();
+                return Json(new { success = true });
+            }
+
+            return Json(new { success = false });
+        }
+
         // Этап 1: Сохранение во временную папку (temp)
         protected async Task SaveDynamicProperties(IHasDynamicProperties entity, IFormCollection form, string entityCode)
         {
@@ -65,28 +119,24 @@ namespace MedicalWeb.Controllers
                     if (files.Any())
                     {
                         var newPaths = new List<string>();
-
                         foreach (var file in files)
                         {
                             if (file.Length > 20 * 1024 * 1024) 
                             {
-                                ModelState.AddModelError(formKey, $"Файл '{file.FileName}' слишком велик (макс 20МБ).");
+                                ModelState.AddModelError(formKey, $"Файл '{file.FileName}' слишком велик.");
                                 continue;
                             }
 
                             var folderGuid = Guid.NewGuid().ToString();
                             var uploadDir = Path.Combine(_hostingEnvironment.WebRootPath, "uploads", "temp", folderGuid);
-                            
                             if (!Directory.Exists(uploadDir)) Directory.CreateDirectory(uploadDir);
 
                             var safeFileName = Path.GetFileName(file.FileName); 
                             var filePath = Path.Combine(uploadDir, safeFileName);
-
                             using (var stream = new FileStream(filePath, FileMode.Create))
                             {
                                 await file.CopyToAsync(stream);
                             }
-
                             newPaths.Add($"/uploads/temp/{folderGuid}/{safeFileName}");
                         }
 
@@ -94,10 +144,24 @@ namespace MedicalWeb.Controllers
                         {
                             if (def.IsArray)
                             {
-                                resultDictionary[def.SystemName] = newPaths.ToArray();
+                                var existingList = new List<string>();
+                                if (resultDictionary.TryGetValue(def.SystemName, out var existingVal))
+                                {
+                                    if (existingVal is JsonElement el && el.ValueKind == JsonValueKind.Array)
+                                        existingList = el.EnumerateArray().Select(x => x.GetString()).ToList();
+                                    else if (existingVal is string[] arr)
+                                        existingList = arr.ToList();
+                                }
+                                existingList.AddRange(newPaths);
+                                resultDictionary[def.SystemName] = existingList.ToArray();
                             }
                             else
                             {
+                                if (resultDictionary.TryGetValue(def.SystemName, out var oldPathVal))
+                                {
+                                    var oldPath = oldPathVal is JsonElement el ? el.GetString() : oldPathVal?.ToString();
+                                    DeletePhysicalFile(oldPath);
+                                }
                                 resultDictionary[def.SystemName] = newPaths.First();
                             }
                         }
@@ -150,7 +214,6 @@ namespace MedicalWeb.Controllers
             entity.Properties = JsonSerializer.Serialize(resultDictionary, options);
         }
 
-        // Этап 2: Перемещение файлов в постоянную папку (EntityCode/ID)
         protected void FinalizeDynamicFilePaths(IHasDynamicProperties entity, string entityCode, string recordId)
         {
             if (string.IsNullOrEmpty(entity.Properties)) return;
@@ -165,62 +228,36 @@ namespace MedicalWeb.Controllers
             foreach (var key in keys)
             {
                 var value = props[key];
-                
                 if (value is JsonElement jEl)
                 {
-                    // Одиночное строковое значение (путь к файлу)
                     if (jEl.ValueKind == JsonValueKind.String)
                     {
                         var path = jEl.GetString();
                         if (!string.IsNullOrEmpty(path) && path.Contains("/uploads/temp/"))
                         {
                             var newPath = MoveFileToFinal(path, finalBaseFolder);
-                            if (newPath != null)
-                            {
-                                props[key] = newPath;
-                                hasChanges = true;
-                            }
+                            if (newPath != null) { props[key] = newPath; hasChanges = true; }
                         }
                     }
-                    // Массив (может быть массив файлов или массив других данных)
                     else if (jEl.ValueKind == JsonValueKind.Array)
                     {
-                        // ИСПРАВЛЕНИЕ: Используем List<object>, чтобы хранить и строки, и булевы, и числа
                         var newItems = new List<object>();
                         bool arrayChanged = false;
-
                         foreach (var item in jEl.EnumerateArray())
                         {
-                            // ПРОВЕРКА: Обрабатываем как файл ТОЛЬКО если это строка
                             if (item.ValueKind == JsonValueKind.String)
                             {
                                 var path = item.GetString();
                                 if (!string.IsNullOrEmpty(path) && path.Contains("/uploads/temp/"))
                                 {
                                     var newPath = MoveFileToFinal(path, finalBaseFolder);
-                                    if (newPath != null)
-                                    {
-                                        newItems.Add(newPath);
-                                        arrayChanged = true;
-                                        hasChanges = true;
-                                    }
-                                    else
-                                    {
-                                        newItems.Add(path);
-                                    }
+                                    if (newPath != null) { newItems.Add(newPath); arrayChanged = true; hasChanges = true; }
+                                    else newItems.Add(path);
                                 }
-                                else
-                                {
-                                    newItems.Add(path);
-                                }
+                                else newItems.Add(path);
                             }
-                            else
-                            {
-                                // Если это не строка (например, false, 123), сохраняем как есть
-                                newItems.Add(item);
-                            }
+                            else newItems.Add(item);
                         }
-
                         if (arrayChanged) props[key] = newItems.ToArray();
                     }
                 }
@@ -228,12 +265,10 @@ namespace MedicalWeb.Controllers
 
             if (hasChanges)
             {
-                var options = new JsonSerializerOptions 
-                { 
+                entity.Properties = JsonSerializer.Serialize(props, new JsonSerializerOptions { 
                     Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping,
                     WriteIndented = true
-                };
-                entity.Properties = JsonSerializer.Serialize(props, options);
+                });
             }
         }
 
@@ -242,14 +277,11 @@ namespace MedicalWeb.Controllers
             try
             {
                 var tempSystemPath = _hostingEnvironment.WebRootPath + tempWebPath.Replace("/", Path.DirectorySeparatorChar.ToString());
-
                 if (!System.IO.File.Exists(tempSystemPath)) return null;
-
                 if (!Directory.Exists(finalBaseDir)) Directory.CreateDirectory(finalBaseDir);
 
                 var fileName = Path.GetFileName(tempSystemPath);
                 var finalSystemPath = Path.Combine(finalBaseDir, fileName);
-
                 if (System.IO.File.Exists(finalSystemPath))
                 {
                     var nameWithoutExt = Path.GetFileNameWithoutExtension(fileName);
@@ -260,22 +292,14 @@ namespace MedicalWeb.Controllers
                 }
 
                 System.IO.File.Move(tempSystemPath, finalSystemPath);
-
                 var tempDir = Path.GetDirectoryName(tempSystemPath);
-                if (Directory.Exists(tempDir) && !Directory.EnumerateFileSystemEntries(tempDir).Any())
-                {
-                    Directory.Delete(tempDir);
-                }
+                if (Directory.Exists(tempDir) && !Directory.EnumerateFileSystemEntries(tempDir).Any()) Directory.Delete(tempDir);
 
                 var relativeDir = finalBaseDir.Replace(_hostingEnvironment.WebRootPath, "").Replace("\\", "/");
                 if (!relativeDir.StartsWith("/")) relativeDir = "/" + relativeDir;
-                
                 return $"{relativeDir.TrimEnd('/')}/{fileName}";
             }
-            catch
-            {
-                return null;
-            }
+            catch { return null; }
         }
 
         private object ParseAndValidateValue(string val, AppFieldDefinition def, string formKey)
@@ -284,23 +308,16 @@ namespace MedicalWeb.Controllers
             {
                 case FieldDataType.Number:
                 case FieldDataType.Money:
-                    if (decimal.TryParse(val.Replace(",", "."), NumberStyles.Any, CultureInfo.InvariantCulture, out decimal d))
-                        return d;
-                    
-                    ModelState.AddModelError(formKey, $"Значение '{val}' в поле '{def.Label}' не является числом.");
+                    if (decimal.TryParse(val.Replace(",", "."), NumberStyles.Any, CultureInfo.InvariantCulture, out decimal d)) return d;
+                    ModelState.AddModelError(formKey, $"Значение '{val}' в поле '{def.Label}' не число.");
                     throw new FormatException();
-
                 case FieldDataType.Date:
                 case FieldDataType.DateTime:
-                    if (DateTime.TryParse(val, out DateTime dt))
-                        return dt;
-
-                    ModelState.AddModelError(formKey, $"Значение '{val}' в поле '{def.Label}' не является корректной датой.");
+                    if (DateTime.TryParse(val, out DateTime dt)) return dt;
+                    ModelState.AddModelError(formKey, $"Значение '{val}' в поле '{def.Label}' не дата.");
                     throw new FormatException();
-
                 case FieldDataType.Boolean:
                     return val.Contains("true", StringComparison.OrdinalIgnoreCase);
-
                 default:
                     return val;
             }
