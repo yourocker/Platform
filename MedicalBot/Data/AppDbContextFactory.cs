@@ -12,9 +12,9 @@ namespace MedicalBot.Data
             // 1. Получаем путь к папке, где лежит исполняемый файл
             string configPath = Path.Combine(Directory.GetCurrentDirectory(), "appsettings.json");
             
-            string connectionString;
+            string? connectionString;
             
-            // 2. Если файла нет (мы в Rider), используем локальные настройки
+            // 2. Если файла нет, используем локальные настройки
             if (!File.Exists(configPath))
             {
                 connectionString = "Host=localhost;Port=5433;Database=medical_db;Username=postgres;Password=postgres";

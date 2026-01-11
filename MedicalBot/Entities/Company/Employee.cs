@@ -1,10 +1,17 @@
-﻿namespace MedicalBot.Entities.Company
+﻿using Microsoft.AspNetCore.Identity;
+using MedicalBot.Entities;
+using MedicalBot.Entities.Company;
+
+namespace MedicalBot.Entities.Company
 {
-    public class Employee : IHasDynamicProperties
+    // Наследуем от IdentityUser<Guid> для поддержки авторизации
+    public class Employee : IdentityUser<Guid>, IHasDynamicProperties
     {
-        public Guid Id { get; set; }
+        // Переопределяем Id, чтобы сохранить явное поле в коде. 
+        // IdentityUser использует его как первичный ключ.
+        public override Guid Id { get; set; }
         
-        // Поля для ввода
+        // --- СТАРЫЕ ПОЛЯ (БЕЗ ИЗМЕНЕНИЙ) ---
         public string LastName { get; set; } = string.Empty;
         public string FirstName { get; set; } = string.Empty;
         public string? MiddleName { get; set; }
@@ -15,6 +22,7 @@
         // Списки контактов
         public List<string> Phones { get; set; } = new();
         public List<string> Emails { get; set; } = new();
+        // Признак увольнения
         public bool IsDismissed { get; set; } = false; // По умолчанию работает
 
         public string? Properties { get; set; }
