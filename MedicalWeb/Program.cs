@@ -1,26 +1,41 @@
 using MedicalBot.Data;
+using MedicalBot.Entities.Company; 
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 
-// Оставляем для поддержки динамического маппинга JSONB в Postgres
 #pragma warning disable CS0618
 NpgsqlConnection.GlobalTypeMapper.EnableDynamicJson(); 
 #pragma warning restore CS0618
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Добавляем сервисы MVC
 builder.Services.AddControllersWithViews();
 
-// Берем строку подключения один раз
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(connectionString, o => 
     {
-        // Включаем отказоустойчивость
         o.EnableRetryOnFailure();
     }));
+
+builder.Services.AddIdentity<Employee, IdentityRole<Guid>>(options => 
+    {
+        options.Password.RequireDigit = false;
+        options.Password.RequiredLength = 4; 
+        options.Password.RequireNonAlphanumeric = false;
+        options.Password.RequireUppercase = false;
+        options.Password.RequireLowercase = false;
+    })
+    .AddEntityFrameworkStores<AppDbContext>()
+    .AddDefaultTokenProviders();
+
+builder.Services.ConfigureApplicationCookie(options =>
+{
+    options.LoginPath = "/Account/Login";
+    options.ExpireTimeSpan = TimeSpan.FromHours(24);
+});
 
 var app = builder.Build();
 
@@ -35,6 +50,8 @@ app.UseHttpsRedirection();
 app.UseStaticFiles();
 
 app.UseRouting();
+
+app.UseAuthentication(); 
 app.UseAuthorization();
 
 app.MapControllerRoute(
@@ -49,10 +66,8 @@ using (var scope = app.Services.CreateScope())
     {
         var context = services.GetRequiredService<AppDbContext>();
         
-        // Автоматически применяем миграции
         await context.Database.MigrateAsync();
         
-        // Наполняем базовыми определениями системных сущностей (Employee, Patient и т.д.)
         await DbInitializer.Initialize(context);
         
         Console.WriteLine(">>> База данных и платформенные сущности успешно инициализированы.");
@@ -64,5 +79,4 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
-// Запускаем приложение (ТОЛЬКО ОДИН РАЗ)
 app.Run();

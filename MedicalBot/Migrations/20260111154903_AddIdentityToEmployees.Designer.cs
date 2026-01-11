@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using MedicalBot.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -12,13 +13,15 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace MedicalBot.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260111154903_AddIdentityToEmployees")]
+    partial class AddIdentityToEmployees
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
-                .HasAnnotation("ProductVersion", "8.0.11")
+                .HasAnnotation("ProductVersion", "8.0.22")
                 .HasAnnotation("Relational:MaxIdentifierLength", 63);
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
@@ -172,7 +175,7 @@ namespace MedicalBot.Migrations
                         .IsUnique()
                         .HasDatabaseName("UserNameIndex");
 
-                    b.ToTable("AspNetUsers", (string)null);
+                    b.ToTable("Employees", (string)null);
                 });
 
             modelBuilder.Entity("MedicalBot.Entities.Company.Position", b =>
@@ -387,8 +390,12 @@ namespace MedicalBot.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("CreatedAt");
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("Discriminator")
+                        .IsRequired()
+                        .HasMaxLength(13)
+                        .HasColumnType("character varying(13)");
 
                     b.Property<string>("EntityCode")
                         .IsRequired()
@@ -398,11 +405,6 @@ namespace MedicalBot.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<string>("ObjectType")
-                        .IsRequired()
-                        .HasMaxLength(5)
-                        .HasColumnType("character varying(5)");
-
                     b.Property<string>("Properties")
                         .HasColumnType("text");
 
@@ -410,7 +412,7 @@ namespace MedicalBot.Migrations
 
                     b.ToTable("GenericObjects");
 
-                    b.HasDiscriminator<string>("ObjectType").HasValue("Base");
+                    b.HasDiscriminator().HasValue("GenericObject");
 
                     b.UseTphMappingStrategy();
                 });
@@ -675,7 +677,7 @@ namespace MedicalBot.Migrations
 
                     b.HasIndex("AuthorId");
 
-                    b.HasDiscriminator().HasValue("Task");
+                    b.HasDiscriminator().HasValue("EmployeeTask");
                 });
 
             modelBuilder.Entity("MedicalBot.Entities.Company.Department", b =>

@@ -64,7 +64,6 @@ public class UpdateHandler
                 return;
             }
 
-            // 2. Обработка файлов (Ручной импорт при пересылке файла в чат)
             if (message.Type == MessageType.Document && message.Document != null)
             {
                 await HandleDocument(botClient, message, ct);
@@ -130,8 +129,7 @@ public class UpdateHandler
             }
             else
             {
-                // Если мы здесь, значит состояние None и кнопки не сработали
-                // Отправляем "по голове" и возвращаем меню
+
                 await botClient.SendTextMessageAsync(
                     chatId: chatId,
                     text: "⚠️ Пожалуйста, используйте кнопки меню для управления ботом.",
