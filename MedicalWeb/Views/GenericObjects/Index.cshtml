@@ -1,55 +1,107 @@
 ﻿@using MedicalBot.Entities.Platform
 @using Newtonsoft.Json
-@model IEnumerable<MedicalBot.Entities.Platform.GenericObject>
 @using Microsoft.AspNetCore.Html
+@using Microsoft.EntityFrameworkCore
+@using MedicalBot.Data
+@model IEnumerable<MedicalBot.Entities.Platform.GenericObject>
+@inject AppDbContext dbContext
 
 @{
     var definition = ViewBag.Definition as AppDefinition;
     ViewData["Title"] = definition?.Name ?? "Объекты";
+
+    // 1. СОБИРАЕМ ВСЕ GUID ИЗ ДАННЫХ ПРЯМО ТУТ
+    var allGuids = new HashSet<Guid>();
+    var guidRegex = new System.Text.RegularExpressions.Regex(@"([a-fA-F0-9]{8}[-][a-fA-F0-9]{4}[-][a-fA-F0-9]{4}[-][a-fA-F0-9]{4}[-][a-fA-F0-9]{12})");
+
+    if (Model != null)
+    {
+        foreach (var obj in Model.Where(o => !string.IsNullOrEmpty(o.Properties)))
+        {
+            var matches = guidRegex.Matches(obj.Properties);
+            foreach (System.Text.RegularExpressions.Match match in matches)
+            {
+                if (Guid.TryParse(match.Value, out Guid g)) allGuids.Add(g);
+            }
+        }
+    }
+
+    // 2. СЛОВАРЬ ИМЕН (ИЩЕМ ВЕЗДЕ)
+    var namesMap = new Dictionary<Guid, string>();
+    if (allGuids.Any())
+    {
+        // Ищем в GenericObjects
+        var gNames = dbContext.GenericObjects.Where(g => allGuids.Contains(g.Id)).Select(g => new { g.Id, g.Name }).ToList();
+        foreach (var n in gNames) namesMap[n.Id] = n.Name;
+
+        // Ищем в Пациентах
+        var pNames = dbContext.Patients.Where(p => allGuids.Contains(p.Id)).Select(p => new { p.Id, Name = p.FullName }).ToList();
+        foreach (var n in pNames) namesMap[n.Id] = n.Name;
+
+        // Ищем в Сотрудниках
+        var eNames = dbContext.Employees.Where(e => allGuids.Contains(e.Id)).Select(e => new { e.Id, Name = e.FullName }).ToList();
+        foreach (var n in eNames) namesMap[n.Id] = n.Name;
+
+        // Ищем в Определениях сущностей
+        var defNames = dbContext.AppDefinitions.Where(d => allGuids.Contains(d.Id)).Select(d => new { d.Id, d.Name }).ToList();
+        foreach (var n in defNames) namesMap[n.Id] = n.Name;
+    }
 }
 
 @functions {
-    // ограничение на предпросмотре до 25 символов
     string Truncate(string value)
     {
         if (string.IsNullOrEmpty(value)) return value;
         return value.Length <= 25 ? value : value.Substring(0, 25) + "...";
     }
 
-    // Единая функция отрисовки значения
-    IHtmlContent renderValue(AppFieldDefinition field, string strVal)
+    IHtmlContent renderValue(AppFieldDefinition field, string strVal, Dictionary<Guid, string> namesMap)
     {
         if (string.IsNullOrWhiteSpace(strVal)) return HtmlString.Empty;
+        
+        // Чистим от кавычек и скобок
+        var cleanVal = strVal.Trim('[', ']', '"', ' ');
 
-        // Обработка файлов
+        // Проверка на GUID
+        if (Guid.TryParse(cleanVal, out Guid id))
+        {
+            if (namesMap != null && namesMap.TryGetValue(id, out var objectName))
+            {
+                return new HtmlString($@"<span class=""badge bg-info text-dark border border-info"" title=""{objectName}"">
+                                        <i class=""bi bi-link-45deg""></i> {objectName}</span>");
+            }
+            // Если GUID есть, но в базе его нет
+            return new HtmlString($@"<span class=""badge bg-light text-muted border"" title=""ID не найден в БД"">
+                                    <i class=""bi bi-question-circle""></i> {cleanVal.Substring(0, 8)}...</span>");
+        }
+
+        // Файлы
         if (field.DataType == FieldDataType.File)
         {
-            var fileName = System.IO.Path.GetFileName(strVal);
-            return new HtmlString($@"<a href=""{strVal}"" target=""_blank"" class=""badge bg-light text-primary border text-decoration-none"" title=""{fileName}"">
+            var fileName = System.IO.Path.GetFileName(cleanVal);
+            return new HtmlString($@"<a href=""{cleanVal}"" target=""_blank"" class=""badge bg-light text-primary border text-decoration-none"" title=""{fileName}"">
                                     <i class=""bi bi-paperclip""></i> {Truncate(fileName)}</a>");
         }
         
-        // Обработка логических полей
+        // Логика
         if (field.DataType == FieldDataType.Boolean)
         {
-            var isTrue = strVal.ToLower() == "true";
-            return isTrue 
-                ? new HtmlString(@"<span class=""badge bg-success-subtle text-success border border-success-subtle""><i class=""bi bi-check-lg""></i> Да</span>")
+            return cleanVal.ToLower() == "true" 
+                ? new HtmlString(@"<span class=""badge bg-success-subtle text-success border border-success-subtle"">Да</span>")
                 : new HtmlString(@"<span class=""badge bg-light text-muted border"">Нет</span>");
         }
 
-        // Обработка дат
+        // Даты
         if (field.DataType == FieldDataType.Date || field.DataType == FieldDataType.DateTime)
         {
-            if (DateTime.TryParse(strVal, out DateTime dt))
+            if (DateTime.TryParse(cleanVal, out DateTime dt))
             {
                 var fmt = field.DataType == FieldDataType.Date ? "dd.MM.yyyy" : "dd.MM.yyyy HH:mm";
                 return new HtmlString($@"<span class=""badge bg-light text-dark border"">{dt.ToString(fmt)}</span>");
             }
         }
 
-        // Обработка строк, чисел, денег
-        return new HtmlString($@"<span class=""badge bg-light text-dark border"" title=""{strVal}"">{Truncate(strVal)}</span>");
+        return new HtmlString($@"<span class=""badge bg-light text-dark border"" title=""{cleanVal}"">{Truncate(cleanVal)}</span>");
     }
 }
 
@@ -79,65 +131,68 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var item in Model)
+                    @if (Model != null)
                     {
-                        var dynamicValues = new Dictionary<string, object>();
-                        if (!string.IsNullOrEmpty(item.Properties))
+                        @foreach (var item in Model)
                         {
-                            try 
+                            var dynamicValues = new Dictionary<string, object>();
+                            if (!string.IsNullOrEmpty(item.Properties))
                             {
-                                dynamicValues = JsonConvert.DeserializeObject<Dictionary<string, object>>(item.Properties) 
-                                               ?? new Dictionary<string, object>();
-                            }
-                            catch { }
-                        }
-
-                        <tr>
-                            <td><strong>@item.Name</strong></td>
-                            @if (definition?.Fields != null)
-                            {
-                                @foreach (var field in definition.Fields.OrderBy(f => f.SortOrder))
+                                try 
                                 {
-                                    <td>
-                                        @if (dynamicValues.TryGetValue(field.SystemName, out var val) && val != null)
-                                        {
-                                            <div class="d-flex flex-column align-items-start gap-1">
-                                            @if (field.IsArray && val is Newtonsoft.Json.Linq.JArray jArray)
+                                    dynamicValues = JsonConvert.DeserializeObject<Dictionary<string, object>>(item.Properties) 
+                                                   ?? new Dictionary<string, object>();
+                                }
+                                catch { }
+                            }
+
+                            <tr>
+                                <td><strong>@item.Name</strong></td>
+                                @if (definition?.Fields != null)
+                                {
+                                    @foreach (var field in definition.Fields.OrderBy(f => f.SortOrder))
+                                    {
+                                        <td>
+                                            @if (dynamicValues.TryGetValue(field.SystemName, out var val) && val != null)
                                             {
-                                                @foreach (var subVal in jArray)
+                                                <div class="d-flex flex-column align-items-start gap-1">
+                                                @if (field.IsArray && val is Newtonsoft.Json.Linq.JArray jArray)
                                                 {
-                                                    @renderValue(field, subVal.ToString())
+                                                    @foreach (var subVal in jArray)
+                                                    {
+                                                        @renderValue(field, subVal.ToString(), namesMap)
+                                                    }
                                                 }
+                                                else
+                                                {
+                                                    @renderValue(field, val.ToString(), namesMap)
+                                                }
+                                                </div>
                                             }
                                             else
                                             {
-                                                @renderValue(field, val.ToString())
+                                                <span class="text-muted small">-</span>
                                             }
-                                            </div>
-                                        }
-                                        else
-                                        {
-                                            <span class="text-muted small">-</span>
-                                        }
-                                    </td>
+                                        </td>
+                                    }
                                 }
-                            }
-                            <td class="text-muted small">@item.CreatedAt.ToString("g")</td>
-                            <td class="text-end">
-                                <div class="btn-group">
-                                    <a asp-controller="GenericObjects" asp-action="Edit" asp-route-id="@item.Id" class="btn btn-sm btn-outline-primary">
-                                        <i class="bi bi-pencil"></i>
-                                    </a>
-                                    <form asp-controller="GenericObjects" asp-action="Delete" asp-route-id="@item.Id" method="post" 
-                                          onsubmit="return confirm('Удалить запись?');" style="display:inline;">
-                                        @Html.AntiForgeryToken()
-                                        <button type="submit" class="btn btn-sm btn-outline-danger">
-                                            <i class="bi bi-trash"></i>
-                                        </button>
-                                    </form>
-                                </div>
-                            </td>
-                        </tr>
+                                <td class="text-muted small">@item.CreatedAt.ToString("g")</td>
+                                <td class="text-end">
+                                    <div class="btn-group">
+                                        <a asp-controller="GenericObjects" asp-action="Edit" asp-route-id="@item.Id" class="btn btn-sm btn-outline-primary">
+                                            <i class="bi bi-pencil"></i>
+                                        </a>
+                                        <form asp-controller="GenericObjects" asp-action="Delete" asp-route-id="@item.Id" method="post" 
+                                              onsubmit="return confirm('Удалить запись?');" style="display:inline;">
+                                            @Html.AntiForgeryToken()
+                                            <button type="submit" class="btn btn-sm btn-outline-danger">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </form>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
                     }
                 </tbody>
             </table>

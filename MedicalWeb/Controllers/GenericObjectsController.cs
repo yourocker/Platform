@@ -7,6 +7,9 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Hosting;
+using Newtonsoft.Json;
+using System.Collections.Generic;
+using System.Text.RegularExpressions;
 
 namespace MedicalWeb.Controllers;
 
@@ -30,6 +33,62 @@ public class GenericObjectsController(AppDbContext context, IWebHostEnvironment 
             .Where(o => o.EntityCode == entityCode)
             .OrderByDescending(o => o.CreatedAt)
             .ToListAsync();
+
+        // 1. СБОР ВСЕХ GUID ИЗ PROPERTIES (БРОНЕБОЙНЫЙ ВАРИАНТ)
+        var allGuids = new HashSet<Guid>();
+        // Регулярка найдет ID даже внутри ["..."] или любых других структур
+        var guidRegex = new Regex(@"([a-fA-F0-9]{8}[-][a-fA-F0-9]{4}[-][a-fA-F0-9]{4}[-][a-fA-F0-9]{4}[-][a-fA-F0-9]{12})");
+
+        foreach (var obj in objects)
+        {
+            if (!string.IsNullOrEmpty(obj.Properties))
+            {
+                var matches = guidRegex.Matches(obj.Properties);
+                foreach (Match match in matches)
+                {
+                    if (Guid.TryParse(match.Value, out Guid g))
+                    {
+                        allGuids.Add(g);
+                    }
+                }
+            }
+        }
+
+        // 2. ЗАПОЛНЕНИЕ СЛОВАРЯ ИМЕНАМИ ИЗ ВСЕХ ТАБЛИЦ
+        var namesMap = new Dictionary<Guid, string>();
+
+        if (allGuids.Count > 0)
+        {
+            // Ищем в GenericObjects
+            var genericNames = await _context.GenericObjects
+                .Where(g => allGuids.Contains(g.Id))
+                .Select(g => new { g.Id, g.Name })
+                .ToListAsync();
+            foreach (var n in genericNames) namesMap[n.Id] = n.Name;
+
+            // Ищем в Пациентах
+            var patientNames = await _context.Patients
+                .Where(p => allGuids.Contains(p.Id))
+                .Select(p => new { p.Id, Name = p.FullName })
+                .ToListAsync();
+            foreach (var n in patientNames) namesMap[n.Id] = n.Name;
+
+            // Ищем в Сотрудниках
+            var employeeNames = await _context.Employees
+                .Where(e => allGuids.Contains(e.Id))
+                .Select(e => new { e.Id, Name = e.FullName })
+                .ToListAsync();
+            foreach (var n in employeeNames) namesMap[n.Id] = n.Name;
+
+            // Ищем в Отделах
+            var deptNames = await _context.Departments
+                .Where(d => allGuids.Contains(d.Id))
+                .Select(d => new { d.Id, d.Name })
+                .ToListAsync();
+            foreach (var n in deptNames) namesMap[n.Id] = n.Name;
+        }
+
+        ViewBag.NamesMap = namesMap;
 
         return View(objects);
     }
