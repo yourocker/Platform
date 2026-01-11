@@ -50,20 +50,21 @@ public class GenericObjectsController(AppDbContext context, IWebHostEnvironment 
     {
         obj.CreatedAt = DateTime.UtcNow;
 
-        // 1. Сохранение во временную папку
+        // 1. Сохраняем свойства во временные папки (temp)
         await SaveDynamicProperties(obj, form, obj.EntityCode);
 
         if (ModelState.IsValid)
         {
             obj.Id = Guid.NewGuid();
             _context.Add(obj);
-            // 2. Сохраняем, чтобы убедиться, что запись создана
+            
+            // 2. Первое сохранение, чтобы зафиксировать запись в БД
             await _context.SaveChangesAsync();
             
-            // 3. Перемещаем файлы из Temp в постоянную папку и обновляем пути
+            // 3. Теперь, когда Id точно есть, переносим файлы из temp в /uploads/{code}/{id}/
             FinalizeDynamicFilePaths(obj, obj.EntityCode, obj.Id.ToString());
             
-            // 4. Сохраняем обновленные пути
+            // 4. Второе сохранение - обновляем JSON пути в БД
             await _context.SaveChangesAsync();
             
             return Redirect($"/Data/{obj.EntityCode}");
@@ -87,21 +88,25 @@ public class GenericObjectsController(AppDbContext context, IWebHostEnvironment 
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Edit(Guid id, GenericObject obj, IFormCollection form)
+    public async Task<IActionResult> Edit(Guid id, GenericObject incomingObj, IFormCollection form)
     {
-        if (id != obj.Id) return NotFound();
+        if (id != incomingObj.Id) return NotFound();
 
-        // 1. Сохранение новых файлов во временную папку
-        await SaveDynamicProperties(obj, form, obj.EntityCode);
+        // 1. Загружаем существующий объект (dbObj) с его старыми Properties
+        var dbObj = await _context.GenericObjects.FindAsync(id);
+        if (dbObj == null) return NotFound();
+
+        // 2. Накладываем изменения из формы на dbObj (новые файлы пойдут в temp)
+        await SaveDynamicProperties(dbObj, form, dbObj.EntityCode);
 
         if (ModelState.IsValid)
         {
             try 
             {
-                // 2. Перемещаем новые файлы из Temp в папку записи (ID у нас уже есть)
-                FinalizeDynamicFilePaths(obj, obj.EntityCode, obj.Id.ToString());
+                // 3. Переносим новые файлы из temp в постоянную папку записи
+                FinalizeDynamicFilePaths(dbObj, dbObj.EntityCode, dbObj.Id.ToString());
 
-                _context.Update(obj);
+                _context.Update(dbObj);
                 await _context.SaveChangesAsync();
             }
             catch (DbUpdateConcurrencyException)
@@ -110,12 +115,12 @@ public class GenericObjectsController(AppDbContext context, IWebHostEnvironment 
                 else throw;
             }
             
-            return Redirect($"/Data/{obj.EntityCode}");
+            return Redirect($"/Data/{dbObj.EntityCode}");
         }
 
-        await LoadDynamicFields(obj.EntityCode);
-        ViewBag.EntityCode = obj.EntityCode;
-        return View(obj);
+        await LoadDynamicFields(dbObj.EntityCode);
+        ViewBag.EntityCode = dbObj.EntityCode;
+        return View(dbObj);
     }
 
     [HttpPost]
