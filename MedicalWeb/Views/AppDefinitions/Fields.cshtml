@@ -54,6 +54,10 @@
                             <td><code>@field.SystemName</code></td>
                             <td>
                                 <span class="badge bg-info text-dark">@field.DataType.ToRuName()</span>
+                                @if (field.DataType == FieldDataType.EntityLink && !string.IsNullOrEmpty(field.TargetEntityCode))
+                                {
+                                    <br /><small class="text-muted">Цель: @field.TargetEntityCode</small>
+                                }
                             </td>
                             <td class="text-center">
                                 @if (field.IsRequired)
@@ -109,13 +113,30 @@
                     </div>
                     <div class="mb-3">
                         <label class="form-label">Тип данных</label>
-                        <select name="dataType" class="form-select" required>
+                        <select name="dataType" id="dataTypeSelect" class="form-select" required onchange="toggleTargetEntitySelector()">
                             @foreach (var type in Enum.GetValues<FieldDataType>())
                             {
                                 <option value="@type">@type.ToRuName()</option>
                             }
                         </select>
                     </div>
+
+                    @* Блок выбора целевой сущности для связи (по умолчанию скрыт) *@
+                    <div class="mb-3" id="targetEntityWrapper" style="display:none;">
+                        <label class="form-label text-primary fw-bold">Целевая сущность (для связи)</label>
+                        <select name="targetEntityCode" id="targetEntitySelect" class="form-select">
+                            <option value="">-- Выберите объект --</option>
+                            @if (ViewBag.AllDefinitions != null)
+                            {
+                                foreach (var def in (IEnumerable<AppDefinition>)ViewBag.AllDefinitions)
+                                {
+                                    <option value="@def.EntityCode">@def.Name (@def.EntityCode)</option>
+                                }
+                            }
+                        </select>
+                        <div class="form-text">Записи выбранного объекта будут доступны для выбора в этом поле.</div>
+                    </div>
+
                     <div class="row">
                         <div class="col-6">
                             <div class="form-check mb-3">
@@ -143,3 +164,19 @@
         </div>
     </div>
 </div>
+
+<script>
+    function toggleTargetEntitySelector() {
+        const select = document.getElementById('dataTypeSelect');
+        const wrapper = document.getElementById('targetEntityWrapper');
+        const targetSelect = document.getElementById('targetEntitySelect');
+        
+        if (select.value === 'EntityLink') {
+            wrapper.style.display = 'block';
+            targetSelect.required = true;
+        } else {
+            wrapper.style.display = 'none';
+            targetSelect.required = false;
+        }
+    }
+</script>

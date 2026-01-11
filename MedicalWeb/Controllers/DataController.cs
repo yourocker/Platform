@@ -3,13 +3,12 @@ using System.Threading.Tasks;
 using MedicalBot.Data;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.AspNetCore.Hosting; // ДОБАВЛЕНО: Для IWebHostEnvironment
+using Microsoft.AspNetCore.Hosting;
 
 namespace MedicalWeb.Controllers
 {
     public class DataController : BasePlatformController
     {
-        // ИСПРАВЛЕНО: Конструктор теперь принимает два параметра и передает их родителю
         public DataController(AppDbContext context, IWebHostEnvironment hostingEnvironment) 
             : base(context, hostingEnvironment)
         {
@@ -24,7 +23,6 @@ namespace MedicalWeb.Controllers
 
             if (definition == null) return NotFound();
 
-            // Загружаем данные
             var objects = await _context.GenericObjects
                 .Where(o => o.EntityCode == entityCode)
                 .OrderByDescending(o => o.CreatedAt)
