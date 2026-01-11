@@ -172,7 +172,7 @@ namespace MedicalBot.Migrations
                         .IsUnique()
                         .HasDatabaseName("UserNameIndex");
 
-                    b.ToTable("AspNetUsers", (string)null);
+                    b.ToTable("Employees", (string)null);
                 });
 
             modelBuilder.Entity("MedicalBot.Entities.Company.Position", b =>

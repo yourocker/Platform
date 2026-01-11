@@ -75,6 +75,7 @@ namespace MedicalBot.Data
 
             modelBuilder.Entity<Employee>(entity =>
             {
+                entity.ToTable("Employees");
                 entity.Property(e => e.Phones).HasColumnType("jsonb");
                 entity.Property(e => e.Emails).HasColumnType("jsonb");
                 entity.Property(e => e.Properties).HasColumnType("jsonb");
