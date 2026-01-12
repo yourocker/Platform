@@ -68,6 +68,20 @@
             
             @* 4. ДИНАМИЧЕСКИЕ ПОЛЯ ИЗ КОНСТРУКТОРА *@
             <partial name="_DynamicFields" model="null" />
+            
+            @if (User.Identity.Name == "admin" || User.Identity.Name?.Contains("awlwlb") == true) // Временная проверка на "Суперадмина"
+            {
+                <hr />
+                <h4>Доступ в систему</h4>
+                <div class="form-group mb-3">
+                    <label class="control-label">Логин (Email)</label>
+                    <input name="Login" class="form-control" autocomplete="off" />
+                </div>
+                <div class="form-group mb-3">
+                    <label class="control-label">Пароль</label>
+                    <input name="Password" type="password" class="form-control" autocomplete="new-password" />
+                </div>
+            }
 
             @* Кнопки действий *@
             <div class="d-flex justify-content-end gap-2 mb-5">

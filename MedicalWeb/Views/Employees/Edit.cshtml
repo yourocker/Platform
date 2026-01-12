@@ -77,7 +77,7 @@
             </div>
         }
 
-        <form asp-action="Edit" method="post">
+        <form asp-action="Edit" method="post" enctype="multipart/form-data">
             <input type="hidden" asp-for="Id" />
             
             <fieldset @(isLocked ? "disabled" : "")>
@@ -175,9 +175,48 @@
                     </div>
                 </div>
 
+                <hr class="my-4" />
+                <h4 class="mb-3"><i class="bi bi-shield-lock"></i> Доступ в систему</h4>
+
+                @if (ViewBag.HasLogin == true)
+                {
+                    <div class="row g-3 align-items-end">
+                        <div class="col-md-5">
+                            <label class="form-label">Логин (Email)</label>
+                            <input name="Login" value="@Model.UserName" class="form-control" autocomplete="off" />
+                            <div class="form-text">Вы можете изменить логин здесь.</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label">Пароль</label>
+                            <input type="password" class="form-control bg-light" value="********" readonly />
+                        </div>
+                        <div class="col-md-3">
+                            <button type="button" class="btn btn-outline-danger w-100" data-bs-toggle="modal" data-bs-target="#resetPasswordModal">
+                                <i class="bi bi-key"></i> Сменить пароль
+                            </button>
+                        </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="alert alert-warning">
+                        <i class="bi bi-exclamation-circle"></i> У сотрудника нет доступа в систему. Заполните поля ниже, чтобы создать учетную запись.
+                    </div>
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label">Придумайте Логин (Email)</label>
+                            <input name="Login" class="form-control" placeholder="ivanov@example.com" autocomplete="off" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Создайте Пароль</label>
+                            <input name="NewPassword" type="password" class="form-control" autocomplete="new-password" />
+                        </div>
+                    </div>
+                }
+
                 @if (!isLocked)
                 {
-                    <div class="d-flex justify-content-end gap-2 mb-5">
+                    <div class="d-flex justify-content-end gap-2 mb-5 mt-4">
                         <a asp-action="Index" class="btn btn-light px-4">Отмена</a>
                         <button type="submit" class="btn btn-primary px-5">Сохранить изменения</button>
                     </div>
@@ -187,8 +226,36 @@
     </div>
 </div>
 
+<div class="modal fade" id="resetPasswordModal" tabindex="-1">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Смена пароля сотрудника</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <p>Вы устанавливаете новый пароль для сотрудника <strong>@Model.FullName</strong>. Старый пароль будет сброшен.</p>
+                <form id="adminResetPassForm">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="id" value="@Model.Id" />
+                    <div class="mb-3">
+                        <label class="form-label">Новый пароль</label>
+                        <input type="password" name="newPassword" class="form-control" required minlength="4" />
+                    </div>
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-danger">Установить пароль</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
 @section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+    
     <script>
+        // --- 1. Скрипт масок и динамических полей ---
         function applyMasks() {
             Inputmask({"mask": "+7(999)999-99-99"}).mask(document.querySelectorAll('input[name="Phones"]'));
             Inputmask({"alias": "email"}).mask(document.querySelectorAll('input[name="Emails"]'));
@@ -219,5 +286,27 @@
 
             container.appendChild(newRow);
         }
+
+        // --- 2. Скрипт отправки формы смены пароля (AJAX) ---
+        $('#adminResetPassForm').on('submit', function(e) {
+            e.preventDefault();
+            var form = $(this);
+            var btn = form.find('button[type="submit"]');
+            
+            btn.prop('disabled', true).text('Сохранение...');
+
+            $.post('/Employees/AdminResetPassword', form.serialize())
+                .done(function() {
+                    alert('Пароль успешно изменен!');
+                    $('#resetPasswordModal').modal('hide');
+                    form[0].reset();
+                })
+                .fail(function(xhr) {
+                    alert('Ошибка: ' + xhr.responseText);
+                })
+                .always(function() {
+                    btn.prop('disabled', false).text('Установить пароль');
+                });
+        });
     </script>
 }
