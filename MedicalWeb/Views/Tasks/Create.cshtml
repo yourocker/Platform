@@ -29,9 +29,11 @@
 
                         <div class="row">
                             <div class="col-md-6 mb-4">
-                                <label asp-for="AuthorId" class="form-label fw-bold">Постановщик</label>
-                                <select asp-for="AuthorId" class="form-select" asp-items="ViewBag.Employees"></select>
+                                <label class="form-label fw-bold">Постановщик</label>
+                                <input type="text" class="form-control bg-light" value="@ViewBag.CurrentUserName" readonly tabindex="-1" />
+                                <input type="hidden" asp-for="AuthorId" value="@ViewBag.CurrentUserId" />
                             </div>
+                            
                             <div class="col-md-6 mb-4">
                                 <label asp-for="AssigneeId" class="form-label fw-bold">Исполнитель</label>
                                 <select asp-for="AssigneeId" class="form-select" asp-items="ViewBag.Employees"></select>
@@ -75,8 +77,7 @@
     @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
 
     <script>
-        // Данные из ViewBag
-        const availableObjects = @Html.Raw(ViewBag.AllObjectsJson);
+        const availableObjects = @Html.Raw(ViewBag.AllObjectsJson ?? "[]");
         const entityTypes = @Html.Raw(Json.Serialize(ViewBag.EntityTypes));
 
         function addRelationRow() {
@@ -86,9 +87,11 @@
             row.className = 'row g-2 mb-2 relation-row align-items-center';
             
             let typeOptions = '<option value="">-- Тип --</option>';
-            entityTypes.forEach(t => {
-                typeOptions += `<option value="${t.value}">${t.text}</option>`;
-            });
+            if(entityTypes) {
+                entityTypes.forEach(t => {
+                    typeOptions += `<option value="${t.value}">${t.text}</option>`;
+                });
+            }
             
             row.innerHTML = `
                 <div class="col-md-5">
@@ -117,7 +120,7 @@
             
             objectSelect.innerHTML = '<option value="">-- Выберите запись --</option>';
             
-            if (selectedType) {
+            if (selectedType && availableObjects) {
                 const filtered = availableObjects.filter(o => o.Type === selectedType);
                 filtered.forEach(o => {
                     const opt = document.createElement('option');
@@ -128,7 +131,6 @@
             }
         }
 
-        // Добавить первую строку при загрузке
         document.addEventListener('DOMContentLoaded', function() {
             addRelationRow();
         });
