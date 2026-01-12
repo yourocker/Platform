@@ -1,0 +1,167 @@
+﻿@using MedicalBot.Entities.Tasks
+@model MedicalBot.Entities.Tasks.EmployeeTask
+
+@{
+    ViewData["Title"] = Model.Title;
+    var currentUserId = (Guid)ViewBag.CurrentUserId;
+    bool isAuthor = Model.AuthorId == currentUserId;
+    bool isAssignee = Model.AssigneeId == currentUserId;
+
+    // ИСПОЛЬЗУЕМ ПОЛНОЕ ИМЯ ТИПА, ЧТОБЫ ИЗБЕЖАТЬ КОНФЛИКТА С SYSTEM.THREADING.TASKS
+    var statusNames = new Dictionary<MedicalBot.Entities.Tasks.TaskStatus, string>
+    {
+        { MedicalBot.Entities.Tasks.TaskStatus.Created, "Новая" },
+        { MedicalBot.Entities.Tasks.TaskStatus.InProgress, "В работе" },
+        { MedicalBot.Entities.Tasks.TaskStatus.InReview, "На проверке" },
+        { MedicalBot.Entities.Tasks.TaskStatus.Completed, "Готова" }
+    };
+    
+    string statusText = statusNames.ContainsKey(Model.Status) ? statusNames[Model.Status] : Model.Status.ToString();
+    string statusColor = Model.Status switch {
+        MedicalBot.Entities.Tasks.TaskStatus.Created => "secondary",
+        MedicalBot.Entities.Tasks.TaskStatus.InProgress => "primary",
+        MedicalBot.Entities.Tasks.TaskStatus.InReview => "warning text-dark",
+        MedicalBot.Entities.Tasks.TaskStatus.Completed => "success",
+        _ => "secondary"
+    };
+}
+
+<div class="container-fluid">
+    <div class="mb-3">
+        <a asp-action="Index" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i> Назад к списку</a>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-white py-3 d-flex justify-content-between align-items-center">
+                    <h4 class="mb-0 fw-bold">@Model.Title</h4>
+                    <span class="badge bg-@statusColor fs-6">@statusText</span>
+                </div>
+                <div class="card-body">
+                    <h6 class="text-muted fw-bold">Описание</h6>
+                    <p class="card-text text-break" style="white-space: pre-line;">@(Model.Description ?? "Нет описания")</p>
+
+                    @if(Model.Relations.Any())
+                    {
+                        <hr />
+                        <h6 class="text-muted fw-bold mb-3">Связанные объекты</h6>
+                        <div class="d-flex flex-wrap gap-2">
+                            @foreach(var rel in Model.Relations)
+                            {
+                                <span class="badge bg-light text-dark border p-2"><i class="bi bi-link-45deg"></i> @rel.EntityName</span>
+                            }
+                        </div>
+                    }
+                </div>
+                <div class="card-footer bg-light text-muted small">
+                    Создана: @Model.CreatedAt.ToString("f")
+                </div>
+            </div>
+
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-white fw-bold"><i class="bi bi-chat-left-text"></i> Комментарии</div>
+                <div class="card-body">
+                    @if (Model.Comments != null && Model.Comments.Any())
+                    {
+                        <ul class="list-unstyled">
+                            @foreach (var comment in Model.Comments)
+                            {
+                                <li class="mb-3 pb-3 border-bottom">
+                                    <div class="d-flex justify-content-between mb-1">
+                                        <strong class="text-primary">@(comment.Author?.FullName ?? "Неизвестный")</strong>
+                                        <small class="text-muted">@comment.CreatedAt.ToString("g")</small>
+                                    </div>
+                                    <div class="text-break">@comment.Text</div>
+                                </li>
+                            }
+                        </ul>
+                    }
+                    else
+                    {
+                        <div class="text-muted text-center py-3">Нет комментариев</div>
+                    }
+
+                    <form asp-action="AddComment" method="post" class="mt-3">
+                        <input type="hidden" name="taskId" value="@Model.Id" />
+                        <div class="mb-2">
+                            <textarea name="text" class="form-control" rows="3" placeholder="Напишите комментарий..." required></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-sm btn-primary">Отправить</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            
+            <div class="card shadow-sm border-0 mb-3 border-primary">
+                <div class="card-body">
+                    <h6 class="fw-bold mb-3">Действия</h6>
+                    <div class="d-grid gap-2">
+                        
+                        @if (Model.Status == MedicalBot.Entities.Tasks.TaskStatus.Created && isAssignee)
+                        {
+                            <form asp-action="ChangeStatus" asp-route-id="@Model.Id" method="post">
+                                <input type="hidden" name="status" value="@MedicalBot.Entities.Tasks.TaskStatus.InProgress" />
+                                <button class="btn btn-primary w-100">Взять в работу</button>
+                            </form>
+                        }
+                        
+                        @if (Model.Status == MedicalBot.Entities.Tasks.TaskStatus.InProgress && isAssignee)
+                        {
+                            <form asp-action="ChangeStatus" asp-route-id="@Model.Id" method="post">
+                                <input type="hidden" name="status" value="@MedicalBot.Entities.Tasks.TaskStatus.InReview" />
+                                <button class="btn btn-warning w-100">Отправить на проверку</button>
+                            </form>
+                        }
+
+                        @if (Model.Status == MedicalBot.Entities.Tasks.TaskStatus.InReview && isAuthor)
+                        {
+                            <div class="row g-2">
+                                <div class="col-6">
+                                    <form asp-action="ChangeStatus" asp-route-id="@Model.Id" method="post">
+                                        <input type="hidden" name="status" value="@MedicalBot.Entities.Tasks.TaskStatus.Completed" />
+                                        <button class="btn btn-success w-100">Принять</button>
+                                    </form>
+                                </div>
+                                <div class="col-6">
+                                    <form asp-action="ChangeStatus" asp-route-id="@Model.Id" method="post">
+                                        <input type="hidden" name="status" value="@MedicalBot.Entities.Tasks.TaskStatus.InProgress" />
+                                        <button class="btn btn-outline-danger w-100">Вернуть</button>
+                                    </form>
+                                </div>
+                            </div>
+                        }
+
+                        @if (isAuthor && Model.Status != MedicalBot.Entities.Tasks.TaskStatus.Completed)
+                        {
+                            <hr class="my-2"/>
+                            <form asp-action="CancelTask" asp-route-id="@Model.Id" method="post" onsubmit="return confirm('Вы уверены, что хотите удалить задачу?');">
+                                <button class="btn btn-outline-secondary w-100">ОТМЕНА ЗАДАЧИ</button>
+                            </form>
+                        }
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm border-0 mb-3">
+                <div class="card-body">
+                    <h6 class="fw-bold mb-3">Детали</h6>
+                    <dl class="row mb-0">
+                        <dt class="col-sm-4">Постановщик</dt>
+                        <dd class="col-sm-8">@(Model.Author?.FullName ?? "Система")</dd>
+
+                        <dt class="col-sm-4">Исполнитель</dt>
+                        <dd class="col-sm-8 fw-bold">@(Model.Assignee?.FullName ?? "Не назначен")</dd>
+
+                        <dt class="col-sm-4">Срок</dt>
+                        <dd class="col-sm-8 @(Model.Deadline < DateTime.UtcNow ? "text-danger fw-bold" : "")">
+                            @(Model.Deadline?.ToString("f") ?? "Бессрочно")
+                        </dd>
+                    </dl>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
