@@ -1,5 +1,22 @@
+# Сборка и временные файлы
 bin/
 obj/
+publish/
 /packages/
-riderModule.iml
-/_ReSharper.Caches/
+
+# Rider и Visual Studio
+.idea/
+*.sln.DotSettings.user
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+_ReSharper.Caches/
+
+# База данных (локальная)
+*.db
+*.sqlite
+
+appsettings.json
+appsettings.Development.json
+appsettingsWORK.json

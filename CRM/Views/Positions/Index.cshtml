@@ -1,0 +1,45 @@
+﻿@model IEnumerable<Core.Entities.Company.Position>
+
+@{
+    ViewData["Title"] = "Должности";
+}
+
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2>Должности</h2>
+    <a asp-action="Create" class="btn btn-primary">
+        <i class="bi bi-plus-lg"></i> Новая должность
+    </a>
+</div>
+
+<div class="card shadow-sm border-0">
+    <div class="card-body p-0">
+        <table class="table table-hover mb-0 align-middle">
+            <thead class="bg-light">
+            <tr>
+                <th class="ps-4">Название</th>
+                <th class="text-end pe-4" style="width: 150px;">Действия</th>
+            </tr>
+            </thead>
+            <tbody>
+            @foreach (var item in Model)
+            {
+                <tr>
+                    <td class="ps-4 fw-bold text-secondary">
+                        @item.Name
+                    </td>
+                    <td class="text-end pe-4">
+                        <div class="btn-group btn-group-sm">
+                            <a asp-action="Edit" asp-route-id="@item.Id" class="btn btn-outline-primary" title="Редактировать">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            <a asp-action="Delete" asp-route-id="@item.Id" class="btn btn-outline-danger" title="Удалить">
+                                <i class="bi bi-trash"></i>
+                            </a>
+                        </div>
+                    </td>
+                </tr>
+            }
+            </tbody>
+        </table>
+    </div>
+</div>
