@@ -1,0 +1,44 @@
+﻿@model Core.Entities.Company.Department
+
+@{
+    ViewData["Title"] = "Удаление подразделения";
+    bool canDelete = ViewBag.CanDelete ?? false;
+}
+
+<h1>Удаление</h1>
+
+<h3>Вы уверены, что хотите удалить это подразделение?</h3>
+<div>
+    <h4>Подразделение: @Model.Name</h4>
+    <hr />
+    <dl class="row">
+        <dt class = "col-sm-2">
+            Название
+        </dt>
+        <dd class = "col-sm-10">
+            @Html.DisplayFor(model => model.Name)
+        </dd>
+    </dl>
+
+    @if (!canDelete)
+    {
+        <div class="alert alert-danger" role="alert">
+            <strong>Внимание!</strong> @ViewBag.Reason
+        </div>
+    }
+
+    <form asp-action="Delete">
+        <input type="hidden" asp-for="Id" />
+        
+        @if (canDelete)
+        {
+            <button type="submit" class="btn btn-danger">Удалить</button>
+        }
+        else
+        {
+            <button type="submit" class="btn btn-danger" disabled>Удалить невозможно</button>
+        }
+        |
+        <a asp-action="Index" class="btn btn-secondary">Вернуться к списку</a>
+    </form>
+</div>

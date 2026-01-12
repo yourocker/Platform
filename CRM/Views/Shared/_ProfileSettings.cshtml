@@ -1,0 +1,139 @@
+﻿@model CRM.ViewModels.UserProfileViewModel
+
+@{
+    // Список таймзон (упрощенный)
+    var timezones = TimeZoneInfo.GetSystemTimeZones();
+}
+
+<div class="modal-header border-0 pb-0">
+    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+</div>
+<div class="modal-body p-0">
+    <div class="d-flex h-100" style="min-height: 500px;">
+        
+        <div class="bg-light border-end p-3 text-center" style="width: 80px;">
+            <div class="nav flex-column nav-pills" id="v-pills-tab" role="tablist" aria-orientation="vertical">
+                <button class="nav-link active mb-3" id="v-pills-profile-tab" data-bs-toggle="pill" data-bs-target="#v-pills-profile" type="button" role="tab" title="Профиль">
+                    <i class="bi bi-person-vcard fs-3"></i>
+                </button>
+                <button class="nav-link" id="v-pills-security-tab" data-bs-toggle="pill" data-bs-target="#v-pills-security" type="button" role="tab" title="Безопасность">
+                    <i class="bi bi-shield-lock fs-3"></i>
+                </button>
+            </div>
+        </div>
+
+        <div class="flex-grow-1 p-4">
+            <div class="tab-content" id="v-pills-tabContent">
+                
+                <div class="tab-pane fade show active" id="v-pills-profile" role="tabpanel">
+                    <h4 class="mb-4">Личные данные</h4>
+                    <form id="profileForm" onsubmit="saveProfile(event)">
+                        <div class="row g-3">
+                            <div class="col-md-4">
+                                <label class="form-label">Фамилия</label>
+                                <input asp-for="LastName" class="form-control" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Имя</label>
+                                <input asp-for="FirstName" class="form-control" />
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Отчество</label>
+                                <input asp-for="MiddleName" class="form-control" />
+                            </div>
+                            
+                            <div class="col-12 mt-4">
+                                <label class="form-label">Часовой пояс</label>
+                                <select asp-for="TimezoneId" class="form-select">
+                                    @foreach (var tz in timezones)
+                                    {
+                                        <option value="@tz.Id">@tz.DisplayName</option>
+                                    }
+                                </select>
+                            </div>
+                            
+                            <div class="col-12 mt-4 text-end">
+                                <button type="submit" class="btn btn-primary">Сохранить изменения</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+
+                <div class="tab-pane fade" id="v-pills-security" role="tabpanel">
+                    <h4 class="mb-4">Вход и безопасность</h4>
+                    
+                    <div class="mb-3">
+                        <label class="form-label text-muted">Ваш Email (Логин)</label>
+                        <input type="text" class="form-control-plaintext fw-bold" value="@Model.Email" readonly />
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label class="form-label text-muted">Телефон для входа</label>
+                        <input type="text" class="form-control-plaintext fw-bold" value="@Model.PhoneNumber" readonly />
+                    </div>
+
+                    <hr class="my-4">
+
+                    <h5>Смена пароля</h5>
+                    <button class="btn btn-outline-danger mt-2" onclick="openChangePasswordModal()">
+                        <i class="bi bi-key"></i> Сменить пароль
+                    </button>
+                </div>
+
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="passwordChangeModal" tabindex="-1">
+    <div class="modal-dialog modal-sm modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Новый пароль</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="changePassForm" onsubmit="submitChangePass(event)">
+                    <div class="mb-2">
+                        <input type="password" name="OldPassword" class="form-control" placeholder="Старый пароль" required />
+                    </div>
+                    <div class="mb-2 position-relative">
+                        <input type="password" name="NewPassword" id="newPass" class="form-control" placeholder="Новый пароль" required />
+                    </div>
+                    <div class="mb-3">
+                        <input type="password" name="ConfirmPassword" class="form-control" placeholder="Повторите новый" required />
+                    </div>
+                    <div class="d-grid">
+                        <button type="submit" class="btn btn-primary">Сменить</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    function saveProfile(e) {
+        e.preventDefault();
+        const data = $('#profileForm').serialize();
+        $.post('/Profile/UpdateInfo', data)
+            .done(() => alert('Данные сохранены!'))
+            .fail(() => alert('Ошибка сохранения'));
+    }
+
+    function openChangePasswordModal() {
+        const passModal = new bootstrap.Modal(document.getElementById('passwordChangeModal'));
+        passModal.show();
+    }
+
+    function submitChangePass(e) {
+        e.preventDefault();
+        const data = $('#changePassForm').serialize();
+        $.post('/Profile/ChangePassword', data)
+            .done(() => {
+                alert('Пароль изменен! Требуется повторный вход.');
+                window.location.reload();
+            })
+            .fail((xhr) => alert('Ошибка: ' + xhr.responseText));
+    }
+</script>

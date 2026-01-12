@@ -1,0 +1,36 @@
+﻿using System.Linq;
+using System.Threading.Tasks;
+using Core.Data;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.AspNetCore.Hosting;
+
+namespace CRM.Controllers
+{
+    public class DataController : BasePlatformController
+    {
+        public DataController(AppDbContext context, IWebHostEnvironment hostingEnvironment) 
+            : base(context, hostingEnvironment)
+        {
+        }
+
+        [Route("Data/{entityCode}")]
+        public async Task<IActionResult> Index(string entityCode)
+        {
+            var definition = await _context.AppDefinitions
+                .Include(a => a.Fields)
+                .FirstOrDefaultAsync(a => a.EntityCode == entityCode);
+
+            if (definition == null) return NotFound();
+
+            var objects = await _context.GenericObjects
+                .Where(o => o.EntityCode == entityCode)
+                .OrderByDescending(o => o.CreatedAt)
+                .ToListAsync();
+
+            ViewBag.Definition = definition;
+            
+            return View("~/Views/GenericObjects/Index.cshtml", objects);
+        }
+    }
+}

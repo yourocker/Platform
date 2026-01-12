@@ -1,0 +1,33 @@
+﻿@model Core.Entities.Platform.GenericObject
+@{ ViewData["Title"] = "Новая запись"; }
+
+<div class="row justify-content-center">
+    <div class="col-md-10"> @* Расширил контейнер до 10 (было 8), чтобы поля были шире *@
+        <h2 class="mb-4">Добавление объекта</h2>
+        
+        <form asp-action="Create" method="post" enctype="multipart/form-data">
+            <input type="hidden" name="EntityCode" value="@ViewBag.EntityCode" />
+            
+            @* --- ОСНОВНЫЕ ПОЛЯ (в едином стиле с доп. полями) --- *@
+            <div class="container-fluid px-0">
+                <div class="row mb-3">
+                    <label asp-for="Name" class="col-sm-2 col-form-label text-muted text-sm-end fw-bold">
+                        Наименование <span class="text-danger">*</span>
+                    </label>
+                    <div class="col-sm-10">
+                        <input asp-for="Name" class="form-control" placeholder="Введите название" required />
+                        <span asp-validation-for="Name" class="text-danger"></span>
+                    </div>
+                </div>
+            </div>
+
+            @* --- ДОПОЛНИТЕЛЬНЫЕ ПОЛЯ --- *@
+            <partial name="_DynamicFields" />
+
+            <div class="mt-4 pt-3 border-top">
+                <button type="submit" class="btn btn-success px-4">Создать</button>
+                <a href="/Data/@ViewBag.EntityCode" class="btn btn-link text-decoration-none">Отмена</a>
+            </div>
+        </form>
+    </div>
+</div>
