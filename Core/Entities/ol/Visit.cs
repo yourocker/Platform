@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace Core.Entities
+﻿namespace Core.Entities.ol
 {
     public class Visit
     {

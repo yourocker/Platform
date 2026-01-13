@@ -1,4 +1,5 @@
 using Core.Data;
+using Core.Data.Interceptors;
 using Core.Entities.Company;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -12,7 +13,7 @@ NpgsqlConnection.GlobalTypeMapper.EnableDynamicJson();
 
 var builder = WebApplication.CreateBuilder(args);
 
-// !!! ИЗМЕНЕНО: Добавляем политику "Вход обязателен для всего"
+// 1. Настройка контроллеров и политики авторизации
 builder.Services.AddControllersWithViews(options =>
 {
     var policy = new AuthorizationPolicyBuilder()
@@ -21,14 +22,23 @@ builder.Services.AddControllersWithViews(options =>
     options.Filters.Add(new AuthorizeFilter(policy));
 });
 
+// 2. Получение строки подключения
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
+// 3. Подключение БД с Interceptor (ИСПРАВЛЕНО)
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseNpgsql(connectionString, o => 
+{
+    // Настройка PostgreSQL
+    options.UseNpgsql(connectionString, npgsqlOptions => 
     {
-        o.EnableRetryOnFailure();
-    }));
+        npgsqlOptions.EnableRetryOnFailure();
+    });
 
+    // Подключение перехватчика событий (Outbox)
+    options.AddInterceptors(new OutboxInterceptor());
+});
+
+// 4. Настройка Identity
 builder.Services.AddIdentity<Employee, IdentityRole<Guid>>(options => 
     {
         options.Password.RequireDigit = false;
@@ -40,6 +50,7 @@ builder.Services.AddIdentity<Employee, IdentityRole<Guid>>(options =>
     .AddEntityFrameworkStores<AppDbContext>()
     .AddDefaultTokenProviders();
 
+// 5. Настройка Cookie
 builder.Services.ConfigureApplicationCookie(options =>
 {
     options.LoginPath = "/Account/Login";
@@ -48,6 +59,7 @@ builder.Services.ConfigureApplicationCookie(options =>
 
 var app = builder.Build();
 
+// 6. Конвейер обработки запросов (Pipeline)
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Home/Error");
@@ -66,6 +78,7 @@ app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}");
 
+// 7. Автомиграция при старте
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
@@ -74,7 +87,7 @@ using (var scope = app.Services.CreateScope())
         var context = services.GetRequiredService<AppDbContext>();
         await context.Database.MigrateAsync();
         // await DbInitializer.Initialize(context); 
-        Console.WriteLine(">>> База данных готова.");
+        Console.WriteLine(">>> База данных готова и обновлена.");
     }
     catch (Exception ex)
     {

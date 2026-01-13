@@ -1,9 +1,10 @@
-﻿@model Core.Entities.Patient
+﻿@using Core.Entities.ol
+@model Core.Entities.ol.Patient
 
 @{
     ViewData["Title"] = "Карточка пациента";
     // Получаем список визитов из контроллера и приводим к нужному типу
-    var visits = ViewBag.Visits as IEnumerable<Core.Entities.Visit>;
+    var visits = ViewBag.Visits as IEnumerable<Visit>;
 }
 
 <div class="container mt-4">

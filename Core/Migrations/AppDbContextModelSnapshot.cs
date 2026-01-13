@@ -232,56 +232,6 @@ namespace Core.Migrations
                     b.ToTable("StaffAppointments");
                 });
 
-            modelBuilder.Entity("Core.Entities.Doctor", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("FullName")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("Doctors");
-                });
-
-            modelBuilder.Entity("Core.Entities.Patient", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("CardNumber")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Comment")
-                        .HasColumnType("text");
-
-                    b.Property<string>("FullName")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("NormalizedName")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("PhoneNumber")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Properties")
-                        .HasColumnType("jsonb");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("NormalizedName");
-
-                    b.ToTable("Patients");
-                });
-
             modelBuilder.Entity("Core.Entities.Platform.AppCategory", b =>
                 {
                     b.Property<Guid>("Id")
@@ -419,6 +369,31 @@ namespace Core.Migrations
                     b.UseTphMappingStrategy();
                 });
 
+            modelBuilder.Entity("Core.Entities.System.OutboxEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Payload")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime?>("ProcessedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("OutboxEvents");
+                });
+
             modelBuilder.Entity("Core.Entities.Tasks.TaskComment", b =>
                 {
                     b.Property<int>("Id")
@@ -478,7 +453,57 @@ namespace Core.Migrations
                     b.ToTable("TaskEntityRelations");
                 });
 
-            modelBuilder.Entity("Core.Entities.Visit", b =>
+            modelBuilder.Entity("Core.Entities.ol.Doctor", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("FullName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("Doctors");
+                });
+
+            modelBuilder.Entity("Core.Entities.ol.Patient", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("CardNumber")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Comment")
+                        .HasColumnType("text");
+
+                    b.Property<string>("FullName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("PhoneNumber")
+                        .HasColumnType("text");
+
+                    b.Property<string>("Properties")
+                        .HasColumnType("jsonb");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NormalizedName");
+
+                    b.ToTable("Patients");
+                });
+
+            modelBuilder.Entity("Core.Entities.ol.Visit", b =>
                 {
                     b.Property<Guid>("Id")
                         .ValueGeneratedOnAdd()
@@ -774,13 +799,13 @@ namespace Core.Migrations
                     b.Navigation("Task");
                 });
 
-            modelBuilder.Entity("Core.Entities.Visit", b =>
+            modelBuilder.Entity("Core.Entities.ol.Visit", b =>
                 {
-                    b.HasOne("Core.Entities.Doctor", null)
+                    b.HasOne("Core.Entities.ol.Doctor", null)
                         .WithMany("Visits")
                         .HasForeignKey("DoctorId");
 
-                    b.HasOne("Core.Entities.Patient", "Patient")
+                    b.HasOne("Core.Entities.ol.Patient", "Patient")
                         .WithMany("Visits")
                         .HasForeignKey("PatientId")
                         .OnDelete(DeleteBehavior.Cascade)
@@ -871,16 +896,6 @@ namespace Core.Migrations
                     b.Navigation("StaffAppointments");
                 });
 
-            modelBuilder.Entity("Core.Entities.Doctor", b =>
-                {
-                    b.Navigation("Visits");
-                });
-
-            modelBuilder.Entity("Core.Entities.Patient", b =>
-                {
-                    b.Navigation("Visits");
-                });
-
             modelBuilder.Entity("Core.Entities.Platform.AppCategory", b =>
                 {
                     b.Navigation("Apps");
@@ -889,6 +904,16 @@ namespace Core.Migrations
             modelBuilder.Entity("Core.Entities.Platform.AppDefinition", b =>
                 {
                     b.Navigation("Fields");
+                });
+
+            modelBuilder.Entity("Core.Entities.ol.Doctor", b =>
+                {
+                    b.Navigation("Visits");
+                });
+
+            modelBuilder.Entity("Core.Entities.ol.Patient", b =>
+                {
+                    b.Navigation("Visits");
                 });
 
             modelBuilder.Entity("Core.Entities.Tasks.EmployeeTask", b =>

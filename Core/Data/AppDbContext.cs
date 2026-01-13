@@ -1,11 +1,13 @@
 ﻿using System;
 using Core.Entities;
 using Core.Entities.Company;
+using Core.Entities.ol;
 using Core.Entities.Platform;
 using Core.Entities.Tasks;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
+using Core.Entities.System;
 
 namespace Core.Data
 {
@@ -34,7 +36,7 @@ namespace Core.Data
         public DbSet<EmployeeTask> EmployeeTasks { get; set; }
         public DbSet<TaskComment> TaskComments { get; set; }
         public DbSet<TaskEntityRelation> TaskEntityRelations { get; set; }
-        
+        public DbSet<OutboxEvent> OutboxEvents { get; set; }
         public DbSet<AppCategory> AppCategories { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
