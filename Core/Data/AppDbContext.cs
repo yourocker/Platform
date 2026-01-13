@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Core.Entities.System;
+using Core.Data.Interceptors;
 
 namespace Core.Data
 {
@@ -38,6 +39,13 @@ namespace Core.Data
         public DbSet<TaskEntityRelation> TaskEntityRelations { get; set; }
         public DbSet<OutboxEvent> OutboxEvents { get; set; }
         public DbSet<AppCategory> AppCategories { get; set; }
+
+        protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+        {
+            // Подключение перехватчика событий Outbox
+            optionsBuilder.AddInterceptors(new OutboxInterceptor());
+            base.OnConfiguring(optionsBuilder);
+        }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {

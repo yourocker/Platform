@@ -20,58 +20,68 @@ namespace Core.Data.Interceptors
             var context = eventData.Context;
             if (context == null) return base.SavingChangesAsync(eventData, result, cancellationToken);
 
+            // Получаем все новые сущности до момента сохранения
             var entries = context.ChangeTracker.Entries()
-                .Where(e => e.State == EntityState.Added || e.State == EntityState.Modified)
+                .Where(e => e.State == EntityState.Added)
                 .ToList();
 
             foreach (var entry in entries)
             {
-                // 1. Новая задача (EmployeeTask)
-                if (entry.Entity is EmployeeTask task && entry.State == EntityState.Added)
+                // Обработка создания задачи
+                if (entry.Entity is EmployeeTask task)
                 {
-                    AddOutboxEvent(context, "TASK_ASSIGNED", new
+                    if (task.AssigneeId != Guid.Empty)
                     {
-                        TaskId = task.Id,
-                        RecipientId = task.AssigneeId, // ID исполнителя
-                        SenderId = task.AuthorId,      // ID автора (постановщика)
-                        Title = "Новая задача",
-                        Message = $"Вам назначена задача: {task.Title}",
-                        Url = $"/Tasks/Details/{task.Id}"
-                    });
+                        Console.WriteLine($">>> [OutboxInterceptor] Фиксация задачи: {task.Title} для {task.AssigneeId}");
+
+                        var payload = new
+                        {
+                            TaskId = task.Id,
+                            RecipientId = task.AssigneeId,
+                            SenderId = task.AuthorId,
+                            Title = "Новая задача",
+                            Message = $"Вам назначена задача: {task.Title}",
+                            Url = $"/Tasks/Details/{task.Id}"
+                        };
+
+                        CreateEvent(context, "TASK_ASSIGNED", payload);
+                    }
                 }
 
-                // 2. Новый комментарий (TaskComment)
-                if (entry.Entity is TaskComment comment && entry.State == EntityState.Added)
+                // Обработка комментария
+                if (entry.Entity is TaskComment comment)
                 {
-                    // Для комментария мы передаем SenderId и TaskId.
-                    // Сервис уведомлений сам разберется, кому отправлять (автору задачи или исполнителю),
-                    // подгрузив задачу по TaskId.
-                    AddOutboxEvent(context, "TASK_COMMENT_ADDED", new
+                    Console.WriteLine($">>> [OutboxInterceptor] Фиксация комментария к задаче: {comment.TaskId}");
+
+                    var payload = new
                     {
-                        TaskId = comment.TaskId,       // ID задачи
-                        SenderId = comment.AuthorId,   // Кто написал
+                        TaskId = comment.TaskId,
+                        SenderId = comment.AuthorId,
                         Title = "Новый комментарий",
-                        Message = "В задаче появился новый комментарий", 
-                        Preview = comment.Text.Length > 50 ? comment.Text.Substring(0, 50) + "..." : comment.Text,
+                        Message = "В вашей задаче появился новый комментарий",
                         Url = $"/Tasks/Details/{comment.TaskId}"
-                    });
+                    };
+
+                    CreateEvent(context, "TASK_COMMENT_ADDED", payload);
                 }
-                
-                // Здесь можно добавлять обработку TASK_STATUS_CHANGED и других событий
             }
 
             return base.SavingChangesAsync(eventData, result, cancellationToken);
         }
 
-        private void AddOutboxEvent(DbContext context, string type, object data)
+        private void CreateEvent(DbContext context, string type, object data)
         {
-            context.Set<OutboxEvent>().Add(new OutboxEvent
+            var outboxEvent = new OutboxEvent
             {
                 Id = Guid.NewGuid(),
                 EventType = type,
                 Payload = JsonConvert.SerializeObject(data),
-                CreatedAt = DateTime.UtcNow
-            });
+                CreatedAt = DateTime.UtcNow,
+                ProcessedAt = null // Обязательно null для воркера
+            };
+
+            context.Set<OutboxEvent>().Add(outboxEvent);
+            Console.WriteLine($">>> [OutboxInterceptor] ✅ Событие {type} поставлено в очередь сохранения.");
         }
     }
 }
