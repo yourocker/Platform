@@ -37,10 +37,6 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\Notifications\Notifications.csproj" />
-    </ItemGroup>
-
-    <ItemGroup>
       <Folder Include="Entities\OldData\" />
     </ItemGroup>
 
