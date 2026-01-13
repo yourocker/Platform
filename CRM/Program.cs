@@ -25,17 +25,13 @@ builder.Services.AddControllersWithViews(options =>
 // 2. Получение строки подключения
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
-// 3. Подключение БД с Interceptor (ИСПРАВЛЕНО)
+// 3. Подключение БД (ИСПРАВЛЕНО: Интерцептор удален отсюда, он теперь в AppDbContext)
 builder.Services.AddDbContext<AppDbContext>(options =>
 {
-    // Настройка PostgreSQL
     options.UseNpgsql(connectionString, npgsqlOptions => 
     {
         npgsqlOptions.EnableRetryOnFailure();
     });
-
-    // Подключение перехватчика событий (Outbox)
-    options.AddInterceptors(new OutboxInterceptor());
 });
 
 // 4. Настройка Identity
@@ -86,7 +82,6 @@ using (var scope = app.Services.CreateScope())
     {
         var context = services.GetRequiredService<AppDbContext>();
         await context.Database.MigrateAsync();
-        // await DbInitializer.Initialize(context); 
         Console.WriteLine(">>> База данных готова и обновлена.");
     }
     catch (Exception ex)

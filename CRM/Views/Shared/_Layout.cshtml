@@ -7,7 +7,7 @@
 @inject UserManager<Employee> UserManager
 
 @{
-// 1. Загружаем категории со всеми приложениями из базы (ТВОЙ КОД)
+// 1. Загружаем категории со всеми приложениями из базы
 var customCategories = await Context.AppCategories
 .Include(c => c.Apps)
 .OrderBy(c => c.SortOrder)
@@ -20,7 +20,7 @@ var action = ViewContext.RouteData.Values["Action"]?.ToString();
 var entityCodeFromUrl = ViewContext.RouteData.Values["entityCode"]?.ToString()
 ?? ViewBag.EntityCode?.ToString();
 
-// Логика определения активности разделов (ТВОЙ КОД)
+// Логика определения активности разделов
 var isCompanyActive = controller == "Positions" || controller == "Departments" || controller == "Employees" ||
 customCategories.Any(c => c.IsSystem && c.Name == "Компания" && c.Apps.Any(a => a.EntityCode == entityCodeFromUrl));
 
@@ -41,13 +41,13 @@ customCategories.Any(c => c.IsSystem && c.Name == "Пациенты" && c.Apps.A
         :root { --main-bg: #1e2229; --sub-bg: #ffffff; --accent: #0d6efd; }
         body { background-color: #f4f7f6; overflow: hidden; height: 100vh; display: flex; margin: 0; font-family: 'Segoe UI', sans-serif; }
 
-        /* ЛЕВОЕ МЕНЮ 1 (Иконки) - ТВОЙ СТИЛЬ */
+        /* ЛЕВОЕ МЕНЮ 1 (Иконки) */
         #nav-main { width: 70px; background: var(--main-bg); display: flex; flex-direction: column; align-items: center; padding-top: 20px; z-index: 1050; flex-shrink: 0; }
         .main-btn { width: 48px; height: 48px; display: flex; align-items: center; justify-content: center; color: #a0a6ad; font-size: 1.5rem; margin-bottom: 12px; cursor: pointer; border-radius: 10px; transition: 0.2s; text-decoration: none; }
         .main-btn:hover, .main-btn.active { background: rgba(255,255,255,0.1); color: #fff; }
         .main-btn.active { color: var(--accent); background: #fff; }
 
-        /* ЛЕВОЕ МЕНЮ 2 (Подменю) - ТВОЙ СТИЛЬ */
+        /* ЛЕВОЕ МЕНЮ 2 (Подменю) */
         #nav-sub { width: 240px; background: var(--sub-bg); border-right: 1px solid #dee2e6; display: flex; flex-direction: column; box-shadow: 2px 0 5px rgba(0,0,0,0.03); flex-shrink: 0; }
         .sub-header { padding: 25px 20px; font-weight: 700; font-size: 1.1rem; border-bottom: 1px solid #f0f0f0; height: 60px; display: flex; align-items: center; } /* height 60px чтобы совпасть с хедером */
         .sub-link { padding: 12px 20px; color: #495057; text-decoration: none; display: flex; align-items: center; transition: 0.15s; }
@@ -55,7 +55,7 @@ customCategories.Any(c => c.IsSystem && c.Name == "Пациенты" && c.Apps.A
         .sub-link.active { color: var(--accent); background: #eef5ff; font-weight: 600; }
         .sub-link i { margin-right: 12px; }
 
-        /* ВЕРХНЯЯ ШАПКА - НОВЫЙ КОД */
+        /* ВЕРХНЯЯ ШАПКА */
         header.navbar { height: 60px; background: white; border-bottom: 1px solid #dee2e6; flex-shrink: 0; padding: 0 20px; }
 
         /* ОСНОВНОЙ КОНТЕНТ */
@@ -63,7 +63,7 @@ customCategories.Any(c => c.IsSystem && c.Name == "Пациенты" && c.Apps.A
         #content-wrapper { flex-grow: 1; overflow-y: auto; padding: 30px; position: relative; }
         .sortable-ghost { opacity: 0.2; }
 
-        /* ПРАВОЕ МЕНЮ - НОВЫЙ КОД */
+        /* ПРАВОЕ МЕНЮ */
         #right-sidebar { width: 60px; background: #fff; border-left: 1px solid #dee2e6; display: flex; flex-direction: column; align-items: center; flex-shrink: 0; z-index: 1040; }
     </style>
 </head>
@@ -187,6 +187,7 @@ customCategories.Any(c => c.IsSystem && c.Name == "Пациенты" && c.Apps.A
             var displayName = user != null ? $"{user.FirstName} {user.LastName}" : User.Identity.Name;
             var timezone = user?.TimezoneId ?? "UTC";
 
+            <input type="hidden" id="currentUserId" value="@user?.Id" />
             <input type="hidden" id="user-timezone" value="@timezone" />
 
             <div class="dropdown">
@@ -224,8 +225,19 @@ customCategories.Any(c => c.IsSystem && c.Name == "Пациенты" && c.Apps.A
 </div>
 
 <div id="right-sidebar">
-    <div class="p-3 text-center border-bottom text-primary" style="height: 60px; display: flex; align-items: center; justify-content: center;">
+    <div class="p-3 text-center border-bottom text-primary position-relative"
+         style="height: 60px; display: flex; align-items: center; justify-content: center; cursor: pointer;"
+         data-bs-toggle="offcanvas"
+         data-bs-target="#notificationSidebar"
+         aria-controls="notificationSidebar">
+
         <i class="bi bi-bell-fill fs-5" title="Уведомления"></i>
+
+        <span id="notificationBadge"
+              class="position-absolute top-0 start-50 translate-middle badge rounded-pill bg-danger"
+              style="display:none; margin-top: 15px; margin-left: 10px; font-size: 0.6em;">
+            0
+        </span>
     </div>
     <div class="flex-grow-1 p-2 text-center text-muted small mt-2">
         <i class="bi bi-activity"></i>
@@ -242,13 +254,25 @@ customCategories.Any(c => c.IsSystem && c.Name == "Пациенты" && c.Apps.A
     </div>
 </div>
 
+<div class="offcanvas offcanvas-end" tabindex="-1" id="notificationSidebar" aria-labelledby="notificationSidebarLabel">
+    <div class="offcanvas-header">
+        <h5 class="offcanvas-title" id="notificationSidebarLabel">Уведомления</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+    </div>
+    <div class="offcanvas-body" id="notificationList">
+        <p class="text-center text-muted mt-4">Нет новых уведомлений</p>
+    </div>
+</div>
+
 <script src="~/lib/jquery/dist/jquery.min.js"></script>
 <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
 <script src="~/js/site.js" asp-append-version="true"></script>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/6.0.25/signalr.min.js"></script>
+<script src="~/js/notifications.js" asp-append-version="true"></script>
 <script>
-    // 1. Скрипт сортировки меню (ТВОЙ КОД)
+    // 1. Скрипт сортировки меню
     const el = document.getElementById('sortable-menu');
     if(el) {
         Sortable.create(el, {
@@ -272,7 +296,7 @@ customCategories.Any(c => c.IsSystem && c.Name == "Пациенты" && c.Apps.A
         }
     });
 
-    // 2. Скрипт Часов и Модалки (НОВЫЙ КОД)
+    // 2. Скрипт Часов и Модалки
     function updateClock() {
         const now = new Date();
         const timeString = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
