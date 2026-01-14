@@ -1,20 +1,22 @@
 ﻿@model CRM.ViewModels.UserProfileViewModel
 
 @{
-    // Список таймзон (упрощенный)
-    var timezones = TimeZoneInfo.GetSystemTimeZones();
+var timezones = TimeZoneInfo.GetSystemTimeZones();
 }
 
 <div class="modal-header border-0 pb-0">
     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
 </div>
 <div class="modal-body p-0">
-    <div class="d-flex h-100" style="min-height: 500px;">
-        
+    <div class="d-flex h-100" style="min-height: 550px;">
+
         <div class="bg-light border-end p-3 text-center" style="width: 80px;">
             <div class="nav flex-column nav-pills" id="v-pills-tab" role="tablist" aria-orientation="vertical">
                 <button class="nav-link active mb-3" id="v-pills-profile-tab" data-bs-toggle="pill" data-bs-target="#v-pills-profile" type="button" role="tab" title="Профиль">
                     <i class="bi bi-person-vcard fs-3"></i>
+                </button>
+                <button class="nav-link mb-3" id="v-pills-notifications-tab" data-bs-toggle="pill" data-bs-target="#v-pills-notifications" type="button" role="tab" title="Уведомления">
+                    <i class="bi bi-bell fs-3"></i>
                 </button>
                 <button class="nav-link" id="v-pills-security-tab" data-bs-toggle="pill" data-bs-target="#v-pills-security" type="button" role="tab" title="Безопасность">
                     <i class="bi bi-shield-lock fs-3"></i>
@@ -23,11 +25,13 @@
         </div>
 
         <div class="flex-grow-1 p-4">
-            <div class="tab-content" id="v-pills-tabContent">
-                
-                <div class="tab-pane fade show active" id="v-pills-profile" role="tabpanel">
-                    <h4 class="mb-4">Личные данные</h4>
-                    <form id="profileForm" onsubmit="saveProfile(event)">
+            <form id="profileForm" onsubmit="saveProfile(event)">
+                <input type="hidden" asp-for="Id" />
+
+                <div class="tab-content" id="v-pills-tabContent">
+
+                    <div class="tab-pane fade show active" id="v-pills-profile" role="tabpanel">
+                        <h4 class="mb-4">Личные данные</h4>
                         <div class="row g-3">
                             <div class="col-md-4">
                                 <label class="form-label">Фамилия</label>
@@ -41,46 +45,81 @@
                                 <label class="form-label">Отчество</label>
                                 <input asp-for="MiddleName" class="form-control" />
                             </div>
-                            
                             <div class="col-12 mt-4">
                                 <label class="form-label">Часовой пояс</label>
                                 <select asp-for="TimezoneId" class="form-select">
                                     @foreach (var tz in timezones)
                                     {
-                                        <option value="@tz.Id">@tz.DisplayName</option>
+                                    <option value="@tz.Id">@tz.DisplayName</option>
                                     }
                                 </select>
                             </div>
-                            
-                            <div class="col-12 mt-4 text-end">
-                                <button type="submit" class="btn btn-primary">Сохранить изменения</button>
+                        </div>
+                    </div>
+
+                    <div class="tab-pane fade" id="v-pills-notifications" role="tabpanel">
+                        <h4 class="mb-4">Настройки уведомлений</h4>
+
+                        <div class="p-3 bg-light rounded-3 mb-4">
+                            <div class="form-check form-switch mb-3">
+                                <input class="form-check-input" type="checkbox" asp-for="NotifySoundEnabled" id="notifySound">
+                                <label class="form-check-label fw-bold" for="notifySound">Звуковой сигнал</label>
+                            </div>
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" asp-for="NotifyDesktopEnabled" id="notifyDesktop">
+                                <label class="form-check-label fw-bold" for="notifyDesktop">Пуш-уведомления в браузере</label>
                             </div>
                         </div>
-                    </form>
+
+                        <div class="form-check form-switch mb-4 pb-3 border-bottom">
+                            <input class="form-check-input" type="checkbox" asp-for="IsAdvancedSettings" id="toggleAdvanced" onchange="toggleSettingsMode()">
+                            <label class="form-check-label text-primary fw-bold" for="toggleAdvanced">Расширенные настройки</label>
+                        </div>
+
+                        <div id="basicSettingsSection" style="@(Model.IsAdvancedSettings ? "display:none" : "")">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" asp-for="NotifyTaskGeneral" id="taskGeneral">
+                                <label class="form-check-label fs-5" for="taskGeneral">Уведомления в задачах</label>
+                            </div>
+                        </div>
+
+                        <div id="advancedSettingsSection" style="@(Model.IsAdvancedSettings ? "" : "display:none")">
+                            <h5 class="text-muted mb-3"><i class="bi bi-list-task me-2"></i>Задачи</h5>
+                            <div class="ms-3">
+                                <div class="form-check mb-2">
+                                    <input class="form-check-input" type="checkbox" asp-for="NotifyTaskAssigned" id="taskAssigned">
+                                    <label class="form-check-label" for="taskAssigned">Назначение новой задачи</label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" asp-for="NotifyTaskComment" id="taskComment">
+                                    <label class="form-check-label" for="taskComment">Новый комментарий в моей задаче</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="tab-pane fade" id="v-pills-security" role="tabpanel">
+                        <h4 class="mb-4">Вход и безопасность</h4>
+                        <div class="mb-3">
+                            <label class="form-label text-muted small">Email (Логин)</label>
+                            <input type="text" class="form-control-plaintext fw-bold p-0" value="@Model.Email" readonly />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label text-muted small">Телефон</label>
+                            <input type="text" class="form-control-plaintext fw-bold p-0" value="@Model.PhoneNumber" readonly />
+                        </div>
+                        <hr class="my-4">
+                        <button type="button" class="btn btn-outline-danger" onclick="openChangePasswordModal()">
+                            <i class="bi bi-key me-2"></i>Сменить пароль
+                        </button>
+                    </div>
+
                 </div>
 
-                <div class="tab-pane fade" id="v-pills-security" role="tabpanel">
-                    <h4 class="mb-4">Вход и безопасность</h4>
-                    
-                    <div class="mb-3">
-                        <label class="form-label text-muted">Ваш Email (Логин)</label>
-                        <input type="text" class="form-control-plaintext fw-bold" value="@Model.Email" readonly />
-                    </div>
-                    
-                    <div class="mb-3">
-                        <label class="form-label text-muted">Телефон для входа</label>
-                        <input type="text" class="form-control-plaintext fw-bold" value="@Model.PhoneNumber" readonly />
-                    </div>
-
-                    <hr class="my-4">
-
-                    <h5>Смена пароля</h5>
-                    <button class="btn btn-outline-danger mt-2" onclick="openChangePasswordModal()">
-                        <i class="bi bi-key"></i> Сменить пароль
-                    </button>
+                <div class="mt-5 pt-3 border-top text-end">
+                    <button type="submit" class="btn btn-primary px-4 shadow-sm">Сохранить изменения</button>
                 </div>
-
-            </div>
+            </form>
         </div>
     </div>
 </div>
@@ -88,24 +127,13 @@
 <div class="modal fade" id="passwordChangeModal" tabindex="-1">
     <div class="modal-dialog modal-sm modal-dialog-centered">
         <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Новый пароль</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
+            <div class="modal-header border-0 shadow-sm"><h5 class="modal-title">Новый пароль</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
             <div class="modal-body">
                 <form id="changePassForm" onsubmit="submitChangePass(event)">
-                    <div class="mb-2">
-                        <input type="password" name="OldPassword" class="form-control" placeholder="Старый пароль" required />
-                    </div>
-                    <div class="mb-2 position-relative">
-                        <input type="password" name="NewPassword" id="newPass" class="form-control" placeholder="Новый пароль" required />
-                    </div>
-                    <div class="mb-3">
-                        <input type="password" name="ConfirmPassword" class="form-control" placeholder="Повторите новый" required />
-                    </div>
-                    <div class="d-grid">
-                        <button type="submit" class="btn btn-primary">Сменить</button>
-                    </div>
+                    <input type="password" name="OldPassword" class="form-control mb-2" placeholder="Старый пароль" required />
+                    <input type="password" name="NewPassword" class="form-control mb-2" placeholder="Новый пароль" required />
+                    <input type="password" name="ConfirmPassword" class="form-control mb-3" placeholder="Повторите новый" required />
+                    <button type="submit" class="btn btn-primary w-100">Сменить</button>
                 </form>
             </div>
         </div>
@@ -113,27 +141,30 @@
 </div>
 
 <script>
+    // Переключение между Основными и Расширенными настройками
+    function toggleSettingsMode() {
+        const isAdvanced = document.getElementById('toggleAdvanced').checked;
+        document.getElementById('basicSettingsSection').style.display = isAdvanced ? 'none' : 'block';
+        document.getElementById('advancedSettingsSection').style.display = isAdvanced ? 'block' : 'none';
+    }
+
     function saveProfile(e) {
         e.preventDefault();
         const data = $('#profileForm').serialize();
         $.post('/Profile/UpdateInfo', data)
-            .done(() => alert('Данные сохранены!'))
+            .done(() => alert('Настройки сохранены!'))
             .fail(() => alert('Ошибка сохранения'));
     }
 
     function openChangePasswordModal() {
-        const passModal = new bootstrap.Modal(document.getElementById('passwordChangeModal'));
-        passModal.show();
+        new bootstrap.Modal(document.getElementById('passwordChangeModal')).show();
     }
 
     function submitChangePass(e) {
         e.preventDefault();
         const data = $('#changePassForm').serialize();
         $.post('/Profile/ChangePassword', data)
-            .done(() => {
-                alert('Пароль изменен! Требуется повторный вход.');
-                window.location.reload();
-            })
+            .done(() => { alert('Пароль изменен! Войдите снова.'); window.location.reload(); })
             .fail((xhr) => alert('Ошибка: ' + xhr.responseText));
     }
 </script>
