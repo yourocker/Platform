@@ -37,4 +37,9 @@
       <_ContentIncludedByDefault Remove="wwwroot\uploads\AllFields\27c924c4-a5b6-4e62-9e54-b93df66972f4\ice_video_20251219-114910.webm" />
     </ItemGroup>
 
+    <ItemGroup>
+      <AdditionalFiles Include="Views\OLD\Patients\Details.cshtml" />
+      <AdditionalFiles Include="Views\OLD\Patients\Index.cshtml" />
+    </ItemGroup>
+
 </Project>

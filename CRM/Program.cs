@@ -74,15 +74,21 @@ app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}");
 
-// 6. Автоматическое применение миграций при старте
+// 6. Автоматическое применение миграций и ИНИЦИАЛИЗАЦИЯ ДАННЫХ ПРИ СТАРТЕ
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
     try
     {
         var context = services.GetRequiredService<AppDbContext>();
+        
+        // Сначала накатываем миграции
         await context.Database.MigrateAsync();
-        Console.WriteLine(">>> CRM: База данных готова.");
+        
+        // ЗАТЕМ запускаем твой инициализатор для создания CRM и Контактов
+        await DbInitializer.Initialize(context);
+        
+        Console.WriteLine(">>> CRM: База данных готова и метаданные инициализированы.");
     }
     catch (Exception ex)
     {

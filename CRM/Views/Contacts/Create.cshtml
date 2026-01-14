@@ -1,0 +1,80 @@
+﻿@model Core.Entities.CRM.Contact
+@{ ViewData["Title"] = "Создание контакта"; }
+
+<div class="row justify-content-center">
+    <div class="col-md-10">
+        <h3 class="fw-bold text-secondary mb-4"><i class="bi bi-person-plus-fill me-2"></i>Новый контакт</h3>
+
+        <form asp-action="Create" method="post" enctype="multipart/form-data">
+            <input type="hidden" asp-for="Id" />
+            <input type="hidden" asp-for="EntityCode" />
+
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-white py-3 border-0"><h5 class="mb-0 fw-bold">Основная информация</h5></div>
+                <div class="card-body p-4 pt-0">
+                    <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label text-muted small fw-bold">ФАМИЛИЯ</label>
+                            <input asp-for="LastName" class="form-control" required />
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label text-muted small fw-bold">ИМЯ</label>
+                            <input asp-for="FirstName" class="form-control" required />
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label class="form-label text-muted small fw-bold">ОТЧЕСТВО</label>
+                            <input asp-for="MiddleName" class="form-control" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="row">
+                <div class="col-md-6 mb-4">
+                    <div class="card shadow-sm border-0 h-100">
+                        <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0 fw-bold">Телефоны</h5>
+                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="addInput('phone-container', 'PhoneNumbers', 'tel')">+ Добавить</button>
+                        </div>
+                        <div class="card-body" id="phone-container">
+                            <input type="tel" name="PhoneNumbers" class="form-control mb-2" placeholder="+7..." />
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6 mb-4">
+                    <div class="card shadow-sm border-0 h-100">
+                        <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center">
+                            <h5 class="mb-0 fw-bold">Email</h5>
+                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="addInput('email-container', 'EmailAddresses', 'email')">+ Добавить</button>
+                        </div>
+                        <div class="card-body" id="email-container">
+                            <input type="email" name="EmailAddresses" class="form-control mb-2" placeholder="mail@example.com" />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-body p-4">
+                    <partial name="_DynamicFields" model="Model" />
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-between">
+                <a asp-action="Index" class="btn btn-link text-muted">Отмена</a>
+                <button type="submit" class="btn btn-primary px-5 shadow">Создать контакт</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    function addInput(containerId, name, type) {
+        const container = document.getElementById(containerId);
+        const div = document.createElement('div');
+        div.className = 'input-group mb-2';
+        div.innerHTML = `<input type="${type}" name="${name}" class="form-control">
+                         <button type="button" class="btn btn-outline-danger" onclick="this.parentElement.remove()"><i class="bi bi-x"></i></button>`;
+        container.appendChild(div);
+    }
+</script>

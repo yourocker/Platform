@@ -57,6 +57,56 @@ namespace Core.Migrations
                     b.ToTable("Appointments");
                 });
 
+            modelBuilder.Entity("Core.Entities.CRM.ContactEmail", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<Guid>("ContactId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ContactId");
+
+                    b.HasIndex("Email");
+
+                    b.ToTable("ContactEmails", (string)null);
+                });
+
+            modelBuilder.Entity("Core.Entities.CRM.ContactPhone", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<Guid>("ContactId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Number")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ContactId");
+
+                    b.HasIndex("Number");
+
+                    b.ToTable("ContactPhones", (string)null);
+                });
+
             modelBuilder.Entity("Core.Entities.Company.Department", b =>
                 {
                     b.Property<Guid>("Id")
@@ -362,8 +412,7 @@ namespace Core.Migrations
                         .HasColumnType("uuid");
 
                     b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp without time zone")
-                        .HasColumnName("CreatedAt");
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("EntityCode")
                         .IsRequired()
@@ -373,21 +422,14 @@ namespace Core.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
-                    b.Property<string>("ObjectType")
-                        .IsRequired()
-                        .HasMaxLength(5)
-                        .HasColumnType("character varying(5)");
-
                     b.Property<string>("Properties")
-                        .HasColumnType("text");
+                        .HasColumnType("jsonb");
 
                     b.HasKey("Id");
 
-                    b.ToTable("GenericObjects");
+                    b.ToTable("GenericObjects", (string)null);
 
-                    b.HasDiscriminator<string>("ObjectType").HasValue("Base");
-
-                    b.UseTphMappingStrategy();
+                    b.UseTptMappingStrategy();
                 });
 
             modelBuilder.Entity("Core.Entities.System.OutboxEvent", b =>
@@ -521,7 +563,7 @@ namespace Core.Migrations
 
                     b.HasIndex("NormalizedName");
 
-                    b.ToTable("Patients");
+                    b.ToTable("Patients", (string)null);
                 });
 
             modelBuilder.Entity("Core.Entities.ol.Visit", b =>
@@ -691,6 +733,38 @@ namespace Core.Migrations
                     b.ToTable("AspNetUserTokens", (string)null);
                 });
 
+            modelBuilder.Entity("Core.Entities.CRM.Contact", b =>
+                {
+                    b.HasBaseType("Core.Entities.Platform.GenericObject");
+
+                    b.Property<string>("FirstName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("FullName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("LastName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("MiddleName")
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.HasIndex("FirstName");
+
+                    b.HasIndex("FullName");
+
+                    b.HasIndex("LastName");
+
+                    b.ToTable("Contacts", (string)null);
+                });
+
             modelBuilder.Entity("Core.Entities.Tasks.EmployeeTask", b =>
                 {
                     b.HasBaseType("Core.Entities.Platform.GenericObject");
@@ -725,7 +799,29 @@ namespace Core.Migrations
 
                     b.HasIndex("AuthorId");
 
-                    b.HasDiscriminator().HasValue("Task");
+                    b.ToTable("EmployeeTasks", (string)null);
+                });
+
+            modelBuilder.Entity("Core.Entities.CRM.ContactEmail", b =>
+                {
+                    b.HasOne("Core.Entities.CRM.Contact", "Contact")
+                        .WithMany("Emails")
+                        .HasForeignKey("ContactId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Contact");
+                });
+
+            modelBuilder.Entity("Core.Entities.CRM.ContactPhone", b =>
+                {
+                    b.HasOne("Core.Entities.CRM.Contact", "Contact")
+                        .WithMany("Phones")
+                        .HasForeignKey("ContactId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Contact");
                 });
 
             modelBuilder.Entity("Core.Entities.Company.Department", b =>
@@ -886,6 +982,15 @@ namespace Core.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Core.Entities.CRM.Contact", b =>
+                {
+                    b.HasOne("Core.Entities.Platform.GenericObject", null)
+                        .WithOne()
+                        .HasForeignKey("Core.Entities.CRM.Contact", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Core.Entities.Tasks.EmployeeTask", b =>
                 {
                     b.HasOne("Core.Entities.Company.Employee", "Assignee")
@@ -898,6 +1003,12 @@ namespace Core.Migrations
                         .WithMany()
                         .HasForeignKey("AuthorId")
                         .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("Core.Entities.Platform.GenericObject", null)
+                        .WithOne()
+                        .HasForeignKey("Core.Entities.Tasks.EmployeeTask", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("Assignee");
@@ -935,6 +1046,13 @@ namespace Core.Migrations
             modelBuilder.Entity("Core.Entities.ol.Patient", b =>
                 {
                     b.Navigation("Visits");
+                });
+
+            modelBuilder.Entity("Core.Entities.CRM.Contact", b =>
+                {
+                    b.Navigation("Emails");
+
+                    b.Navigation("Phones");
                 });
 
             modelBuilder.Entity("Core.Entities.Tasks.EmployeeTask", b =>
