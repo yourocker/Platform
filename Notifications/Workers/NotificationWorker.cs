@@ -1,5 +1,5 @@
 ﻿using Core.Data;
-using Core.Entities.System;
+using Core.Entities.Company;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Newtonsoft.Json.Linq;
@@ -26,7 +26,7 @@ namespace Notifications.Workers
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            _logger.LogInformation(">>> [Worker] Запущен. Мониторинг CRM DB и запись в Notifications DB...");
+            _logger.LogInformation(">>> [Worker] Запущен. Мониторинг CRM DB (с учетом настроек пользователя)...");
 
             while (!stoppingToken.IsCancellationRequested)
             {
@@ -46,11 +46,7 @@ namespace Notifications.Workers
         private async Task ProcessEventsAsync(CancellationToken token)
         {
             using var scope = _serviceProvider.CreateScope();
-            
-            // Контекст базы CRM (medical_db) - только для очереди событий
             var crmContext = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            
-            // Контекст собственной базы (notifications_db) - для истории
             var notifyContext = scope.ServiceProvider.GetRequiredService<NotificationDbContext>();
 
             var events = await crmContext.OutboxEvents
@@ -61,8 +57,6 @@ namespace Notifications.Workers
 
             if (!events.Any()) return;
 
-            _logger.LogInformation($">>> [Worker] Найдено событий: {events.Count}");
-
             foreach (var evt in events)
             {
                 try
@@ -72,50 +66,86 @@ namespace Notifications.Workers
 
                     if (Guid.TryParse(recipientIdStr, out var recipientId))
                     {
-                        var title = data["Title"]?.ToString() ?? "Уведомление";
-                        var message = data["Message"]?.ToString() ?? "";
-                        var url = data["Url"]?.ToString() ?? "#";
+                        // 1. Получаем настройки пользователя из базы CRM
+                        var userSettings = await crmContext.Employees
+                            .AsNoTracking()
+                            .Select(e => new 
+                            { 
+                                e.Id, 
+                                e.NotifySoundEnabled, 
+                                e.NotifyDesktopEnabled,
+                                e.IsAdvancedSettings,
+                                e.NotifyTaskGeneral,
+                                e.NotifyTaskAssigned,
+                                e.NotifyTaskComment
+                            })
+                            .FirstOrDefaultAsync(e => e.Id == recipientId, token);
 
-                        // 1. Сохраняем в историю собственной базы данных (notifications_db)
+                        if (userSettings == null)
+                        {
+                            _logger.LogWarning($">>> [Worker] Пользователь {recipientId} не найден.");
+                            evt.ProcessedAt = DateTime.UtcNow;
+                            continue;
+                        }
+
+                        // 2. Логика фильтрации: нужно ли отправлять сигнал?
+                        bool canSendRealtime = false;
+
+                        if (!userSettings.IsAdvancedSettings)
+                        {
+                            // ОБЫЧНЫЙ режим: смотрим только общую галку задач
+                            canSendRealtime = userSettings.NotifyTaskGeneral;
+                        }
+                        else
+                        {
+                            // РАСШИРЕННЫЙ режим: проверяем конкретный тип
+                            canSendRealtime = evt.EventType switch
+                            {
+                                "TASK_ASSIGNED" => userSettings.NotifyTaskAssigned,
+                                "TASK_COMMENT_ADDED" => userSettings.NotifyTaskComment,
+                                _ => true
+                            };
+                        }
+
+                        // 3. Сохраняем в историю ВСЕГДА (чтобы в списке боковой панели уведомление было)
                         var historyEntry = new UserNotification
                         {
                             Id = Guid.NewGuid(),
                             UserId = recipientId,
-                            Title = title,
-                            Message = message,
-                            Url = url,
+                            Title = data["Title"]?.ToString() ?? "Уведомление",
+                            Message = data["Message"]?.ToString() ?? "",
+                            Url = data["Url"]?.ToString() ?? "#",
                             CreatedAt = DateTime.UtcNow,
                             IsRead = false
                         };
-
                         notifyContext.UserNotifications.Add(historyEntry);
 
-                        // 2. Отправляем сигнал в браузер
-                        await _hubContext.Clients.User(recipientId.ToString()).SendAsync("ReceiveNotification", new 
-                        { 
-                            id = historyEntry.Id,
-                            title = title,
-                            message = message,
-                            url = url
-                        }, token);
-
-                        _logger.LogInformation($">>> [Worker] Обработано: {evt.EventType} для {recipientId}");
+                        // 4. Отправляем SignalR только если разрешено настройками
+                        if (canSendRealtime)
+                        {
+                            await _hubContext.Clients.User(recipientId.ToString()).SendAsync("ReceiveNotification", new 
+                            { 
+                                id = historyEntry.Id,
+                                title = historyEntry.Title,
+                                message = historyEntry.Message,
+                                url = historyEntry.Url,
+                                // Передаем флаги, чтобы JS знал, играть ли звук и показывать ли пуш
+                                playSound = userSettings.NotifySoundEnabled,
+                                showDesktop = userSettings.NotifyDesktopEnabled
+                            }, token);
+                        }
                     }
                     
-                    // Помечаем событие в базе CRM как обработанное
                     evt.ProcessedAt = DateTime.UtcNow;
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, $">>> [Worker] Ошибка обработки события {evt.Id}");
+                    _logger.LogError(ex, $">>> [Worker] Ошибка на событии {evt.Id}");
                 }
             }
 
-            // Сохраняем изменения в обеих базах
             await notifyContext.SaveChangesAsync(token);
             await crmContext.SaveChangesAsync(token);
-            
-            _logger.LogInformation(">>> [Worker] Данные синхронизированы в обеих БД.");
         }
     }
 }

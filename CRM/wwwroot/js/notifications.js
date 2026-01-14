@@ -1,12 +1,12 @@
 ﻿"use strict";
 
-const NOTIFICATION_SERVICE_URL = "https://localhost:7163"; // Базовый URL сервиса уведомлений
+const NOTIFICATION_SERVICE_URL = "https://localhost:7163";
 const NOTIFICATION_HUB_URL = `${NOTIFICATION_SERVICE_URL}/hubs/notifications`;
 
 const currentUserIdInput = document.getElementById('currentUserId');
 const currentUserId = currentUserIdInput ? currentUserIdInput.value : null;
 
-// Запрашиваем разрешение на системные уведомления
+// Запрашиваем разрешение на системные уведомления при первом запуске
 if (typeof Notification !== 'undefined' && Notification.permission !== "granted") {
     Notification.requestPermission();
 }
@@ -19,30 +19,37 @@ if (currentUserId) {
         .withAutomaticReconnect()
         .build();
 
-    // При получении нового уведомления в реальном времени
+    // При получении нового уведомления
     connection.on("ReceiveNotification", function (data) {
-        console.log("🔔 Новое уведомление:", data);
+        console.log("🔔 Получен сигнал уведомления:", data);
 
-        // 1. Звук
-        new Audio('/sounds/notify.mp3').play().catch(() => {});
-
-        // 2. Системный пуш
-        if (Notification.permission === "granted") {
-            new Notification(data.title, { body: data.message, icon: '/favicon.ico' });
+        // 1. Звук (Проверяем флаг playSound, пришедший с сервера)
+        if (data.playSound) {
+            new Audio('/sounds/notify.mp3').play().catch(() => {
+                console.warn("Автовоспроизведение звука заблокировано браузером до первого клика пользователя.");
+            });
         }
 
-        // 3. Добавляем в список и обновляем счетчик
-        addNotificationToSidebar(data, true); // true означает "новое/непрочитанное"
+        // 2. Системный пуш (Проверяем флаг showDesktop И разрешение браузера)
+        if (data.showDesktop && typeof Notification !== 'undefined' && Notification.permission === "granted") {
+            new Notification(data.title, {
+                body: data.message,
+                icon: '/favicon.ico'
+            });
+        }
+
+        // 3. Обновление интерфейса (делаем всегда, так как это не "беспокоит", а просто обновляет данные)
+        addNotificationToSidebar(data, true);
         updateBadgeCount(1);
     });
 
     connection.start().then(function () {
-        console.log(">>> ✅ SignalR подключен. Загрузка истории...");
-        fetchHistory(); // Загружаем историю из БД сразу после подключения
+        console.log(">>> ✅ SignalR подключен.");
+        fetchHistory();
     }).catch(err => console.error(">>> ❌ Ошибка SignalR:", err));
 }
 
-// Загрузка истории уведомлений из API сервиса Notifications
+// Загрузка истории
 async function fetchHistory() {
     try {
         const response = await fetch(`${NOTIFICATION_SERVICE_URL}/api/notifications/history/${currentUserId}`);
@@ -50,7 +57,7 @@ async function fetchHistory() {
 
         const notifications = await response.json();
         const list = document.getElementById("notificationList");
-        if (list) list.innerHTML = ''; // Очищаем заглушку
+        if (list) list.innerHTML = '';
 
         let unreadCount = 0;
         notifications.forEach(n => {
@@ -64,7 +71,7 @@ async function fetchHistory() {
     }
 }
 
-// Пометка как прочитанных при открытии боковой панели
+// Пометка как прочитанных
 const notificationSidebar = document.getElementById('notificationSidebar');
 if (notificationSidebar) {
     notificationSidebar.addEventListener('show.bs.offcanvas', async function () {
@@ -78,7 +85,6 @@ if (notificationSidebar) {
             if (response.ok) {
                 badge.innerText = "0";
                 badge.style.display = "none";
-                // Визуально помечаем элементы в списке как прочитанные (убираем bg-light)
                 document.querySelectorAll('.notification-item').forEach(el => el.classList.remove('bg-light', 'border-primary'));
             }
         } catch (e) {
