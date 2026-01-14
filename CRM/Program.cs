@@ -1,5 +1,4 @@
 using Core.Data;
-using Core.Data.Interceptors;
 using Core.Entities.Company;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -8,12 +7,13 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc.Authorization;
 
 #pragma warning disable CS0618
+// Поддержка работы с jsonb в PostgreSQL
 NpgsqlConnection.GlobalTypeMapper.EnableDynamicJson(); 
 #pragma warning restore CS0618
 
 var builder = WebApplication.CreateBuilder(args);
 
-// 1. Настройка контроллеров и политики авторизации
+// 1. Настройка контроллеров и глобальная политика авторизации
 builder.Services.AddControllersWithViews(options =>
 {
     var policy = new AuthorizationPolicyBuilder()
@@ -22,19 +22,19 @@ builder.Services.AddControllersWithViews(options =>
     options.Filters.Add(new AuthorizeFilter(policy));
 });
 
-// 2. Получение строки подключения
+// 2. Настройка базы данных
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 
-// 3. Подключение БД (ИСПРАВЛЕНО: Интерцептор удален отсюда, он теперь в AppDbContext)
 builder.Services.AddDbContext<AppDbContext>(options =>
 {
     options.UseNpgsql(connectionString, npgsqlOptions => 
     {
         npgsqlOptions.EnableRetryOnFailure();
     });
+    // Интерцептор Outbox теперь подключен внутри самого AppDbContext.cs (OnConfiguring)
 });
 
-// 4. Настройка Identity
+// 3. Настройка Identity (Аутентификация и пользователи)
 builder.Services.AddIdentity<Employee, IdentityRole<Guid>>(options => 
     {
         options.Password.RequireDigit = false;
@@ -46,7 +46,7 @@ builder.Services.AddIdentity<Employee, IdentityRole<Guid>>(options =>
     .AddEntityFrameworkStores<AppDbContext>()
     .AddDefaultTokenProviders();
 
-// 5. Настройка Cookie
+// 4. Настройка Cookie
 builder.Services.ConfigureApplicationCookie(options =>
 {
     options.LoginPath = "/Account/Login";
@@ -55,7 +55,7 @@ builder.Services.ConfigureApplicationCookie(options =>
 
 var app = builder.Build();
 
-// 6. Конвейер обработки запросов (Pipeline)
+// 5. Конвейер обработки (Middleware)
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Home/Error");
@@ -74,7 +74,7 @@ app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}");
 
-// 7. Автомиграция при старте
+// 6. Автоматическое применение миграций при старте
 using (var scope = app.Services.CreateScope())
 {
     var services = scope.ServiceProvider;
@@ -82,12 +82,12 @@ using (var scope = app.Services.CreateScope())
     {
         var context = services.GetRequiredService<AppDbContext>();
         await context.Database.MigrateAsync();
-        Console.WriteLine(">>> База данных готова и обновлена.");
+        Console.WriteLine(">>> CRM: База данных готова.");
     }
     catch (Exception ex)
     {
         var logger = services.GetRequiredService<ILogger<Program>>();
-        logger.LogError(ex, "Ошибка при инициализации БД");
+        logger.LogError(ex, "Ошибка при инициализации БД CRM");
     }
 }
 

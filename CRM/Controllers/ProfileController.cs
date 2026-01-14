@@ -18,7 +18,6 @@ namespace CRM.Controllers
             _signInManager = signInManager;
         }
 
-        // Отдает частичное представление (Modal Body)
         [HttpGet]
         public async Task<IActionResult> GetSettings()
         {
@@ -33,7 +32,14 @@ namespace CRM.Controllers
                 MiddleName = user.MiddleName,
                 Email = user.Email,
                 PhoneNumber = user.PhoneNumber,
-                TimezoneId = user.TimezoneId ?? "Russian Standard Time"
+                TimezoneId = user.TimezoneId ?? "Russian Standard Time",
+                
+                NotifySoundEnabled = user.NotifySoundEnabled,
+                NotifyDesktopEnabled = user.NotifyDesktopEnabled,
+                IsAdvancedSettings = user.IsAdvancedSettings,
+                NotifyTaskGeneral = user.NotifyTaskGeneral,
+                NotifyTaskAssigned = user.NotifyTaskAssigned,
+                NotifyTaskComment = user.NotifyTaskComment
             };
 
             return PartialView("_ProfileSettings", model);
@@ -50,35 +56,32 @@ namespace CRM.Controllers
             user.MiddleName = model.MiddleName;
             user.TimezoneId = model.TimezoneId;
             user.PhoneNumber = model.PhoneNumber;
-            // Email менять опасно без подтверждения, пока оставим как есть или добавим логику позже
+
+            user.NotifySoundEnabled = model.NotifySoundEnabled;
+            user.NotifyDesktopEnabled = model.NotifyDesktopEnabled;
+            user.IsAdvancedSettings = model.IsAdvancedSettings;
+            user.NotifyTaskGeneral = model.NotifyTaskGeneral;
+            user.NotifyTaskAssigned = model.NotifyTaskAssigned;
+            user.NotifyTaskComment = model.NotifyTaskComment;
 
             var result = await _userManager.UpdateAsync(user);
-            if (result.Succeeded)
-            {
-                return Ok(); // Успех
-            }
-            return BadRequest("Ошибка при обновлении данных");
+            return result.Succeeded ? Ok() : BadRequest("Ошибка при обновлении данных");
         }
 
         [HttpPost]
         public async Task<IActionResult> ChangePassword(ChangePasswordViewModel model)
         {
             if (!ModelState.IsValid) return BadRequest(ModelState);
-
             var user = await _userManager.GetUserAsync(User);
             if (user == null) return NotFound();
 
             var result = await _userManager.ChangePasswordAsync(user, model.OldPassword, model.NewPassword);
-            
             if (result.Succeeded)
             {
-                await _signInManager.SignOutAsync(); // Выкидываем пользователя
+                await _signInManager.SignOutAsync();
                 return Ok();
             }
-
-            // Собираем ошибки
-            var errors = string.Join(", ", result.Errors.Select(e => e.Description));
-            return BadRequest(errors);
+            return BadRequest(string.Join(", ", result.Errors.Select(e => e.Description)));
         }
     }
 }

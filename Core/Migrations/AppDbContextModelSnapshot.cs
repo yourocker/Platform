@@ -113,6 +113,9 @@ namespace Core.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<bool>("IsAdvancedSettings")
+                        .HasColumnType("boolean");
+
                     b.Property<bool>("IsDismissed")
                         .HasColumnType("boolean");
 
@@ -137,6 +140,21 @@ namespace Core.Migrations
                         .HasMaxLength(256)
                         .HasColumnType("character varying(256)");
 
+                    b.Property<bool>("NotifyDesktopEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("NotifySoundEnabled")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("NotifyTaskAssigned")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("NotifyTaskComment")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("NotifyTaskGeneral")
+                        .HasColumnType("boolean");
+
                     b.Property<string>("PasswordHash")
                         .HasColumnType("text");
 
@@ -155,6 +173,9 @@ namespace Core.Migrations
 
                     b.Property<string>("SecurityStamp")
                         .HasColumnType("text");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer");
 
                     b.Property<string>("TimezoneId")
                         .IsRequired()

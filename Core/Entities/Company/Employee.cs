@@ -1,31 +1,41 @@
 ﻿using Microsoft.AspNetCore.Identity;
+using System;
+using System.Collections.Generic;
 using Core.Entities;
-using Core.Entities.Company;
 
 namespace Core.Entities.Company
 {
-    // Наследуем от IdentityUser<Guid> для поддержки авторизации
     public class Employee : IdentityUser<Guid>, IHasDynamicProperties
     {
-        // Переопределяем Id, чтобы сохранить явное поле в коде. 
-        // IdentityUser использует его как первичный ключ.
-        public override Guid Id { get; set; }
+        public enum UserStatus
+        {
+            Online,
+            Offline
+        }
         
+        public override Guid Id { get; set; }
         public string LastName { get; set; } = string.Empty;
         public string FirstName { get; set; } = string.Empty;
         public string? MiddleName { get; set; }
-
-        // Вычисляемое поле (только для чтения в коде)
         public string FullName => $"{LastName} {FirstName} {MiddleName}".Trim();
 
-        // Списки контактов
         public List<string> Phones { get; set; } = new();
         public List<string> Emails { get; set; } = new();
-        // Признак увольнения
-        public bool IsDismissed { get; set; } = false; // По умолчанию 
+        public bool IsDismissed { get; set; } = false; 
+        public string TimezoneId { get; set; } = "Russian Standard Time";
         
-        // Время
-        public string TimezoneId { get; set; } = "Russian Standard Time"; // Дефолт: Москва
+        // Статус и Базовые настройки (Звук/Пуш)
+        public UserStatus Status { get; set; } = UserStatus.Offline;
+        public bool NotifySoundEnabled { get; set; } = true;
+        public bool NotifyDesktopEnabled { get; set; } = true;
+
+        // Переключатель режима настроек
+        public bool IsAdvancedSettings { get; set; } = false;
+
+        // Сами настройки событий
+        public bool NotifyTaskGeneral { get; set; } = true;    // Для "Обычного" режима
+        public bool NotifyTaskAssigned { get; set; } = true;   // Для "Расширенного": Назначение
+        public bool NotifyTaskComment { get; set; } = true;    // Для "Расширенного": Комментарии
 
         public string? Properties { get; set; }
         public List<StaffAppointment> StaffAppointments { get; set; } = new();

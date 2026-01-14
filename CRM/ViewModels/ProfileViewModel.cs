@@ -1,4 +1,5 @@
-﻿using System.ComponentModel.DataAnnotations;
+﻿using System;
+using System.ComponentModel.DataAnnotations;
 
 namespace CRM.ViewModels
 {
@@ -23,6 +24,14 @@ namespace CRM.ViewModels
         
         [Display(Name = "Часовой пояс")]
         public string TimezoneId { get; set; }
+
+        // Настройки уведомлений
+        public bool NotifySoundEnabled { get; set; }
+        public bool NotifyDesktopEnabled { get; set; }
+        public bool IsAdvancedSettings { get; set; }
+        public bool NotifyTaskGeneral { get; set; }
+        public bool NotifyTaskAssigned { get; set; }
+        public bool NotifyTaskComment { get; set; }
     }
 
     public class ChangePasswordViewModel
