@@ -1,0 +1,70 @@
+﻿@model Core.Entities.CRM.Contact
+@{ ViewData["Title"] = "Просмотр контакта"; }
+
+<div class="row justify-content-center">
+    <div class="col-md-10">
+        <div class="d-flex align-items-center justify-content-between mb-4">
+            <div>
+                <h3 class="fw-bold text-secondary mb-0"><i class="bi bi-person-vcard me-2"></i>@Model.FullName</h3>
+                <span class="badge bg-light text-primary border mt-2">ID: @Model.Id</span>
+            </div>
+            <div class="btn-group shadow-sm">
+                <a asp-action="Edit" asp-route-id="@Model.Id" class="btn btn-outline-primary px-3">
+                    <i class="bi bi-pencil me-1"></i> Изменить
+                </a>
+                <a asp-action="Index" class="btn btn-outline-secondary px-3">
+                    <i class="bi bi-list me-1"></i> К списку
+                </a>
+            </div>
+        </div>
+
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-white py-3 border-0"><h5 class="mb-0 fw-bold">Информация</h5></div>
+            <div class="card-body p-4 pt-0">
+                <div class="row mb-4">
+                    <div class="col-md-4">
+                        <label class="text-muted small fw-bold d-block">ФАМИЛИЯ</label>
+                        <div class="fs-5">@Model.LastName</div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="text-muted small fw-bold d-block">ИМЯ</label>
+                        <div class="fs-5">@Model.FirstName</div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="text-muted small fw-bold d-block">ОТЧЕСТВО</label>
+                        <div class="fs-5">@(Model.MiddleName ?? "—")</div>
+                    </div>
+                </div>
+
+                <div class="row">
+                    <div class="col-md-6">
+                        <label class="text-muted small fw-bold d-block">ТЕЛЕФОНЫ</label>
+                        <ul class="list-unstyled">
+                            @foreach(var p in Model.Phones) { <li><i class="bi bi-telephone me-2 text-primary"></i>@p.Number</li> }
+                            @if(!Model.Phones.Any()){ <li class="text-muted">Нет данных</li> }
+                        </ul>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="text-muted small fw-bold d-block">EMAIL</label>
+                        <ul class="list-unstyled">
+                            @foreach(var e in Model.Emails) { <li><i class="bi bi-envelope me-2 text-primary"></i>@e.Email</li> }
+                            @if(!Model.Emails.Any()){ <li class="text-muted">Нет данных</li> }
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-body p-4">
+                <partial name="_DynamicFields" model="Model" />
+            </div>
+        </div>
+        
+        <div class="text-end">
+            <a asp-action="Delete" asp-route-id="@Model.Id" class="btn btn-link text-danger text-decoration-none small">
+                <i class="bi bi-trash"></i> Удалить контакт
+            </a>
+        </div>
+    </div>
+</div>

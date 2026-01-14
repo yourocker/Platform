@@ -1,13 +1,17 @@
 ﻿@using Core.Entities.Platform
 @using System.Text.Json
-@model Core.Entities.IHasDynamicProperties
 @using Microsoft.AspNetCore.Html
+@model Core.Entities.IHasDynamicProperties
 
 @{
+    // 1. ИСПРАВЛЕНИЕ: Берем поля из ViewBag, куда их положил наш исправленный Контроллер
     var fields = ViewBag.DynamicFields as List<AppFieldDefinition>;
-    var lookupData = ViewBag.LookupData as Dictionary<string, List<SelectListItem>> ?? new Dictionary<string, List<SelectListItem>>();
-    var values = new Dictionary<string, object>();
     
+    // Данные для выпадающих списков
+    var lookupData = ViewBag.LookupData as Dictionary<string, List<SelectListItem>> ?? new Dictionary<string, List<SelectListItem>>();
+    
+    // Парсим JSON со значениями
+    var values = new Dictionary<string, object>();
     if (!string.IsNullOrEmpty(Model?.Properties))
     {
         try { 
@@ -21,7 +25,7 @@
     bool isEditMode = action == "Create" || action == "Edit";
 }
 
-@* Подключаем Select2 для поиска в больших списках *@
+@* Подключаем стили для Select2 (если они еще не подключены в Layout) *@
 <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" />
 
@@ -35,8 +39,10 @@
         @foreach (var field in fields.OrderBy(f => f.SortOrder))
         {
             var formKey = $"DynamicProps[{field.SystemName}]";
+            // Проверка ошибок валидации
             var hasError = ViewData.ModelState.ContainsKey(formKey) && ViewData.ModelState[formKey].Errors.Any();
             
+            // Получаем значение (или список значений)
             values.TryGetValue(field.SystemName, out var rawValue);
             
             var currentValues = new List<string>();
@@ -52,6 +58,7 @@
                 currentValues.Add(rawValue.ToString());
             }
 
+            // Если значений нет, добавляем пустую строку, чтобы нарисовалось хотя бы одно поле
             if (!currentValues.Any()) currentValues.Add("");
 
             <div class="row mb-3 align-items-start">
@@ -68,13 +75,14 @@
                             var recordId = (Model is Core.Entities.Platform.GenericObject go) ? go.Id.ToString() : "";
 
                             <div class="input-group mb-2 dynamic-field-item flex-column" id="@wrapperId">
+                                @* Отображение ссылки на существующий файл *@
                                 @if (field.DataType == FieldDataType.File && !string.IsNullOrWhiteSpace(val) && !val.Contains("/uploads/temp/"))
                                 {
                                     <div class="mb-1 d-flex align-items-center">
                                         <a href="@val" target="_blank" class="text-decoration-none small">
                                             <i class="bi bi-paperclip"></i> Текущий файл: @System.IO.Path.GetFileName(val)
                                         </a>
-                                        @if (!string.IsNullOrEmpty(recordId))
+                                        @if (isEditMode && !string.IsNullOrEmpty(recordId))
                                         {
                                             <button type="button" class="btn btn-link text-danger p-0 ms-2" title="Удалить файл"
                                                     onclick="deleteExistingFile('@recordId', '@ViewBag.EntityCode', '@field.SystemName', '@val', '@wrapperId')">
@@ -87,8 +95,10 @@
                                 <div class="d-flex w-100">
                                     @if (isEditMode)
                                     {
+                                        @* Рендерим инпут для редактирования *@
                                         @renderField(field, val, hasError, lookupData)
                                         
+                                        @* Кнопка удаления элемента массива *@
                                         @if (field.IsArray)
                                         {
                                             <button type="button" class="btn btn-outline-danger" onclick="this.closest('.dynamic-field-item').remove()">
@@ -98,7 +108,7 @@
                                     }
                                     else
                                     {
-                                        @* ОТОБРАЖЕНИЕ В ЗАПИСИ (ПРОСМОТР) *@
+                                        @* РЕЖИМ ПРОСМОТРА (Read Only) *@
                                         @if (field.DataType == FieldDataType.EntityLink)
                                         {
                                             var displayName = lookupData.ContainsKey(field.SystemName) 
@@ -119,20 +129,11 @@
                                         }
                                     }
                                 </div>
-                                
-                                @* Ссылочность: прямая ссылка на объект под полем выбора при редактировании *@
-                                @if (isEditMode && field.DataType == FieldDataType.EntityLink && !string.IsNullOrEmpty(val))
-                                {
-                                    <div class="mt-1">
-                                        <a href="/Data/@field.TargetEntityCode" target="_blank" class="text-primary small">
-                                            <i class="bi bi-box-arrow-up-right"></i> Перейти к справочнику
-                                        </a>
-                                    </div>
-                                }
                             </div>
                         }
                     </div>
 
+                    @* Вывод ошибок валидации *@
                     @if (hasError && isEditMode)
                     {
                         <div class="text-danger small mt-1">
@@ -143,6 +144,7 @@
                         </div>
                     }
 
+                    @* Кнопка "Добавить еще" для массивов *@
                     @if (field.IsArray && isEditMode)
                     {
                         <button type="button" class="btn btn-sm btn-outline-secondary mt-1" 
@@ -155,7 +157,7 @@
         }
     </div>
 
-    @* Шаблоны для JS *@
+    @* --- ШАБЛОНЫ ДЛЯ JS (Восстановлены) --- *@
     <div id="field_templates" style="display:none;">
         <div data-type="String"><input type="text" class="form-control" /></div>
         <div data-type="Number"><input type="number" step="any" class="form-control" /></div>
@@ -165,7 +167,7 @@
         <div data-type="File"><input type="file" class="form-control" /></div>
         <div data-type="Boolean">
             <div class="form-check form-switch mt-2">
-                <input class="form-check-input" type="checkbox" value="true">
+                <input type="hidden" value="false" /> <input class="form-check-input" type="checkbox" value="true">
             </div>
         </div>
         <div data-type="EntityLink">
@@ -173,15 +175,17 @@
                 <option value="">-- Выберите --</option>
             </select>
         </div>
+        <div data-type="Text"><textarea class="form-control" rows="3"></textarea></div>
     </div>
 
+    @* --- СКРИПТЫ (Восстановлены) --- *@
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <script>
         function initSelect2(element) {
             $(element).select2({
                 theme: "bootstrap-5",
                 width: '100%',
-                placeholder: "Поиск записей...",
+                placeholder: "Поиск...",
                 allowClear: true,
                 dropdownParent: $(element).closest('.col-sm-10')
             });
@@ -195,6 +199,7 @@
 
         function addDynamicField(systemName, dataType) {
             const container = document.getElementById('container_' + systemName);
+            // Ищем шаблон по типу данных, если нет - берем String
             const template = document.querySelector(`#field_templates [data-type="${dataType}"]`) 
                           || document.querySelector(`#field_templates [data-type="String"]`);
             
@@ -202,64 +207,94 @@
             wrapper.className = 'input-group mb-2 dynamic-field-item';
             
             const content = template.cloneNode(true);
+            // Находим поле ввода внутри шаблона
             const input = content.querySelector('input') || content.querySelector('textarea') || content.querySelector('select');
-            input.name = `DynamicProps[${systemName}]`;
+            
+            if (input) {
+                input.name = `DynamicProps[${systemName}]`; // Присваиваем правильное имя для биндинга
+            }
 
-            // Копируем опции для EntityLink из существующего скрытого шаблона или первого селекта
+            // Для Boolean нужно обработать скрытое поле
+            if (dataType === 'Boolean') {
+                 const hidden = content.querySelector('input[type="hidden"]');
+                 if(hidden) hidden.name = `DynamicProps[${systemName}]`;
+            }
+
+            // Копируем опции для EntityLink из существующего селекта (чтобы не делать AJAX запрос заново)
             if (dataType === 'EntityLink') {
                 const sourceSelect = document.querySelector(`select[name="DynamicProps[${systemName}]"]`);
-                if (sourceSelect) {
+                if (sourceSelect && input) {
                     input.innerHTML = sourceSelect.innerHTML;
+                    // Сбрасываем выбранное значение
+                    input.value = "";
                 }
             }
             
+            // Кнопка удаления
             const btn = document.createElement('button');
             btn.type = 'button';
             btn.className = 'btn btn-outline-danger';
             btn.innerHTML = '<i class="bi bi-x"></i>';
             btn.onclick = function() { this.closest('.dynamic-field-item').remove(); };
             
-            wrapper.appendChild(content.classList.contains('form-check') ? content : content.firstElementChild || content);
+            // Добавляем элементы в wrapper
+            // Если это boolean (внутри div), добавляем сам div, иначе input
+            wrapper.appendChild(content.classList.contains('form-check') || content.tagName === 'DIV' ? content : (content.firstElementChild || content));
             wrapper.appendChild(btn);
+            
             container.appendChild(wrapper);
 
-            if (dataType === 'EntityLink') {
+            if (dataType === 'EntityLink' && input) {
                 initSelect2(input);
             }
         }
 
         function deleteExistingFile(id, entityCode, propName, path, wrapperId) {
-            if (!confirm('Удалить этот файл?')) return;
+            if (!confirm('Удалить этот файл? Это действие нельзя отменить.')) return;
+            
             const formData = new FormData();
             formData.append('id', id);
             formData.append('entityCode', entityCode);
             formData.append('propertyName', propName);
             formData.append('filePath', path);
+            
+            // Получаем токен анти-CSRF
             const token = document.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
 
             fetch('/GenericObjects/DeleteFileProperty', {
                 method: 'POST',
                 body: formData,
                 headers: { 'RequestVerificationToken': token }
-            }).then(r => r.json()).then(d => {
-                if (d.success) document.getElementById(wrapperId).querySelector('.mb-1')?.remove();
-            });
+            })
+            .then(r => r.json())
+            .then(d => {
+                if (d.success) {
+                    const el = document.getElementById(wrapperId);
+                    // Удаляем ссылку на файл из DOM
+                    const fileLink = el.querySelector('.d-flex.align-items-center');
+                    if(fileLink) fileLink.remove();
+                } else {
+                    alert('Ошибка при удалении файла: ' + (d.message || 'Unknown error'));
+                }
+            })
+            .catch(e => console.error(e));
         }
     </script>
 }
 
 @functions {
+    // Хелпер для отрисовки полей (Render Logic)
     IHtmlContent renderField(AppFieldDefinition field, string value, bool hasError, Dictionary<string, List<SelectListItem>> lookupData)
     {
         var fieldName = $"DynamicProps[{field.SystemName}]";
-        var required = field.IsRequired ? "required" : "";
+        var required = (field.IsRequired && !field.IsArray) ? "required" : ""; // Для массивов required работает хитро, лучше не ставить жестко
         var errorClass = hasError ? "is-invalid" : "";
         
         switch (field.DataType)
         {
             case FieldDataType.EntityLink:
                 var options = new System.Text.StringBuilder();
-                options.Append("<option value=\"\"></option>");
+                options.Append("<option value=\"\">-- Выберите --</option>");
                 if (lookupData.TryGetValue(field.SystemName, out var items))
                 {
                     foreach (var item in items)
@@ -279,13 +314,20 @@
             case FieldDataType.DateTime:
                 return new HtmlString($"<input type=\"datetime-local\" name=\"{fieldName}\" value=\"{valForDate(value, true)}\" class=\"form-control {errorClass}\" {required} />");
             case FieldDataType.File:
+                // Для файла value отображать в input нельзя, он пустой для загрузки нового
                 return new HtmlString($"<input type=\"file\" name=\"{fieldName}\" class=\"form-control {errorClass}\" {required} />");
             case FieldDataType.Boolean:
-                var checkedAttr = value.ToLower() == "true" ? "checked" : "";
-                return new HtmlString($@"<div class=""form-check form-switch mt-2""><input type=""hidden"" name=""{fieldName}"" value=""false"" /><input class=""form-check-input"" type=""checkbox"" name=""{fieldName}"" value=""true"" {checkedAttr} /></div>");
+                var checkedAttr = (value ?? "").ToLower() == "true" ? "checked" : "";
+                // Трюк с hidden input для чекбоксов в ASP.NET
+                return new HtmlString($@"
+                    <div class=""form-check form-switch mt-2"">
+                        <input type=""hidden"" name=""{fieldName}"" value=""false"" />
+                        <input class=""form-check-input"" type=""checkbox"" name=""{fieldName}"" value=""true"" {checkedAttr} />
+                        <label class=""form-check-label"">Да</label>
+                    </div>");
             case FieldDataType.Text:
                 return new HtmlString($"<textarea name=\"{fieldName}\" class=\"form-control {errorClass}\" rows=\"3\" {required}>{value}</textarea>");
-            default:
+            default: // String
                 return new HtmlString($"<input type=\"text\" name=\"{fieldName}\" value=\"{value}\" class=\"form-control {errorClass}\" {required} />");
         }
     }

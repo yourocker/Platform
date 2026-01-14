@@ -20,7 +20,13 @@ var action = ViewContext.RouteData.Values["Action"]?.ToString();
 var entityCodeFromUrl = ViewContext.RouteData.Values["entityCode"]?.ToString()
 ?? ViewBag.EntityCode?.ToString();
 
-// Логика определения активности разделов
+// Находим категорию CRM один раз вверху, чтобы не делать это в циклах
+var crmCategory = customCategories.FirstOrDefault(c => c.Name == "CRM");
+
+// --- ЛОГИКА АКТИВНОСТИ РАЗДЕЛОВ ---
+var isCRMActive = controller == "Contacts" ||
+customCategories.Any(c => c.IsSystem && c.Name == "CRM" && c.Apps.Any(a => a.EntityCode == entityCodeFromUrl));
+
 var isCompanyActive = controller == "Positions" || controller == "Departments" || controller == "Employees" ||
 customCategories.Any(c => c.IsSystem && c.Name == "Компания" && c.Apps.Any(a => a.EntityCode == entityCodeFromUrl));
 
@@ -49,7 +55,7 @@ customCategories.Any(c => c.IsSystem && c.Name == "Пациенты" && c.Apps.A
 
         /* ЛЕВОЕ МЕНЮ 2 (Подменю) */
         #nav-sub { width: 240px; background: var(--sub-bg); border-right: 1px solid #dee2e6; display: flex; flex-direction: column; box-shadow: 2px 0 5px rgba(0,0,0,0.03); flex-shrink: 0; }
-        .sub-header { padding: 25px 20px; font-weight: 700; font-size: 1.1rem; border-bottom: 1px solid #f0f0f0; height: 60px; display: flex; align-items: center; } /* height 60px чтобы совпасть с хедером */
+        .sub-header { padding: 25px 20px; font-weight: 700; font-size: 1.1rem; border-bottom: 1px solid #f0f0f0; height: 60px; display: flex; align-items: center; }
         .sub-link { padding: 12px 20px; color: #495057; text-decoration: none; display: flex; align-items: center; transition: 0.15s; }
         .sub-link:hover { background: #f8f9fa; color: var(--accent); }
         .sub-link.active { color: var(--accent); background: #eef5ff; font-weight: 600; }
@@ -74,6 +80,13 @@ customCategories.Any(c => c.IsSystem && c.Name == "Пациенты" && c.Apps.A
         <a href="/" class="main-btn @(controller == "Home" ? "active" : "")" data-id="home" title="Дашборд">
             <i class="bi bi-speedometer2"></i>
         </a>
+
+        @if (crmCategory != null)
+        {
+        <a href="/Contacts" class="main-btn @(isCRMActive ? "active" : "")" data-id="@crmCategory.Id" title="@crmCategory.Name">
+            <i class="bi bi-@crmCategory.Icon"></i>
+        </a>
+        }
 
         <a href="/Employees" class="main-btn @(isCompanyActive ? "active" : "")" data-id="company" title="Компания">
             <i class="bi bi-building"></i>
@@ -102,7 +115,27 @@ customCategories.Any(c => c.IsSystem && c.Name == "Пациенты" && c.Apps.A
 </nav>
 
 <nav id="nav-sub">
-    @if (isCompanyActive)
+    @if (isCRMActive && crmCategory != null)
+    {
+    <div class="sub-header">@crmCategory.Name</div>
+
+    @* Поиск приложения Контакты внутри CRM *@
+    var contactApp = crmCategory.Apps.FirstOrDefault(a => a.EntityCode == "Contact");
+    if (contactApp != null)
+    {
+    <a href="/Contacts" class="sub-link @(controller == "Contacts" ? "active" : "")">
+        <i class="bi bi-@contactApp.Icon"></i> @contactApp.Name
+    </a>
+    }
+
+    @foreach (var app in crmCategory.Apps.Where(a => a.EntityCode != "Contact"))
+    {
+    <a href="/Data/@app.EntityCode" class="sub-link @(entityCodeFromUrl == app.EntityCode ? "active" : "")">
+        <i class="bi bi-@app.Icon"></i> @app.Name
+    </a>
+    }
+    }
+    else if (isCompanyActive)
     {
     <div class="sub-header">Компания</div>
     <a href="/Departments" class="sub-link @(controller == "Departments" ? "active" : "")"><i class="bi bi-diagram-3"></i> Оргструктура</a>
