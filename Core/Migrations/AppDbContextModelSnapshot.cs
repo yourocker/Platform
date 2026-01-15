@@ -837,6 +837,35 @@ namespace Core.Migrations
                     b.ToTable("Contacts", (string)null);
                 });
 
+            modelBuilder.Entity("Core.Entities.CRM.ServiceCategory", b =>
+                {
+                    b.HasBaseType("Core.Entities.Platform.GenericObject");
+
+                    b.Property<Guid?>("ParentCategoryId")
+                        .HasColumnType("uuid");
+
+                    b.HasIndex("ParentCategoryId");
+
+                    b.ToTable("ServiceCategories", (string)null);
+                });
+
+            modelBuilder.Entity("Core.Entities.CRM.ServiceItem", b =>
+                {
+                    b.HasBaseType("Core.Entities.Platform.GenericObject");
+
+                    b.Property<Guid>("CategoryId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("Price")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.HasIndex("CategoryId");
+
+                    b.HasIndex("Name");
+
+                    b.ToTable("ServiceItems", (string)null);
+                });
+
             modelBuilder.Entity("Core.Entities.Tasks.EmployeeTask", b =>
                 {
                     b.HasBaseType("Core.Entities.Platform.GenericObject");
@@ -1074,6 +1103,39 @@ namespace Core.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Core.Entities.CRM.ServiceCategory", b =>
+                {
+                    b.HasOne("Core.Entities.Platform.GenericObject", null)
+                        .WithOne()
+                        .HasForeignKey("Core.Entities.CRM.ServiceCategory", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Core.Entities.CRM.ServiceCategory", "ParentCategory")
+                        .WithMany("Children")
+                        .HasForeignKey("ParentCategoryId")
+                        .OnDelete(DeleteBehavior.Restrict);
+
+                    b.Navigation("ParentCategory");
+                });
+
+            modelBuilder.Entity("Core.Entities.CRM.ServiceItem", b =>
+                {
+                    b.HasOne("Core.Entities.CRM.ServiceCategory", "Category")
+                        .WithMany("Services")
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Core.Entities.Platform.GenericObject", null)
+                        .WithOne()
+                        .HasForeignKey("Core.Entities.CRM.ServiceItem", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Category");
+                });
+
             modelBuilder.Entity("Core.Entities.Tasks.EmployeeTask", b =>
                 {
                     b.HasOne("Core.Entities.Company.Employee", "Assignee")
@@ -1136,6 +1198,13 @@ namespace Core.Migrations
                     b.Navigation("Emails");
 
                     b.Navigation("Phones");
+                });
+
+            modelBuilder.Entity("Core.Entities.CRM.ServiceCategory", b =>
+                {
+                    b.Navigation("Children");
+
+                    b.Navigation("Services");
                 });
 
             modelBuilder.Entity("Core.Entities.Tasks.EmployeeTask", b =>

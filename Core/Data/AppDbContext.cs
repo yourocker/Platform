@@ -56,6 +56,10 @@ namespace Core.Data
         public DbSet<CompanyWorkMode> CompanyWorkModes { get; set; }
         public DbSet<CompanyHoliday> CompanyHolidays { get; set; }
         public DbSet<EmployeeSchedule> EmployeeSchedules { get; set; }
+        
+        // --- Список товаров/услуг ---
+        public DbSet<ServiceCategory> ServiceCategories { get; set; }
+        public DbSet<ServiceItem> ServiceItems { get; set; }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
@@ -164,6 +168,36 @@ namespace Core.Data
                 .HasOne(s => s.Employee)
                 .WithMany()
                 .HasForeignKey(s => s.EmployeeId);
+            
+            // 10. Справочник услуг (Прайс-лист)
+            modelBuilder.Entity<ServiceCategory>(entity =>
+            {
+                entity.ToTable("ServiceCategories");
+                entity.Property(e => e.Properties).HasColumnType("jsonb");
+
+                // ИСПРАВЛЕНИЕ: Явный маппинг системного поля Name для унаследованной сущности
+                entity.Property(e => e.Name).HasMaxLength(255).IsRequired();
+
+                entity.HasOne(c => c.ParentCategory)
+                    .WithMany(c => c.Children)
+                    .HasForeignKey(c => c.ParentCategoryId)
+                    .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<ServiceItem>(entity =>
+            {
+                entity.ToTable("ServiceItems");
+                entity.Property(e => e.Properties).HasColumnType("jsonb");
+
+                // ИСПРАВЛЕНИЕ: Явный маппинг системного поля Name для унаследованной сущности
+                entity.Property(e => e.Name).HasMaxLength(255).IsRequired();
+
+                entity.HasIndex(e => e.Name);
+                entity.HasOne(s => s.Category)
+                    .WithMany(c => c.Services)
+                    .HasForeignKey(s => s.CategoryId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
         }
     }
 }

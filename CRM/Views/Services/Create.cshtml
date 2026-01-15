@@ -1,0 +1,64 @@
+﻿@model Core.Entities.CRM.ServiceItem
+@{ ViewData["Title"] = "Новая услуга"; }
+
+<div class="row justify-content-center">
+    <div class="col-md-10">
+        <div class="d-flex align-items-center mb-4">
+            <a asp-action="Index" class="btn btn-outline-secondary me-3">
+                <i class="bi bi-arrow-left"></i>
+            </a>
+            <h3 class="fw-bold text-secondary mb-0"><i class="bi bi-tag-plus-fill me-2"></i>Добавление услуги</h3>
+        </div>
+
+        <form asp-action="Create" method="post">
+            <input type="hidden" asp-for="Id" />
+            <input type="hidden" asp-for="EntityCode" />
+
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-white py-3 border-0">
+                    <h5 class="mb-0 fw-bold">Основная информация</h5>
+                </div>
+                <div class="card-body p-4 pt-0">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label text-muted small fw-bold">НАЗВАНИЕ УСЛУГИ / ТОВАРА</label>
+                            <input asp-for="Name" class="form-control" placeholder="Введите наименование..." required />
+                            <span asp-validation-for="Name" class="text-danger"></span>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label text-muted small fw-bold">КАТЕГОРИЯ (РАЗДЕЛ)</label>
+                            <select asp-for="CategoryId" class="form-select" asp-items="ViewBag.Categories" required>
+                                <option value="">-- Выберите раздел --</option>
+                            </select>
+                            <span asp-validation-for="CategoryId" class="text-danger"></span>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label text-muted small fw-bold">ЦЕНА</label>
+                            <div class="input-group">
+                                <input asp-for="Price" class="form-control" type="number" step="0.01" placeholder="0.00" required />
+                                <span class="input-group-text">₽</span>
+                            </div>
+                            <span asp-validation-for="Price" class="text-danger"></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            @* Динамические поля из конструктора *@
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-body p-4">
+                    <partial name="_DynamicFields" model="Model" />
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-between">
+                <a asp-action="Index" class="btn btn-link text-muted">Отмена</a>
+                <button type="submit" class="btn btn-primary px-5 shadow">Создать услугу</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+}
