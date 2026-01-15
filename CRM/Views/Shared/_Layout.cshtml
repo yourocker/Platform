@@ -112,7 +112,7 @@
         </a>
         }
 
-        <a href="/AppDefinitions" class="main-btn @(controller == "AppDefinitions" || controller == "AppCategories" || controller == "CompanySettings" ? "active" : "")" data-id="settings" title="Конструктор">
+        <a href="/AppDefinitions" class="main-btn @(controller == "AppDefinitions" || controller == "AppCategories" || controller == "CompanySettings" || controller == "Services" ? "active" : "")" data-id="settings" title="Конструктор">
             <i class="bi bi-gear"></i>
         </a>
     </div>
@@ -182,7 +182,9 @@
         <hr />
         <a href="/Tasks" class="sub-link @(action == "Index" ? "active" : "")"><i class="bi bi-list-ul"></i> Все задачи</a>
     }
-    else if (controller == "AppDefinitions" || controller == "AppCategories" || controller == "CompanySettings")
+    
+    else if (controller == "AppDefinitions" || controller == "AppCategories" || controller == "CompanySettings" || controller == "Services")
+        
     {
         <div class="sub-header">Конструктор</div>
         <hr />
@@ -192,6 +194,7 @@
         <hr />
         <div class="px-3 small text-muted mb-2">Настройки компании</div>
         <a href="/CompanySettings/WorkMode" class="sub-link @(controller == "CompanySettings" ? "active" : "")"><i class="bi bi-clock-history"></i> Режим работы</a>
+        <a href="/Services" class="sub-link @(controller == "Services" ? "active" : "")"><i class="bi bi-tag"></i> Справочник услуг</a>
     }
     else if (customCategories.Any(c => !c.IsSystem && c.Apps.Any(a => a.EntityCode == entityCodeFromUrl)))
     {

@@ -1,0 +1,48 @@
+﻿@model Core.Entities.CRM.ServiceItem
+@{ ViewData["Title"] = "Редактирование услуги"; }
+
+<div class="row justify-content-center">
+    <div class="col-md-10">
+        <div class="d-flex align-items-center mb-4">
+            <a asp-action="Index" class="btn btn-outline-secondary me-3">
+                <i class="bi bi-arrow-left"></i>
+            </a>
+            <h3 class="fw-bold text-secondary mb-0"><i class="bi bi-pencil-square me-2"></i>Редактирование: @Model.Name</h3>
+        </div>
+
+        <form asp-action="Edit" method="post">
+            <input type="hidden" asp-for="Id" />
+            <input type="hidden" asp-for="EntityCode" />
+
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-body p-4">
+                    <div class="row">
+                        <div class="col-md-6 mb-3">
+                            <label class="form-label text-muted small fw-bold">НАЗВАНИЕ</label>
+                            <input asp-for="Name" class="form-control" required />
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label text-muted small fw-bold">РАЗДЕЛ</label>
+                            <select asp-for="CategoryId" class="form-select" asp-items="ViewBag.Categories" required></select>
+                        </div>
+                        <div class="col-md-3 mb-3">
+                            <label class="form-label text-muted small fw-bold">ЦЕНА (₽)</label>
+                            <input asp-for="Price" class="form-control" type="number" step="0.01" required />
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-body p-4">
+                    <partial name="_DynamicFields" model="Model" />
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-between">
+                <a asp-action="Index" class="btn btn-link text-muted">Отмена</a>
+                <button type="submit" class="btn btn-primary px-5 shadow">Сохранить изменения</button>
+            </div>
+        </form>
+    </div>
+</div>

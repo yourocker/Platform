@@ -1,0 +1,52 @@
+﻿@model Core.Entities.CRM.ServiceCategory
+@{ ViewData["Title"] = "Новый раздел"; }
+
+<div class="row justify-content-center">
+    <div class="col-md-8">
+        <div class="d-flex align-items-center mb-4">
+            <a asp-action="Index" class="btn btn-outline-secondary me-3">
+                <i class="bi bi-arrow-left"></i>
+            </a>
+            <h3 class="fw-bold text-secondary mb-0"><i class="bi bi-folder-plus me-2"></i>Новый раздел (категория)</h3>
+        </div>
+
+        <form asp-action="CreateCategory" method="post">
+            <input type="hidden" asp-for="Id" />
+            <input type="hidden" asp-for="EntityCode" />
+
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-body p-4">
+                    <div class="mb-3">
+                        <label class="form-label text-muted small fw-bold">НАЗВАНИЕ РАЗДЕЛА</label>
+                        <input asp-for="Name" class="form-control form-control-lg" placeholder="Например: Стоматология или Расходные материалы" required />
+                        <span asp-validation-for="Name" class="text-danger"></span>
+                    </div>
+
+                    <div class="mb-0">
+                        <label class="form-label text-muted small fw-bold">РОДИТЕЛЬСКИЙ РАЗДЕЛ</label>
+                        <select asp-for="ParentCategoryId" class="form-select" asp-items="ViewBag.Categories">
+                            <option value="">-- Корневой раздел --</option>
+                        </select>
+                        <div class="form-text">Выберите, если этот раздел является подразделом другого</div>
+                    </div>
+                </div>
+            </div>
+
+            @* Если для категорий тоже нужны динамические поля *@
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-body p-4">
+                    <partial name="_DynamicFields" model="Model" />
+                </div>
+            </div>
+
+            <div class="d-flex justify-content-between">
+                <a asp-action="Index" class="btn btn-link text-muted">Отмена</a>
+                <button type="submit" class="btn btn-warning px-5 shadow">Создать раздел</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+@section Scripts {
+    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+}
