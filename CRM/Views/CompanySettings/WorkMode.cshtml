@@ -1,0 +1,113 @@
+﻿@using Core.Entities.Company
+@model List<CompanyWorkMode>
+@{
+    ViewData["Title"] = "Режим работы";
+    var holidays = ViewBag.Holidays as List<CompanyHoliday> ?? new List<CompanyHoliday>();
+    
+    string GetDayName(DayOfWeek day) => day switch {
+        DayOfWeek.Monday => "Понедельник",
+        DayOfWeek.Tuesday => "Вторник",
+        DayOfWeek.Wednesday => "Среда",
+        DayOfWeek.Thursday => "Четверг",
+        DayOfWeek.Friday => "Пятница",
+        DayOfWeek.Saturday => "Суббота",
+        DayOfWeek.Sunday => "Воскресенье",
+        _ => day.ToString()
+    };
+}
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0"><i class="bi bi-clock me-2"></i> График работы компании</h5>
+                </div>
+                <div class="card-body">
+                    <form asp-action="SaveWorkMode" method="post">
+                        <div class="table-responsive">
+                            <table class="table align-middle">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>День недели</th>
+                                        <th>Работа (С - По)</th>
+                                        <th>Обед (С - По)</th>
+                                        <th class="text-center">Выходной</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @for (int i = 0; i < Model.Count; i++)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <input type="hidden" name="modes[@i].Id" value="@Model[i].Id" />
+                                                <span class="fw-bold">@GetDayName(Model[i].DayOfWeek)</span>
+                                            </td>
+                                            <td>
+                                                <div class="d-flex gap-1 align-items-center">
+                                                    <input type="time" name="modes[@i].StartTime" value="@Model[i].StartTime.ToString(@"hh\:mm")" class="form-control form-control-sm" />
+                                                    <span>-</span>
+                                                    <input type="time" name="modes[@i].EndTime" value="@Model[i].EndTime.ToString(@"hh\:mm")" class="form-control form-control-sm" />
+                                                </div>
+                                            </td>
+                                            <td>
+                                                <div class="d-flex gap-1 align-items-center">
+                                                    <input type="time" name="modes[@i].LunchStartTime" value="@(Model[i].LunchStartTime?.ToString(@"hh\:mm"))" class="form-control form-control-sm" />
+                                                    <span>-</span>
+                                                    <input type="time" name="modes[@i].LunchEndTime" value="@(Model[i].LunchEndTime?.ToString(@"hh\:mm"))" class="form-control form-control-sm" />
+                                                </div>
+                                            </td>
+                                            <td class="text-center">
+                                                <div class="form-check form-switch d-inline-block">
+                                                    <input type="checkbox" name="modes[@i].IsWeekend" value="true" @(Model[i].IsWeekend ? "checked" : "") class="form-check-input" />
+                                                    <input type="hidden" name="modes[@i].IsWeekend" value="false" />
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="text-end mt-3">
+                            <button type="submit" class="btn btn-primary px-4">Сохранить всё</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-white py-3">
+                    <h5 class="mb-0"><i class="bi bi-calendar-event me-2"></i> Выходные года</h5>
+                </div>
+                <div class="card-body">
+                    <form asp-action="AddHoliday" method="post" class="mb-4">
+                        <div class="input-group input-group-sm mb-2">
+                            <input type="date" name="date" class="form-control" required />
+                        </div>
+                        <div class="input-group input-group-sm">
+                            <input type="text" name="description" class="form-control" placeholder="Описание" required />
+                            <button type="submit" class="btn btn-success"><i class="bi bi-plus-lg"></i></button>
+                        </div>
+                    </form>
+
+                    <div class="list-group list-group-flush" style="max-height: 400px; overflow-y: auto;">
+                        @foreach (var h in holidays)
+                        {
+                            <div class="list-group-item d-flex justify-content-between align-items-center px-0">
+                                <div>
+                                    <div class="fw-bold small">@h.Date.ToString("dd.MM.yyyy")</div>
+                                    <div class="text-muted" style="font-size: 0.8rem;">@h.Description</div>
+                                </div>
+                                <form asp-action="DeleteHoliday" asp-route-id="@h.Id" method="post">
+                                    <button type="submit" class="btn btn-sm btn-outline-danger border-0"><i class="bi bi-trash"></i></button>
+                                </form>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
