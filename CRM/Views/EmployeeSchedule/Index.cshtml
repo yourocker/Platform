@@ -1,0 +1,158 @@
+﻿@{
+ViewData["Title"] = "График сотрудников";
+}
+
+<script src='https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js'></script>
+
+<div class="container-fluid">
+    <div class="card shadow-sm border-0">
+        <div class="card-body">
+            <div class="row mb-4 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold">Подразделение</label>
+                    <select id="depFilter" class="form-select shadow-none">
+                        <option value="">-- Все подразделения --</option>
+                        @foreach (var dep in ViewBag.Departments)
+                        {
+                        <option value="@dep.Id">@dep.Name</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold">Сотрудник</label>
+                    <select id="empFilter" class="form-select shadow-none">
+                        <option value="">Сначала выберите подразделение...</option>
+                    </select>
+                </div>
+                <div class="col-md-6 text-end">
+                    <span class="badge bg-secondary p-2"><i class="bi bi-arrows-move me-1"></i> Можно перетаскивать и изменять блоки</span>
+                </div>
+            </div>
+
+            <div id="scheduleCalendar" style="background: white;"></div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .fc-v-event { border: none !important; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+    /* Высота слота для удобства отображения 15-минуток */
+    .fc-timegrid-slot { height: 1.0em !important; }
+    .fc-theme-bootstrap5 a { color: #495057; text-decoration: none; }
+    .fc-timegrid-bg-event { opacity: 0.9 !important; background-color: #adb5bd !important; }
+</style>
+
+@section Scripts {
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        var calendarEl = document.getElementById('scheduleCalendar');
+        var depFilter = document.getElementById('depFilter');
+        var empFilter = document.getElementById('empFilter');
+        var currentEmployeeId = null;
+
+        // Функция для получения строки даты БЕЗ часового пояса
+        function toLocalISO(date) {
+            const pad = num => String(num).padStart(2, '0');
+            return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+        }
+
+        var calendar = new FullCalendar.Calendar(calendarEl, {
+            initialView: 'timeGridWeek',
+            locale: 'ru',
+            firstDay: 1,
+            slotMinTime: "@ViewBag.MinTime",
+            slotMaxTime: "@ViewBag.MaxTime",
+
+            // --- РЕАЛИЗАЦИЯ 15-МИНУТНЫХ СЛОТОВ ---
+            slotDuration: '00:15:00',
+            snapDuration: '00:15:00',
+            // ------------------------------------
+
+            allDaySlot: false,
+            selectable: true,
+            editable: true,
+            eventStartEditable: true,
+            eventDurationEditable: true,
+
+            headerToolbar: {
+                left: 'prev,next today',
+                center: 'title',
+                right: 'dayGridMonth,timeGridWeek,timeGridDay'
+            },
+            buttonText: { today: 'Сегодня', month: 'Месяц', week: 'Неделя', day: 'День' },
+
+            events: function(info, successCallback, failureCallback) {
+                if (!currentEmployeeId) { successCallback([]); return; }
+                $.get('/EmployeeSchedule/GetEvents', {
+                    employeeId: currentEmployeeId,
+                    start: info.startStr,
+                    end: info.endStr
+                }).done(data => successCallback(data));
+            },
+
+            select: function(info) {
+                if (!currentEmployeeId) {
+                    alert('Сначала выберите сотрудника!');
+                    calendar.unselect();
+                    return;
+                }
+                $.post('/EmployeeSchedule/SaveAbsence', {
+                    employeeId: currentEmployeeId,
+                    start: toLocalISO(info.start),
+                    end: toLocalISO(info.end)
+                }).done(() => calendar.refetchEvents());
+                calendar.unselect();
+            },
+
+            eventDrop: function(info) {
+                updateEventInDb(info.event);
+            },
+
+            eventResize: function(info) {
+                updateEventInDb(info.event);
+            },
+
+            eventClick: function(info) {
+                if (info.event.display === 'background') return;
+                if (confirm('Удалить этот период отсутствия?')) {
+                    $.post('/EmployeeSchedule/DeleteAbsence', { id: info.event.id })
+                        .done(() => info.event.remove());
+                }
+            }
+        });
+
+        function updateEventInDb(event) {
+            $.post('/EmployeeSchedule/UpdateAbsence', {
+                id: event.id,
+                start: toLocalISO(event.start),
+                end: toLocalISO(event.end)
+            }).fail(() => {
+                alert('Ошибка при сохранении изменений');
+                calendar.refetchEvents();
+            });
+        }
+
+        calendar.render();
+
+        function loadEmployees(depId) {
+            $.get('/EmployeeSchedule/GetEmployees', { departmentId: depId })
+                .done(function(data) {
+                    empFilter.innerHTML = '<option value="">-- Выберите сотрудника --</option>';
+                    data.forEach(e => {
+                        empFilter.innerHTML += `<option value="${e.id}">${e.fullName}</option>`;
+                    });
+                    currentEmployeeId = null;
+                    calendar.refetchEvents();
+                });
+        }
+
+        depFilter.addEventListener('change', function() { loadEmployees(this.value); });
+        empFilter.addEventListener('change', function() {
+            currentEmployeeId = this.value;
+            calendar.refetchEvents();
+        });
+
+        loadEmployees('');
+    });
+</script>
+}

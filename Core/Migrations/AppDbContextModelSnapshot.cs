@@ -107,6 +107,53 @@ namespace Core.Migrations
                     b.ToTable("ContactPhones", (string)null);
                 });
 
+            modelBuilder.Entity("Core.Entities.Company.CompanyHoliday", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("Date")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("Description")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("CompanyHolidays", (string)null);
+                });
+
+            modelBuilder.Entity("Core.Entities.Company.CompanyWorkMode", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("DayOfWeek")
+                        .HasColumnType("integer");
+
+                    b.Property<TimeSpan>("EndTime")
+                        .HasColumnType("interval");
+
+                    b.Property<bool>("IsWeekend")
+                        .HasColumnType("boolean");
+
+                    b.Property<TimeSpan?>("LunchEndTime")
+                        .HasColumnType("interval");
+
+                    b.Property<TimeSpan?>("LunchStartTime")
+                        .HasColumnType("interval");
+
+                    b.Property<TimeSpan>("StartTime")
+                        .HasColumnType("interval");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("CompanyWorkModes", (string)null);
+                });
+
             modelBuilder.Entity("Core.Entities.Company.Department", b =>
                 {
                     b.Property<Guid>("Id")
@@ -248,6 +295,31 @@ namespace Core.Migrations
                         .HasDatabaseName("UserNameIndex");
 
                     b.ToTable("Employees", (string)null);
+                });
+
+            modelBuilder.Entity("Core.Entities.Company.EmployeeSchedule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("EndTime")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<bool>("IsAbsence")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("StartTime")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmployeeId");
+
+                    b.ToTable("EmployeeSchedules", (string)null);
                 });
 
             modelBuilder.Entity("Core.Entities.Company.Position", b =>
@@ -837,6 +909,17 @@ namespace Core.Migrations
                     b.Navigation("Manager");
 
                     b.Navigation("Parent");
+                });
+
+            modelBuilder.Entity("Core.Entities.Company.EmployeeSchedule", b =>
+                {
+                    b.HasOne("Core.Entities.Company.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Employee");
                 });
 
             modelBuilder.Entity("Core.Entities.Company.StaffAppointment", b =>

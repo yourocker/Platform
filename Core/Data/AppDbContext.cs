@@ -51,6 +51,11 @@ namespace Core.Data
         public DbSet<TaskComment> TaskComments { get; set; }
         public DbSet<TaskEntityRelation> TaskEntityRelations { get; set; }
         public DbSet<OutboxEvent> OutboxEvents { get; set; }
+        
+        // --- Рабочие графики ---
+        public DbSet<CompanyWorkMode> CompanyWorkModes { get; set; }
+        public DbSet<CompanyHoliday> CompanyHolidays { get; set; }
+        public DbSet<EmployeeSchedule> EmployeeSchedules { get; set; }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
@@ -144,11 +149,21 @@ namespace Core.Data
                     .HasForeignKey(d => d.ParentId);
             });
 
-            // Уникальный индекс для метаданных полей
+            // 8. Уникальный индекс для метаданных полей
             modelBuilder.Entity<AppFieldDefinition>(entity =>
             {
                 entity.HasIndex(f => new { f.AppDefinitionId, f.SystemName }).IsUnique();
             });
+            
+            // 9. Рабочие графики
+            modelBuilder.Entity<CompanyWorkMode>().ToTable("CompanyWorkModes");
+            modelBuilder.Entity<CompanyHoliday>().ToTable("CompanyHolidays");
+            modelBuilder.Entity<EmployeeSchedule>().ToTable("EmployeeSchedules");
+            
+            modelBuilder.Entity<EmployeeSchedule>()
+                .HasOne(s => s.Employee)
+                .WithMany()
+                .HasForeignKey(s => s.EmployeeId);
         }
     }
 }
