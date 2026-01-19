@@ -1,0 +1,119 @@
+﻿@using CRM.ViewModels
+@model ImportMappingViewModel
+@{
+    ViewData["Title"] = "Импорт услуг: Шаг 2";
+}
+
+<div class="container-fluid px-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h3 class="fw-bold text-secondary"><i class="bi bi- ailment me-2"></i>Импорт услуг: Сопоставление полей</h3>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item text-success">Шаг 1: Загрузка файла</li>
+                    <li class="breadcrumb-item active">Шаг 2: Настройка полей</li>
+                    <li class="breadcrumb-item text-muted">Шаг 3: Результат</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <form asp-action="ExecuteImport" method="post">
+        <input type="hidden" name="FileName" value="@Model.FileName" />
+        
+        <div class="card shadow-sm border-0 mb-4">
+            <div class="card-header bg-white py-3">
+                <h6 class="mb-0 fw-bold">Настройка соответствия колонок</h6>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="bg-light small text-uppercase">
+                        <tr>
+                            <th style="width: 30%;">Поле в CRM</th>
+                            <th style="width: 30%;">Данные из файла (предпросмотр)</th>
+                            <th style="width: 40%;">Колонка в Excel</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var field in Model.CrmFields)
+                        {
+                            <tr>
+                                <td>
+                                    <span class="fw-bold">@field.DisplayName</span>
+                                    @if (field.IsRequired)
+                                    {
+                                        <span class="text-danger" title="Обязательное поле">*</span>
+                                    }
+                                </td>
+                                <td class="small text-muted">
+                                    <div class="preview-text" data-field="@field.SystemName">
+                                        <i>Выберите колонку справа...</i>
+                                    </div>
+                                </td>
+                                <td>
+                                    <select name="Mappings[@field.SystemName]" class="form-select mapping-select" data-field="@field.SystemName" required="@field.IsRequired">
+                                        <option value="">-- Не импортировать --</option>
+                                        @for (int i = 0; i < Model.ExcelHeaders.Count; i++)
+                                        {
+                                            var header = Model.ExcelHeaders[i];
+                                            @* Авто-сопоставление по названию *@
+                                            bool isSelected = header.Equals(field.DisplayName, StringComparison.OrdinalIgnoreCase) || 
+                                                              header.Equals(field.SystemName, StringComparison.OrdinalIgnoreCase);
+                                            
+                                            <option value="@i" selected="@isSelected">@header</option>
+                                        }
+                                    </select>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+            <div class="card-footer bg-white py-3 text-end">
+                <a asp-action="Index" class="btn btn-link text-muted me-3">Отмена</a>
+                <button type="submit" class="btn btn-success px-5 fw-bold" id="startImportBtn">Начать импорт</button>
+            </div>
+        </div>
+    </form>
+</div>
+
+@* Храним данные предпросмотра в JS *@
+<script>
+    const previewData = @Html.Raw(Json.Serialize(Model.PreviewRows));
+    
+    document.querySelectorAll('.mapping-select').forEach(select => {
+        select.addEventListener('change', function() {
+            updatePreview(this);
+            validateForm();
+        });
+        // Вызываем один раз для авто-заполненных полей
+        updatePreview(select);
+    });
+
+    function updatePreview(select) {
+        const fieldName = select.getAttribute('data-field');
+        const colIndex = select.value;
+        const previewDiv = document.querySelector(`.preview-text[data-field="${fieldName}"]`);
+        
+        if (colIndex === "" || !previewData.length) {
+            previewDiv.innerHTML = "<i>Не импортируется</i>";
+            return;
+        }
+
+        let html = "";
+        previewData.forEach((row, idx) => {
+            if (row[colIndex]) {
+                html += `<div>${row[colIndex]}</div>`;
+            }
+        });
+        previewDiv.innerHTML = html || "<i>Пусто</i>";
+    }
+
+    function validateForm() {
+        const nameSelect = document.querySelector('select[data-field="Name"]');
+        const submitBtn = document.getElementById('startImportBtn');
+        submitBtn.disabled = (nameSelect.value === "");
+    }
+
+    validateForm();
+</script>

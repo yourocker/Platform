@@ -492,7 +492,8 @@ namespace Core.Migrations
 
                     b.Property<string>("Name")
                         .IsRequired()
-                        .HasColumnType("text");
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
 
                     b.Property<string>("Properties")
                         .HasColumnType("jsonb");
@@ -841,6 +842,12 @@ namespace Core.Migrations
                 {
                     b.HasBaseType("Core.Entities.Platform.GenericObject");
 
+                    b.Property<int>("DisplayId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("DisplayId"));
+
                     b.Property<Guid?>("ParentCategoryId")
                         .HasColumnType("uuid");
 
@@ -855,6 +862,12 @@ namespace Core.Migrations
 
                     b.Property<Guid>("CategoryId")
                         .HasColumnType("uuid");
+
+                    b.Property<int>("DisplayId")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("DisplayId"));
 
                     b.Property<decimal>("Price")
                         .HasColumnType("decimal(18,2)");

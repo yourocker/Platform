@@ -1,0 +1,37 @@
+﻿@{
+    ViewData["Title"] = "Импорт услуг: Шаг 1";
+}
+
+<div class="container-fluid px-4">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h3 class="fw-bold text-secondary"><i class="bi bi-upload me-2"></i>Импорт услуг: Загрузка файла</h3>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item active">Шаг 1: Загрузка файла</li>
+                    <li class="breadcrumb-item text-muted">Шаг 2: Настройка полей</li>
+                    <li class="breadcrumb-item text-muted">Шаг 3: Результат</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0">
+        <div class="card-body p-5 text-center">
+            <form asp-action="UploadForImport" method="post" enctype="multipart/form-data" id="uploadForm">
+                <div class="mb-4">
+                    <i class="bi bi-file-earmark-excel text-success" style="font-size: 4rem;"></i>
+                </div>
+                <h5>Выберите файл формата .xlsx</h5>
+                <p class="text-muted mb-4">Файл должен содержать одну страницу с заголовками в первой строке.</p>
+                
+                <div class="d-flex justify-content-center">
+                    <div class="input-group mb-3" style="max-width: 500px;">
+                        <input type="file" name="file" class="form-control" id="fileInput" accept=".xlsx" required>
+                        <button class="btn btn-primary px-4" type="submit" id="uploadBtn">Далее <i class="bi bi-arrow-right ms-1"></i></button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

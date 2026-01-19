@@ -7,7 +7,8 @@ namespace Core.Entities.CRM
     [Table("ServiceCategories")]
     public class ServiceCategory : GenericObject
     {
-        // Свойство Name удалено, используется базовое из GenericObject
+        [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+        public int DisplayId { get; set; }
 
         public Guid? ParentCategoryId { get; set; }
 
@@ -21,8 +22,9 @@ namespace Core.Entities.CRM
     [Table("ServiceItems")]
     public class ServiceItem : GenericObject
     {
-        // Свойство Name удалено, используется базовое из GenericObject
-
+        [DatabaseGenerated(DatabaseGeneratedOption.Identity)]
+        public int DisplayId { get; set; }
+        
         [Required]
         [Column(TypeName = "decimal(18,2)")]
         public decimal Price { get; set; }
