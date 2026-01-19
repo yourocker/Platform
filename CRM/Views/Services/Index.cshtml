@@ -3,9 +3,17 @@
 @using System.Text.Json
 @model IEnumerable<CRM.Controllers.ServiceTreeItem>
 @{
-ViewData["Title"] = "Справочник услуг";
-var dynamicFields = ViewBag.DynamicFields as List<AppFieldDefinition> ?? new List<AppFieldDefinition>();
-string currentSearch = ViewBag.CurrentSearch;
+    ViewData["Title"] = "Справочник услуг";
+    var dynamicFields = ViewBag.DynamicFields as List<AppFieldDefinition> ?? new List<AppFieldDefinition>();
+    string currentSearch = ViewBag.CurrentSearch;
+}
+
+@if (TempData["ImportResult"] != null)
+{
+    <div class="alert alert-success alert-dismissible fade show shadow-sm border-0 mb-4" role="alert">
+        <i class="bi bi-check-circle-fill me-2"></i> @TempData["ImportResult"]
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+    </div>
 }
 
 <div class="container-fluid px-4">
@@ -15,9 +23,9 @@ string currentSearch = ViewBag.CurrentSearch;
             <h3 class="mb-0 fw-bold text-secondary"><i class="bi bi-list-check me-2"></i>Справочник услуг</h3>
             <span class="text-muted small">
                 @if (string.IsNullOrEmpty(currentSearch)) {
-                <text>Древовидная структура (до 10 уровней)</text>
+                    <text>Древовидная структура (до 10 уровней)</text>
                 } else {
-                <text>Результаты поиска: <strong>@Model.Count()</strong></text>
+                    <text>Результаты поиска: <strong>@Model.Count()</strong></text>
                 }
             </span>
         </div>
@@ -35,10 +43,20 @@ string currentSearch = ViewBag.CurrentSearch;
                     <li><h6 class="dropdown-header">Поля конструктора</h6></li>
                     @foreach (var field in dynamicFields)
                     {
-                    <li><div class="dropdown-item"><div class="form-check"><input class="form-check-input col-chk" type="checkbox" value="col-dyn-@field.SystemName" checked> <label class="form-check-label">@field.Label</label></div></div></li>
+                        <li><div class="dropdown-item"><div class="form-check"><input class="form-check-input col-chk" type="checkbox" value="col-dyn-@field.SystemName" checked> <label class="form-check-label">@field.Label</label></div></div></li>
                     }
                 </ul>
             </div>
+
+            @* КНОПКА ЭКСПОРТА *@
+            <a asp-action="Export" class="btn btn-outline-success shadow-sm">
+                <i class="bi bi-download me-1"></i> Экспорт
+            </a>
+
+            @* --- КНОПКА ИМПОРТА (НОВАЯ) --- *@
+            <a asp-action="Import" class="btn btn-outline-info shadow-sm">
+                <i class="bi bi-upload me-1"></i> Импорт
+            </a>
 
             @* Дропдаун кнопки создания *@
             <div class="dropdown">
@@ -69,7 +87,7 @@ string currentSearch = ViewBag.CurrentSearch;
                     <span class="input-group-text bg-white border-0"><i class="bi bi-search text-primary"></i></span>
                     <input type="text" name="searchString" value="@currentSearch" class="form-control border-0 shadow-none" placeholder="Мгновенный поиск услуги или раздела..." autocomplete="off" />
                     @if(!string.IsNullOrEmpty(currentSearch)) {
-                    <a href="@Url.Action("Index")" class="btn btn-white border-0 d-flex align-items-center text-danger"><i class="bi bi-x-lg"></i></a>
+                        <a href="@Url.Action("Index")" class="btn btn-white border-0 d-flex align-items-center text-danger"><i class="bi bi-x-lg"></i></a>
                     }
                 </div>
             </div>
@@ -81,83 +99,76 @@ string currentSearch = ViewBag.CurrentSearch;
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0" id="servicesTable">
                 <thead class="bg-light text-muted small text-uppercase">
-                <tr>
-                    <th class="ps-4 col-name">Наименование</th>
-                    <th class="col-price">Цена</th>
-                    @foreach (var field in dynamicFields)
-                    {
-                    <th class="col-dyn-@field.SystemName">@field.Label</th>
-                    }
-                    <th class="text-end pe-4">Действия</th>
-                </tr>
+                    <tr>
+                        <th class="ps-4 col-name">Наименование</th>
+                        <th class="col-price">Цена</th>
+                        @foreach (var field in dynamicFields)
+                        {
+                            <th class="col-dyn-@field.SystemName">@field.Label</th>
+                        }
+                        <th class="text-end pe-4">Действия</th>
+                    </tr>
                 </thead>
                 <tbody>
-                @foreach (var item in Model) {
-                var isCat = item.Type == "Category";
-                var propValues = new Dictionary<string, object>();
-                if (!string.IsNullOrEmpty(item.Properties)) {
-                try { propValues = JsonSerializer.Deserialize<Dictionary<string, object>>(item.Properties) ?? new Dictionary<string, object>(); } catch { }
-                }
+                    @foreach (var item in Model) {
+                        var isCat = item.Type == "Category";
+                        var propValues = new Dictionary<string, object>();
+                        if (!string.IsNullOrEmpty(item.Properties)) {
+                            try { propValues = JsonSerializer.Deserialize<Dictionary<string, object>>(item.Properties) ?? new Dictionary<string, object>(); } catch { }
+                        }
 
-                @* ДОБАВЛЕНЫ data-id и data-parent для сворачивания *@
-                <tr id="row-@item.Id"
-                    data-id="@item.Id"
-                    data-parent="@item.ParentId"
-                    class="tree-row @(isCat ? "category-row table-light fw-bold" : "item-row")">
+                        <tr id="row-@item.Id"
+                            data-id="@item.Id"
+                            data-parent="@item.ParentId"
+                            class="tree-row @(isCat ? "category-row table-light fw-bold" : "item-row")">
 
-                    @* Колонка названия с отступом и кнопкой переключения для папок *@
-                    <td class="ps-4 col-name @(isCat ? "text-dark" : "")" style="padding-left: @(item.Level * 2 + 1.5)rem !important;">
-                        @if (isCat) {
-                        @* Иконка-стрелочка для сворачивания *@
-                        <span class="toggle-btn me-2" onclick="toggleNode('@item.Id')" style="cursor: pointer; display: inline-block; width: 1.5rem; text-align: center;">
+                            <td class="ps-4 col-name @(isCat ? "text-dark" : "")" style="padding-left: @(item.Level * 2 + 1.5)rem !important;">
+                                @if (isCat) {
+                                    <span class="toggle-btn me-2" onclick="toggleNode('@item.Id')" style="cursor: pointer; display: inline-block; width: 1.5rem; text-align: center;">
                                         <i class="bi bi-chevron-down toggle-icon"></i>
                                     </span>
-                        <i class="bi bi-folder-fill text-warning me-2"></i>@item.Name
-                        } else {
-                        @* Отступ для услуги, чтобы иконка была под названием папки *@
-                        <span style="display: inline-block; width: 1.5rem;"></span>
-                        <i class="bi bi-tag text-muted me-2"></i>@item.Name
-                        }
-                    </td>
+                                    <i class="bi bi-folder-fill text-warning me-2"></i>@item.Name
+                                } else {
+                                    <span style="display: inline-block; width: 1.5rem;"></span>
+                                    <i class="bi bi-tag text-muted me-2"></i>@item.Name
+                                }
+                            </td>
 
-                    @* Цена (только для услуг) *@
-                    <td class="col-price">
-                        @if (!isCat && item.Price.HasValue) {
-                        <span class="text-primary fw-bold">@item.Price.Value.ToString("N2")</span>
-                        }
-                    </td>
+                            <td class="col-price">
+                                @if (!isCat && item.Price.HasValue) {
+                                    <span class="text-primary fw-bold">@item.Price.Value.ToString("N2")</span>
+                                }
+                            </td>
 
-                    @* Динамические поля (только для услуг) *@
-                    @foreach (var field in dynamicFields) {
-                    <td class="col-dyn-@field.SystemName">
-                        @if (!isCat && propValues.TryGetValue(field.SystemName, out var val) && val != null) {
-                        @val.ToString()
-                        }
-                    </td>
-                    }
-
-                    @* Действия *@
-                    <td class="text-end pe-4">
-                        <div class="btn-group btn-group-sm shadow-sm">
-                            @if (isCat) {
-                            <a asp-action="EditCategory" asp-route-id="@item.Id" class="btn btn-white border" title="Редактировать раздел"><i class="bi bi-pencil-fill text-primary"></i></a>
-                            <button type="button" class="btn btn-white border" onclick="confirmDelete('@item.Id', 'Category')" title="Удалить раздел"><i class="bi bi-trash-fill text-danger"></i></button>
-                            } else {
-                            <a asp-action="Edit" asp-route-id="@item.Id" class="btn btn-white border"><i class="bi bi-pencil-fill text-primary"></i></a>
-                            <button type="button" class="btn btn-white border" onclick="confirmDelete('@item.Id', 'Item')"><i class="bi bi-trash-fill text-danger"></i></button>
+                            @foreach (var field in dynamicFields) {
+                                <td class="col-dyn-@field.SystemName">
+                                    @if (!isCat && propValues.TryGetValue(field.SystemName, out var val) && val != null) {
+                                        @val.ToString()
+                                    }
+                                </td>
                             }
-                        </div>
-                    </td>
-                </tr>
-                }
-                @if (!Model.Any()) {
-                <tr>
-                    <td colspan="100" class="text-center py-5 text-muted">
-                        <i class="bi bi-search fs-2 d-block mb-2"></i>
-                        Справочник пуст или ничего не найдено
-                    </td>
-                </tr>
-                }
+
+                            <td class="text-end pe-4">
+                                <div class="btn-group btn-group-sm shadow-sm">
+                                    @if (isCat) {
+                                        <a asp-action="EditCategory" asp-route-id="@item.Id" class="btn btn-white border" title="Редактировать раздел"><i class="bi bi-pencil-fill text-primary"></i></a>
+                                        <button type="button" class="btn btn-white border" onclick="confirmDelete('@item.Id', 'Category')" title="Удалить раздел"><i class="bi bi-trash-fill text-danger"></i></button>
+                                    } else {
+                                        <a asp-action="Edit" asp-route-id="@item.Id" class="btn btn-white border"><i class="bi bi-pencil-fill text-primary"></i></a>
+                                        <button type="button" class="btn btn-white border" onclick="confirmDelete('@item.Id', 'Item')"><i class="bi bi-trash-fill text-danger"></i></button>
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                    @if (!Model.Any()) {
+                        <tr>
+                            <td colspan="100" class="text-center py-5 text-muted">
+                                <i class="bi bi-search fs-2 d-block mb-2"></i>
+                                Справочник пуст или ничего не найдено
+                            </td>
+                        </tr>
+                    }
                 </tbody>
             </table>
         </div>
@@ -167,17 +178,14 @@ string currentSearch = ViewBag.CurrentSearch;
 @Html.AntiForgeryToken()
 
 <script>
-    // --- 1. ЛОГИКА СВОРАЧИВАНИЯ/РАЗВОРАЧИВАНИЯ ---
     function toggleNode(id) {
         const row = document.querySelector(`tr[data-id="${id}"]`);
         const icon = row.querySelector('.toggle-icon');
         const isExpanded = icon.classList.contains('bi-chevron-down');
 
-        // Переключаем иконку стрелочки
         icon.classList.toggle('bi-chevron-down');
         icon.classList.toggle('bi-chevron-right');
 
-        // Рекурсивно скрываем/показываем всех потомков
         toggleChildren(id, !isExpanded);
     }
 
@@ -187,7 +195,6 @@ string currentSearch = ViewBag.CurrentSearch;
         children.forEach(child => {
             if (show) {
                 child.style.display = 'table-row';
-                // Если это раздел и он был развернут до скрытия родителя, разворачиваем и его детей
                 if (child.classList.contains('category-row')) {
                     const childIcon = child.querySelector('.toggle-icon');
                     if (childIcon && childIcon.classList.contains('bi-chevron-down')) {
@@ -196,7 +203,6 @@ string currentSearch = ViewBag.CurrentSearch;
                 }
             } else {
                 child.style.display = 'none';
-                // Если скрываем родителя, скрываем абсолютно всех потомков
                 if (child.classList.contains('category-row')) {
                     toggleChildren(child.getAttribute('data-id'), false);
                 }
@@ -204,7 +210,6 @@ string currentSearch = ViewBag.CurrentSearch;
         });
     }
 
-    // --- 2. УДАЛЕНИЕ ЧЕРЕЗ AJAX ---
     function confirmDelete(id, type) {
         const msg = type === 'Category'
             ? "Удалить этот раздел? Раздел должен быть пустым."
@@ -241,7 +246,6 @@ string currentSearch = ViewBag.CurrentSearch;
             });
     }
 
-    // --- 3. УПРАВЛЕНИЕ ВИДИМОСТЬЮ КОЛОНОК ---
     document.addEventListener('DOMContentLoaded', function() {
         const STORAGE_KEY = 'crm_services_tree_columns_v3';
         const checkboxes = document.querySelectorAll('.col-chk');
@@ -266,7 +270,6 @@ string currentSearch = ViewBag.CurrentSearch;
         }
     });
 
-    // --- 4. САБМИТ ПОИСКА ПРИ ENTER ---
     const searchInput = document.querySelector('input[name="searchString"]');
     searchInput.addEventListener('keypress', function(e) {
         if (e.key === 'Enter') {
@@ -279,11 +282,7 @@ string currentSearch = ViewBag.CurrentSearch;
     .table-hover tbody tr:hover { background-color: rgba(13, 110, 253, 0.04); cursor: pointer; }
     .table-light { background-color: rgba(0,0,0, 0.015) !important; }
     .col-name { white-space: nowrap; }
-
-    /* Плавный поворот стрелочки */
     .toggle-icon { transition: transform 0.2s ease; display: inline-block; }
-
-    /* Стили для иконок дерева */
     .bi-folder-fill { font-size: 1.1rem; }
-    .category-row { border-left: 3px solid #ffc107; } /* Желтая метка для разделов */
+    .category-row { border-left: 3px solid #ffc107; }
 </style>

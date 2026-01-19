@@ -14,9 +14,7 @@ namespace Core.Data
             // --- ШАГ 1: Инициализация разделов меню (AppCategories) ---
             var categories = new List<AppCategory>
             {
-                // Системный раздел CRM
                 new AppCategory { Id = Guid.Parse("e5555555-5555-5555-5555-555555555555"), Name = "CRM", Icon = "wallet-fill", SortOrder = 2, IsSystem = true },
-                
                 new AppCategory { Id = Guid.Parse("a1111111-1111-1111-1111-111111111111"), Name = "Компания", Icon = "building", SortOrder = 1, IsSystem = true },
                 new AppCategory { Id = Guid.Parse("b2222222-2222-2222-2222-222222222222"), Name = "Пациенты", Icon = "people", SortOrder = 3, IsSystem = true },
                 new AppCategory { Id = Guid.Parse("c3333333-3333-3333-3333-333333333333"), Name = "Конструктор", Icon = "gear", SortOrder = 5, IsSystem = true },
@@ -48,14 +46,16 @@ namespace Core.Data
 
             var systemApps = new List<AppDefinition>
             {
-                // Сущность Контакты (Восстановлено AppCategoryId)
                 new AppDefinition { Name = "Контакты", EntityCode = "Contact", Icon = "person-lines-fill", IsSystem = true, AppCategoryId = catCRM?.Id },
-
                 new AppDefinition { Name = "Сотрудники", EntityCode = "Employee", Icon = "person-badge", IsSystem = true, AppCategoryId = catCompany?.Id },
                 new AppDefinition { Name = "Пациенты", EntityCode = "Patient", Icon = "person-heart", IsSystem = true, AppCategoryId = catPatients?.Id },
                 new AppDefinition { Name = "Должности", EntityCode = "Position", Icon = "briefcase", IsSystem = true, AppCategoryId = catCompany?.Id },
                 new AppDefinition { Name = "Подразделения", EntityCode = "Department", Icon = "diagram-3", IsSystem = true, AppCategoryId = catCompany?.Id },
-                new AppDefinition { Name = "Задачи", EntityCode = "TASK", Icon = "check2-all", IsSystem = true, AppCategoryId = catServices?.Id }
+                new AppDefinition { Name = "Задачи", EntityCode = "TASK", Icon = "check2-all", IsSystem = true, AppCategoryId = catServices?.Id },
+                
+                // РЕГИСТРАЦИЯ СПРАВОЧНИКА УСЛУГ
+                new AppDefinition { Name = "Услуги", EntityCode = "ServiceItem", Icon = "cart-check", IsSystem = true, AppCategoryId = catServices?.Id },
+                new AppDefinition { Name = "Категории услуг", EntityCode = "ServiceCategory", Icon = "folder2", IsSystem = true, AppCategoryId = catServices?.Id }
             };
 
             foreach (var app in systemApps)
