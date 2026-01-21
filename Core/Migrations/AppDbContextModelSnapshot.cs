@@ -530,6 +530,43 @@ namespace Core.Migrations
                     b.ToTable("OutboxEvents");
                 });
 
+            modelBuilder.Entity("Core.Entities.System.UiSettings", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("AccentColor")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("BaseFontSize")
+                        .HasColumnType("integer");
+
+                    b.Property<Guid?>("EmployeeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsDarkMode")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("MainBgColor")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("PrimaryColor")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmployeeId");
+
+                    b.ToTable("UiSettings", (string)null);
+                });
+
             modelBuilder.Entity("Core.Entities.Tasks.TaskComment", b =>
                 {
                     b.Property<int>("Id")

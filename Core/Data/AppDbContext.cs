@@ -60,6 +60,9 @@ namespace Core.Data
         // --- Список товаров/услуг ---
         public DbSet<ServiceCategory> ServiceCategories { get; set; }
         public DbSet<ServiceItem> ServiceItems { get; set; }
+        
+        // --- Таблица настроек интерфейса ---
+        public DbSet<UiSettings> UiSettings { get; set; }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
@@ -175,7 +178,6 @@ namespace Core.Data
                 entity.ToTable("ServiceCategories");
                 entity.Property(e => e.Properties).HasColumnType("jsonb");
 
-                // ИСПРАВЛЕНИЕ: Явный маппинг системного поля Name для унаследованной сущности
                 entity.Property(e => e.Name).HasMaxLength(255).IsRequired();
 
                 entity.HasOne(c => c.ParentCategory)
@@ -189,7 +191,6 @@ namespace Core.Data
                 entity.ToTable("ServiceItems");
                 entity.Property(e => e.Properties).HasColumnType("jsonb");
 
-                // ИСПРАВЛЕНИЕ: Явный маппинг системного поля Name для унаследованной сущности
                 entity.Property(e => e.Name).HasMaxLength(255).IsRequired();
 
                 entity.HasIndex(e => e.Name);
@@ -197,6 +198,13 @@ namespace Core.Data
                     .WithMany(c => c.Services)
                     .HasForeignKey(s => s.CategoryId)
                     .OnDelete(DeleteBehavior.Cascade);
+            });
+            
+            // 11. Таблица настроек интерфейса
+            modelBuilder.Entity<UiSettings>(entity =>
+            {
+                entity.ToTable("UiSettings");
+                entity.HasIndex(e => e.EmployeeId);
             });
         }
     }
