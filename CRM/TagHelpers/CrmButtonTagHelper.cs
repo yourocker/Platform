@@ -1,40 +1,49 @@
 ﻿using Microsoft.AspNetCore.Razor.TagHelpers;
-using System.Threading.Tasks;
+using Microsoft.AspNetCore.Mvc.Rendering;
+using Microsoft.AspNetCore.Mvc.ViewFeatures;
+using Microsoft.Extensions.DependencyInjection;
+using Core.Services;
 
 namespace CRM.TagHelpers
 {
-    [HtmlTargetElement("a", Attributes = "crm-button")]
     [HtmlTargetElement("button", Attributes = "crm-button")]
+    [HtmlTargetElement("a", Attributes = "crm-button")]
     public class CrmButtonTagHelper : TagHelper
     {
+        [ViewContext]
+        [HtmlAttributeNotBound]
+        public ViewContext ViewContext { get; set; }
+
+        private readonly ICrmStyleService _styleService;
+
+        // Внедряем сервис через конструктор
+        public CrmButtonTagHelper(ICrmStyleService styleService)
+        {
+            _styleService = styleService;
+        }
+
         public string Variant { get; set; } = "primary";
         public string Icon { get; set; }
         public string IconClass { get; set; }
-        public string Size { get; set; }
 
-        public override async Task ProcessAsync(TagHelperContext context, TagHelperOutput output)
+        public override void Process(TagHelperContext context, TagHelperOutput output)
         {
-            // 1. Базовые классы
-            var sizeClass = !string.IsNullOrEmpty(Size) ? $"btn-{Size}" : "";
-            var btnClasses = $"btn btn-{Variant} {sizeClass}";
+            var settings = _styleService.GetSettings();
             
-            var existingClasses = output.Attributes["class"]?.Value?.ToString();
-            output.Attributes.SetAttribute("class", string.IsNullOrEmpty(existingClasses) 
-                ? btnClasses 
-                : $"{btnClasses} {existingClasses}");
+            output.Attributes.SetAttribute("class", $"btn btn-{Variant} shadow-sm");
 
-            // 2. Проверяем, есть ли текст внутри тега
-            var content = await output.GetChildContentAsync();
-            var hasText = !content.IsEmptyOrWhiteSpace;
+            // Применяем PrimaryColor из БД для кнопок типа primary
+            if (Variant == "primary")
+            {
+                output.Attributes.SetAttribute("style", 
+                    $"background-color: {settings.PrimaryColor}; border-color: {settings.PrimaryColor}; color: white;");
+            }
 
-            // 3. Добавляем иконку
+            // Рендерим иконку в PreContent (самое начало внутреннего содержимого тега)
             if (!string.IsNullOrEmpty(Icon))
             {
-                // Если текст есть — добавляем отступ me-1, если нет — иконка будет ровно по центру
-                var marginClass = hasText ? "me-1" : "";
-                var iClass = string.IsNullOrEmpty(IconClass) ? "" : $" {IconClass}";
-                
-                output.PreContent.SetHtmlContent($"<i class=\"bi bi-{Icon}{iClass} {marginClass}\"></i>");
+                // Добавляем иконку и пробел me-2 перед основным текстом кнопки
+                output.PreContent.AppendHtml($"<i class=\"bi bi-{Icon} me-2 {IconClass}\"></i>");
             }
         }
     }

@@ -1,113 +1,85 @@
-﻿using Microsoft.AspNetCore.Mvc.Rendering;
+﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Rendering;
+using Microsoft.AspNetCore.Mvc.Routing;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using Microsoft.AspNetCore.Razor.TagHelpers;
-using Microsoft.AspNetCore.Routing;
-using Microsoft.AspNetCore.Http; // Для работы с QueryString
-using System;
-using System.Linq;
+using Core.Services;
 
 namespace CRM.TagHelpers
 {
     [HtmlTargetElement("crm-pagination")]
     public class CrmPaginationTagHelper : TagHelper
     {
+        private readonly IUrlHelperFactory _urlHelperFactory;
+        private readonly ICrmStyleService _styleService;
+
+        public CrmPaginationTagHelper(IUrlHelperFactory urlHelperFactory, ICrmStyleService styleService)
+        {
+            _urlHelperFactory = urlHelperFactory;
+            _styleService = styleService;
+        }
+
         [ViewContext]
         [HtmlAttributeNotBound]
         public ViewContext ViewContext { get; set; }
 
-        [HtmlAttributeName("total-pages")]
-        public int TotalPages { get; set; }
-
-        [HtmlAttributeName("current-page")]
         public int CurrentPage { get; set; }
+        public int TotalPages { get; set; }
+        public string Action { get; set; }
 
         public override void Process(TagHelperContext context, TagHelperOutput output)
         {
-            try
+            if (TotalPages <= 1)
             {
-                if (TotalPages <= 1)
-                {
-                    output.SuppressOutput();
-                    return;
-                }
+                output.SuppressOutput();
+                return;
+            }
 
-                // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ:
-                // Разрешаем тегу иметь вложенный контент (<li>), даже если в .cshtml он вызван как <crm-pagination />
-                output.TagMode = TagMode.StartTagAndEndTag;
+            var settings = _styleService.GetSettings();
+            var urlHelper = _urlHelperFactory.GetUrlHelper(ViewContext);
+            
+            output.TagName = "nav";
+            output.TagMode = TagMode.StartTagAndEndTag;
+
+            var ul = new TagBuilder("ul");
+            ul.AddCssClass("pagination pagination-sm m-0");
+
+            for (int i = 1; i <= TotalPages; i++)
+            {
+                var li = new TagBuilder("li");
+                li.AddCssClass("page-item");
                 
-                output.TagName = "ul";
-                output.Attributes.SetAttribute("class", "pagination pagination-sm mb-0");
-
-                // 1. Кнопка "Назад"
-                output.Content.AppendHtml(CreateItem(CurrentPage - 1, "chevron-left", CurrentPage <= 1));
-
-                // 2. Номера страниц
-                for (int i = 1; i <= TotalPages; i++)
-                {
-                    if (i == 1 || i == TotalPages || (i >= CurrentPage - 2 && i <= CurrentPage + 2))
-                    {
-                        output.Content.AppendHtml(CreateItem(i, i.ToString(), false, i == CurrentPage));
-                    }
-                    else if (i == CurrentPage - 3 || i == CurrentPage + 3)
-                    {
-                        output.Content.AppendHtml("<li class=\"page-item disabled\"><span class=\"page-link\">...</span></li>");
-                    }
-                }
-
-                // 3. Кнопка "Вперед"
-                output.Content.AppendHtml(CreateItem(CurrentPage + 1, "chevron-right", CurrentPage >= TotalPages));
-            }
-            catch (Exception ex)
-            {
-                output.TagName = "div";
-                output.Attributes.SetAttribute("class", "text-danger small");
-                output.Content.SetContent($"Ошибка пагинации: {ex.Message}");
-            }
-        }
-
-        private TagBuilder CreateItem(int page, string text, bool disabled, bool active = false)
-        {
-            var li = new TagBuilder("li");
-            li.AddCssClass("page-item");
-            if (disabled) li.AddCssClass("disabled");
-            if (active) li.AddCssClass("active");
-
-            var a = new TagBuilder("a");
-            a.AddCssClass("page-link");
-
-            if (!disabled && !active)
-            {
-                var queryParams = ViewContext.HttpContext.Request.Query;
+                var a = new TagBuilder("a");
+                a.AddCssClass("page-link shadow-none");
+                
+                // Формируем URL с сохранением существующих параметров поиска
                 var routeValues = new RouteValueDictionary();
-
-                foreach (var key in queryParams.Keys)
+                foreach (var query in ViewContext.HttpContext.Request.Query)
                 {
-                    routeValues[key] = queryParams[key].ToString();
+                    routeValues[query.Key] = query.Value;
                 }
-                routeValues["pageNumber"] = page.ToString();
-
-                var path = ViewContext.HttpContext.Request.Path;
-                // Формируем QueryString вручную
-                var queryString = QueryString.Create(routeValues.ToDictionary(k => k.Key, v => v.Value?.ToString()));
+                routeValues["pageNumber"] = i;
                 
-                a.Attributes["href"] = $"{path}{queryString}";
-            }
-            else
-            {
-                a.Attributes["href"] = "javascript:void(0)";
+                a.Attributes["href"] = urlHelper.Action(Action, routeValues);
+                a.InnerHtml.Append(i.ToString());
+
+                if (i == CurrentPage)
+                {
+                    li.AddCssClass("active");
+                    // ВНИМАНИЕ: Применяем PrimaryColor из БД для активной кнопки пагинации
+                    a.Attributes["style"] = $"background-color: {settings.PrimaryColor}; border-color: {settings.PrimaryColor}; color: white;";
+                }
+                else
+                {
+                    // Для неактивных кнопок используем цвет текста из PrimaryColor для единообразия
+                    a.Attributes["style"] = $"color: {settings.PrimaryColor};";
+                }
+
+                li.InnerHtml.AppendHtml(a);
+                ul.InnerHtml.AppendHtml(li);
             }
 
-            if (text.Contains("chevron"))
-            {
-                a.InnerHtml.AppendHtml($"<i class=\"bi bi-{text}\"></i>");
-            }
-            else
-            {
-                a.InnerHtml.Append(text);
-            }
-
-            li.InnerHtml.AppendHtml(a);
-            return li;
+            output.Content.AppendHtml(ul);
         }
     }
 }
