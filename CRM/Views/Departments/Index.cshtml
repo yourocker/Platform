@@ -2,87 +2,99 @@
 
 @{
     ViewData["Title"] = "Оргструктура";
-    var rootDepartments = Model.Where(d => d.ParentId == null).OrderBy(d => d.Name).ToList();
 }
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h2>Оргструктура</h2>
-    <a asp-action="Create" class="btn btn-primary">
-        <i class="bi bi-plus-lg"></i> Добавить подразделение
-    </a>
-</div>
+<div class="container-fluid px-4">
+    @* --- УНИФИЦИРОВАННЫЙ ХЕДЕР СТРАНИЦЫ --- *@
+    <crm-page-header title="Оргструктура" icon="diagram-3" subtitle="Иерархия подразделений и сотрудников">
+        <a asp-action="Create" crm-button variant="primary" icon="plus-lg" class="shadow-sm px-4">
+            Добавить подразделение
+        </a>
+    </crm-page-header>
 
-<div class="card shadow-sm">
-    <div class="card-body">
-        @if (!Model.Any())
-        {
-            <div class="alert alert-info">Подразделения еще не созданы.</div>
-        }
-        else
-        {
-            @* Используем локальную функцию с Task, чтобы TagHelpers (asp-action) работали корректно *@
-            async Task RenderTree(Guid? parentId, int level)
+    @* --- ОСНОВНОЙ КОНТЕНТ В УНИФИЦИРОВАННОЙ КАРТОЧКЕ --- *@
+    <div crm-card>
+        <div class="card-body">
+            @if (!Model.Any())
             {
-                var children = Model.Where(d => d.ParentId == parentId).OrderBy(d => d.Name).ToList();
-                if (!children.Any()) return;
+                <div class="alert alert-info border-0 shadow-sm">
+                    <i class="bi bi-info-circle me-2"></i>Подразделения еще не созданы.
+                </div>
+            }
+            else
+            {
+                @* Локальная функция для отрисовки дерева *@
+                async Task RenderTree(Guid? parentId, int level)
+                {
+                    var children = Model.Where(d => d.ParentId == parentId).OrderBy(d => d.Name).ToList();
+                    if (!children.Any()) return;
 
-                <ul class="list-unstyled @(level > 0 ? "ms-4 border-start ps-3" : "")">
-                    @foreach (var dept in children)
-                    {
-                        <li class="mb-2">
-                            <div class="d-flex justify-content-between align-items-center p-2 bg-light rounded border">
-                                <div>
-                                    <span class="fw-bold text-primary">@dept.Name</span>
-                                    
-                                    @* Отображение руководителя *@
-                                    @if (dept.Manager != null)
-                                    {
-                                        <div class="small text-muted">
-                                            <i class="bi bi-person-badge"></i> Руководитель: 
-                                            <strong>@dept.Manager.LastName @dept.Manager.FirstName</strong>
-                                        </div>
-                                    }
-
-                                    @* Список только АКТИВНЫХ сотрудников в этом отделе *@
-                                    @{
-                                        var activeStaff = dept.StaffAppointments?
-                                            .Where(sa => sa.Employee != null && !sa.Employee.IsDismissed)
-                                            .Select(sa => sa.Employee)
-                                            .Distinct()
-                                            .ToList();
-
-                                        if (activeStaff != null && activeStaff.Any())
+                    <ul class="list-unstyled @(level > 0 ? "ms-4 border-start ps-3 mt-3" : "")">
+                        @foreach (var dept in children)
+                        {
+                            <li class="mb-3">
+                                <div class="d-flex justify-content-between align-items-center p-3 bg-light rounded border shadow-sm">
+                                    <div>
+                                        <div class="fw-bold text-dark fs-5">@dept.Name</div>
+                                        
+                                        @* Отображение руководителя *@
+                                        @if (dept.Manager != null)
                                         {
-                                            <div class="mt-1">
-                                                @foreach (var emp in activeStaff)
-                                                {
-                                                    <span class="badge bg-white text-dark border me-1">
-                                                        <i class="bi bi-person"></i> @emp.LastName @emp.FirstName[0].
-                                                    </span>
-                                                }
+                                            <div class="small text-muted mt-1">
+                                                <i class="bi bi-person-badge text-primary"></i> Руководитель: 
+                                                <span class="fw-semibold">@dept.Manager.LastName @dept.Manager.FirstName</span>
                                             </div>
                                         }
-                                    }
+
+                                        @* Список активных сотрудников *@
+                                        @{
+                                            var activeStaff = dept.StaffAppointments?
+                                                .Where(sa => sa.Employee != null && !sa.Employee.IsDismissed)
+                                                .Select(sa => sa.Employee)
+                                                .Distinct()
+                                                .ToList();
+
+                                            if (activeStaff != null && activeStaff.Any())
+                                            {
+                                                <div class="mt-2 d-flex flex-wrap gap-1">
+                                                    @foreach (var emp in activeStaff)
+                                                    {
+                                                        <span class="badge bg-white text-dark border fw-normal shadow-sm">
+                                                            <i class="bi bi-person text-secondary"></i> @emp.LastName @emp.FirstName[0].
+                                                        </span>
+                                                    }
+                                                </div>
+                                            }
+                                        }
+                                    </div>
+                                    
+                                    @* Унифицированные кнопки действий *@
+                                    <div class="btn-group btn-group-sm shadow-sm">
+                                        <a asp-action="Edit" asp-route-id="@dept.Id" 
+                                           crm-button variant="white" icon="pencil-fill" icon-class="text-primary" 
+                                           class="border" title="Редактировать"></a>
+                                           
+                                        <a asp-action="Delete" asp-route-id="@dept.Id" 
+                                           crm-button variant="white" icon="trash-fill" icon-class="text-danger" 
+                                           class="border" title="Удалить"></a>
+                                    </div>
                                 </div>
                                 
-                                <div class="btn-group btn-group-sm">
-                                    <a asp-action="Edit" asp-route-id="@dept.Id" class="btn btn-outline-secondary" title="Редактировать">
-                                        <i class="bi bi-pencil"></i>
-                                    </a>
-                                    <a asp-action="Delete" asp-route-id="@dept.Id" class="btn btn-outline-danger" title="Удалить">
-                                        <i class="bi bi-trash"></i>
-                                    </a>
-                                </div>
-                            </div>
-                            @* Рекурсия *@
-                            @{ await RenderTree(dept.Id, level + 1); }
-                        </li>
-                    }
-                </ul>
-            }
+                                @* Рекурсивный вызов для вложенных подразделений *@
+                                @{ await RenderTree(dept.Id, level + 1); }
+                            </li>
+                        }
+                    </ul>
+                }
 
-            @* Запуск отрисовки дерева *@
-            await RenderTree(null, 0);
-        }
+                @* Запуск отрисовки дерева *@
+                await RenderTree(null, 0);
+            }
+        </div>
     </div>
 </div>
+
+<style>
+    .border-start { border-left: 2px dashed #dee2e6 !important; }
+    .bg-light { background-color: #fcfcfc !important; }
+</style>
