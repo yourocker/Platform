@@ -1,34 +1,47 @@
 ﻿using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.AspNetCore.Razor.TagHelpers;
 using System.Threading.Tasks;
+using Core.Services;
 
 namespace CRM.TagHelpers
 {
     [HtmlTargetElement("crm-page-header")]
     public class CrmPageHeaderTagHelper : TagHelper
     {
+        private readonly ICrmStyleService _styleService;
+
+        // Внедряем сервис через конструктор
+        public CrmPageHeaderTagHelper(ICrmStyleService styleService)
+        {
+            _styleService = styleService;
+        }
+
         public string Title { get; set; }
         public string Icon { get; set; }
         public string Subtitle { get; set; }
 
         public override async Task ProcessAsync(TagHelperContext context, TagHelperOutput output)
         {
-            // Устанавливаем режим парного тега
+            var settings = _styleService.GetSettings();
+            
             output.TagMode = TagMode.StartTagAndEndTag;
             output.TagName = "div";
             output.Attributes.SetAttribute("class", "row mb-4 align-items-center justify-content-between");
 
-            // --- Левая часть: Заголовок, Иконка, Сабтайтл ---
+            // Левая часть: Иконка + Заголовок + Подзаголовок
             var leftCol = new TagBuilder("div");
             leftCol.AddCssClass("col-auto");
 
-            // Контейнер для иконки и заголовка (в одну линию)
             var titleWrapper = new TagBuilder("div");
             titleWrapper.AddCssClass("d-flex align-items-center");
 
             if (!string.IsNullOrEmpty(Icon))
             {
-                titleWrapper.InnerHtml.AppendHtml($"<i class=\"bi bi-{Icon} me-2 fs-3 text-secondary\"></i>");
+                // Применяем PrimaryColor из БД для иконки
+                var iconTag = new TagBuilder("i");
+                iconTag.AddCssClass($"bi bi-{Icon} me-2 fs-3");
+                iconTag.Attributes.Add("style", $"color: {settings.PrimaryColor};");
+                titleWrapper.InnerHtml.AppendHtml(iconTag);
             }
 
             var h3 = new TagBuilder("h3");
@@ -42,19 +55,17 @@ namespace CRM.TagHelpers
             {
                 var sub = new TagBuilder("span");
                 sub.AddCssClass("text-muted small");
-                sub.InnerHtml.AppendHtml(Subtitle);
+                sub.InnerHtml.Append(Subtitle);
                 leftCol.InnerHtml.AppendHtml(sub);
             }
 
-            // --- Правая часть: Кнопки (контент внутри тега) ---
+            // Правая часть: Кнопки действий (из вложенного содержимого)
             var rightCol = new TagBuilder("div");
             rightCol.AddCssClass("col-auto d-flex gap-2");
             
-            // Получаем всё, что вложено в <crm-page-header>...</crm-page-header>
             var actions = await output.GetChildContentAsync();
             rightCol.InnerHtml.AppendHtml(actions);
 
-            // Собираем всё вместе
             output.Content.AppendHtml(leftCol);
             output.Content.AppendHtml(rightCol);
         }

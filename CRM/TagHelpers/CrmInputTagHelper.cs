@@ -1,51 +1,63 @@
 ﻿using Microsoft.AspNetCore.Razor.TagHelpers;
 using Microsoft.AspNetCore.Mvc.Rendering;
-using Microsoft.AspNetCore.Mvc.ViewFeatures;
+using Core.Services;
 
 namespace CRM.TagHelpers
 {
     [HtmlTargetElement("crm-input")]
     public class CrmInputTagHelper : TagHelper
     {
+        private readonly ICrmStyleService _styleService;
+
+        // Внедряем сервис через конструктор
+        public CrmInputTagHelper(ICrmStyleService styleService)
+        {
+            _styleService = styleService;
+        }
+
         public string Name { get; set; }
         public string Label { get; set; }
         public string Value { get; set; }
         public string Placeholder { get; set; }
-        public string Class { get; set; } // Дополнительные классы (например, instant-filter)
+        public string Class { get; set; }
 
         public override void Process(TagHelperContext context, TagHelperOutput output)
         {
-            // Устанавливаем режим парного тега, чтобы избежать проблем с рендерингом
-            output.TagMode = TagMode.StartTagAndEndTag;
+            var settings = _styleService.GetSettings();
             
-            // Внешний контейнер теперь не нужен (тег crm-input сам станет этим контейнером)
+            output.TagMode = TagMode.StartTagAndEndTag;
             output.TagName = "div";
             output.Attributes.SetAttribute("class", "mb-3");
 
-            // 1. Создаем Label
+            // Стиль для шрифта из БД
+            string fontSizeStyle = $"font-size: {settings.BaseFontSize}px;";
+
+            // 1. Рендерим Label
             if (!string.IsNullOrEmpty(Label))
             {
                 var label = new TagBuilder("label");
                 label.AddCssClass("form-label small fw-bold text-muted text-uppercase");
+                label.Attributes.Add("style", fontSizeStyle);
                 label.InnerHtml.Append(Label);
                 output.Content.AppendHtml(label);
             }
 
-            // 2. Создаем Input
+            // 2. Рендерим Input
             var input = new TagBuilder("input");
             input.TagRenderMode = TagRenderMode.SelfClosing;
             input.Attributes.Add("type", "text");
             input.Attributes.Add("name", Name);
             input.Attributes.Add("id", Name);
+            input.Attributes.Add("style", fontSizeStyle);
             
-            if (!string.IsNullOrEmpty(Value))
+            if (!string.IsNullOrEmpty(Value)) 
                 input.Attributes.Add("value", Value);
                 
-            if (!string.IsNullOrEmpty(Placeholder))
+            if (!string.IsNullOrEmpty(Placeholder)) 
                 input.Attributes.Add("placeholder", Placeholder);
 
             input.AddCssClass("form-control form-control-sm");
-            if (!string.IsNullOrEmpty(Class))
+            if (!string.IsNullOrEmpty(Class)) 
                 input.AddCssClass(Class);
 
             output.Content.AppendHtml(input);
