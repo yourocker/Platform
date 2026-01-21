@@ -1,0 +1,238 @@
+﻿@using Core.Data
+@using Microsoft.EntityFrameworkCore
+@using Microsoft.AspNetCore.Identity
+@using Core.Entities.Company
+@using Core.Entities.System
+
+@inject AppDbContext Context
+@inject UserManager<Employee> UserManager
+
+@{
+    // Загружаем настройки интерфейса из БД. Если настроек нет — берем значения по умолчанию.
+    var ui = await Context.UiSettings.FirstOrDefaultAsync() ?? new UiSettings();
+}
+
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - Medical CRM</title>
+    
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
+    
+    <style>
+        :root { 
+            /* Динамические переменные из базы данных */
+            --main-bg: @ui.MainBgColor; 
+            --sub-bg: #ffffff; 
+            --accent: @ui.AccentColor; 
+            --primary-color: @ui.PrimaryColor;
+            --base-font-size: @(ui.BaseFontSize)px;
+        }
+
+        body { 
+            background-color: #f4f7f6; 
+            overflow: hidden; 
+            height: 100vh; 
+            display: flex; 
+            margin: 0; 
+            font-family: 'Segoe UI', sans-serif;
+            font-size: var(--base-font-size);
+        }
+
+        /* Применение переменных к стилям макета */
+        #nav-main { 
+            width: 70px; 
+            background: var(--main-bg); 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            padding-top: 20px; 
+            z-index: 1050; 
+            flex-shrink: 0; 
+        }
+
+        .main-btn { 
+            width: 48px; height: 48px; 
+            display: flex; align-items: center; justify-content: center; 
+            color: #a0a6ad; font-size: 1.5rem; margin-bottom: 12px; 
+            cursor: pointer; border-radius: 10px; transition: 0.2s; text-decoration: none; 
+        }
+        .main-btn:hover, .main-btn.active { background: rgba(255,255,255,0.1); color: #fff; }
+        .main-btn.active { color: var(--accent); background: #fff; }
+
+        #nav-sub { 
+            width: 240px; background: var(--sub-bg); border-right: 1px solid #dee2e6; 
+            display: flex; flex-direction: column; box-shadow: 2px 0 5px rgba(0,0,0,0.03); flex-shrink: 0; 
+        }
+
+        .sub-header { padding: 25px 20px; font-weight: 700; font-size: 1.1rem; border-bottom: 1px solid #f0f0f0; height: 60px; display: flex; align-items: center; }
+        .sub-link { padding: 12px 20px; color: #495057; text-decoration: none; display: flex; align-items: center; transition: 0.15s; }
+        .sub-link:hover { background: #f8f9fa; color: var(--accent); }
+        .sub-link.active { color: var(--accent); background: #eef5ff; font-weight: 600; }
+        .sub-link i { margin-right: 12px; }
+
+        header.navbar { height: 60px; background: white; border-bottom: 1px solid #dee2e6; flex-shrink: 0; padding: 0 20px; }
+
+        #main-area { flex-grow: 1; display: flex; flex-direction: column; overflow: hidden; }
+        #content-wrapper { flex-grow: 1; overflow-y: auto; padding: 30px; position: relative; }
+        
+        #right-sidebar { width: 60px; background: #fff; border-left: 1px solid #dee2e6; display: flex; flex-direction: column; align-items: center; flex-shrink: 0; z-index: 1040; }
+        
+        .text-primary { color: var(--primary-color) !important; }
+        .btn-primary { background-color: var(--primary-color); border-color: var(--primary-color); }
+        .sortable-ghost { opacity: 0.2; }
+    </style>
+</head>
+<body>
+
+    @* Вызов компонента навигации, который мы создали на Шаге 2 *@
+    @await Component.InvokeAsync("Navigation")
+
+    <div id="main-area">
+        <header class="navbar d-flex align-items-center justify-content-between">
+            <div class="d-none d-sm-block">
+                <h5 class="m-0 text-muted">@ViewData["Title"]</h5>
+            </div>
+
+            <div class="d-flex align-items-center gap-3">
+                <div class="text-end lh-1 d-none d-md-block" id="user-clock-container">
+                    <div class="fw-bold" id="clock-time" style="font-size: 1.1rem;">00:00</div>
+                    <small class="text-muted" id="clock-date" style="font-size: 0.8rem;">Загрузка...</small>
+                </div>
+
+                <div class="vr mx-2"></div>
+
+                @if (User.Identity.IsAuthenticated)
+                {
+                    var user = await UserManager.GetUserAsync(User);
+                    var displayName = user != null ? $"{user.FirstName} {user.LastName}" : User.Identity.Name;
+                    var timezone = user?.TimezoneId ?? "UTC";
+
+                    <input type="hidden" id="currentUserId" value="@user?.Id" />
+                    <input type="hidden" id="user-timezone" value="@timezone" />
+
+                    <div class="dropdown">
+                        <button class="btn btn-light dropdown-toggle d-flex align-items-center gap-2 border-0 bg-transparent p-0" type="button" data-bs-toggle="dropdown">
+                            <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 36px; height: 36px;">
+                                @displayName?.Substring(0,1).ToUpper()
+                            </div>
+                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end shadow border-0">
+                            <li class="px-3 py-2 text-muted small">@displayName</li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <button class="dropdown-item" onclick="openProfileSettings()">
+                                    <i class="bi bi-person-gear me-2"></i> Настройки
+                                </button>
+                            </li>
+                            <li>
+                                <form asp-controller="Account" asp-action="Logout" method="post" class="d-inline">
+                                    <button type="submit" class="dropdown-item text-danger">
+                                        <i class="bi bi-box-arrow-right me-2"></i> Выйти
+                                    </button>
+                                </form>
+                            </li>
+                        </ul>
+                    </div>
+                }
+            </div>
+        </header>
+
+        <div id="content-wrapper">
+            <main role="main">
+                @RenderBody()
+            </main>
+        </div>
+    </div>
+
+    @* Правая панель уведомлений *@
+    <div id="right-sidebar">
+        <div class="p-3 text-center border-bottom text-primary position-relative"
+             style="height: 60px; display: flex; align-items: center; justify-content: center; cursor: pointer;"
+             data-bs-toggle="offcanvas"
+             data-bs-target="#notificationSidebar"
+             aria-controls="notificationSidebar">
+            <i class="bi bi-bell-fill fs-5" title="Уведомления"></i>
+            <span id="notificationBadge" class="position-absolute top-0 start-50 translate-middle badge rounded-pill bg-danger" style="display:none; margin-top: 15px; margin-left: 10px; font-size: 0.6em;">0</span>
+        </div>
+    </div>
+
+    @* Модальные окна и оффканвас (сохранено из оригинала) *@
+    <div class="modal fade" id="profileModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-centered">
+            <div class="modal-content" id="profileModalContent">
+                <div class="p-5 text-center">
+                    <div class="spinner-border text-primary" role="status"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="offcanvas offcanvas-end" tabindex="-1" id="notificationSidebar">
+        <div class="offcanvas-header">
+            <h5 class="offcanvas-title">Уведомления</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+        </div>
+        <div class="offcanvas-body" id="notificationList">
+            <p class="text-center text-muted mt-4">Нет новых уведомлений</p>
+        </div>
+    </div>
+
+    @* Подключение скриптов *@
+    <script src="~/lib/jquery/dist/jquery.min.js"></script>
+    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+    <script src="~/js/site.js" asp-append-version="true"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/6.0.25/signalr.min.js"></script>
+    <script src="~/js/notifications.js" asp-append-version="true"></script>
+
+    <script>
+        // Инициализация сортировки основного меню
+        const el = document.getElementById('sortable-menu');
+        if(el) {
+            Sortable.create(el, {
+                animation: 150,
+                ghostClass: 'sortable-ghost',
+                store: {
+                    get: (s) => localStorage.getItem('main-menu-order')?.split('|') || [],
+                    set: (s) => localStorage.setItem('main-menu-order', s.toArray().join('|'))
+                }
+            });
+        }
+
+        $(document).ready(function() {
+            const order = localStorage.getItem('main-menu-order');
+            if (order && order.length > 0) {
+                const container = $('#sortable-menu');
+                order.split('|').forEach(id => {
+                    const item = container.find(`[data-id="${id}"]`);
+                    if (item.length) container.append(item);
+                });
+            }
+        });
+
+        // Работа часов
+        function updateClock() {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+            const dateString = now.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
+            if(document.getElementById('clock-time')) document.getElementById('clock-time').innerText = timeString;
+            if(document.getElementById('clock-date')) document.getElementById('clock-date').innerText = dateString;
+        }
+        setInterval(updateClock, 1000);
+        updateClock();
+
+        function openProfileSettings() {
+            const modal = new bootstrap.Modal(document.getElementById('profileModal'));
+            modal.show();
+            $('#profileModalContent').load('/Profile/GetSettings');
+        }
+    </script>
+
+    @await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

@@ -1,0 +1,91 @@
+﻿@model CRM.Models.NavigationViewModel
+
+<nav id="nav-main">
+    <div id="sortable-menu" style="width: 100%; display: flex; flex-direction: column; align-items: center;">
+        <a href="/" class="main-btn @(Model.Controller == "Home" ? "active" : "")" data-id="home" title="Дашборд">
+            <i class="bi bi-speedometer2"></i>
+        </a>
+
+        @if (Model.CrmCategory != null)
+        {
+            <a href="/Contacts" class="main-btn @(Model.IsCRMActive ? "active" : "")" data-id="@Model.CrmCategory.Id" title="@Model.CrmCategory.Name">
+                <i class="bi bi-@Model.CrmCategory.Icon"></i>
+            </a>
+        }
+
+        <a href="/Employees" class="main-btn @(Model.IsCompanyActive ? "active" : "")" data-id="company" title="Компания">
+            <i class="bi bi-building"></i>
+        </a>
+        
+        <a href="/Tasks" class="main-btn @(Model.IsTasksActive ? "active" : "")" data-id="tasks" title="Задачи">
+            <i class="bi bi-list-check"></i>
+        </a>
+
+        @foreach (var cat in Model.CustomCategories.Where(c => !c.IsSystem))
+        {
+            var isActive = cat.Apps.Any(a => a.EntityCode == Model.EntityCode);
+            <a href="/Data/@cat.Apps.FirstOrDefault()?.EntityCode" class="main-btn @(isActive ? "active" : "")" data-id="@cat.Id" title="@cat.Name">
+                <i class="bi bi-@cat.Icon"></i>
+            </a>
+        }
+
+        <a href="/AppDefinitions" class="main-btn @(Model.IsSettingsActive ? "active" : "")" data-id="settings" title="Конструктор">
+            <i class="bi bi-gear"></i>
+        </a>
+    </div>
+</nav>
+
+<nav id="nav-sub">
+    @if (Model.IsCRMActive && Model.CrmCategory != null)
+    {
+        <div class="sub-header">@Model.CrmCategory.Name</div>
+        var contactApp = Model.CrmCategory.Apps.FirstOrDefault(a => a.EntityCode == "Contact");
+        if (contactApp != null)
+        {
+            <a href="/Contacts" class="sub-link @(Model.Controller == "Contacts" ? "active" : "")">
+                <i class="bi bi-@contactApp.Icon"></i> @contactApp.Name
+            </a>
+        }
+        @foreach (var app in Model.CrmCategory.Apps.Where(a => a.EntityCode != "Contact"))
+        {
+            <a href="/Data/@app.EntityCode" class="sub-link @(Model.EntityCode == app.EntityCode ? "active" : "")">
+                <i class="bi bi-@app.Icon"></i> @app.Name
+            </a>
+        }
+    }
+    else if (Model.IsCompanyActive)
+    {
+        <div class="sub-header">Компания</div>
+        <a href="/Departments" class="sub-link @(Model.Controller == "Departments" ? "active" : "")"><i class="bi bi-diagram-3"></i> Оргструктура</a>
+        <a href="/Employees" class="sub-link @(Model.Controller == "Employees" ? "active" : "")"><i class="bi bi-person-badge"></i> Сотрудники</a>
+        <a href="/Positions" class="sub-link @(Model.Controller == "Positions" ? "active" : "")"><i class="bi bi-briefcase"></i> Должности</a>
+        <a href="/EmployeeSchedule" class="sub-link @(Model.Controller == "EmployeeSchedule" ? "active" : "")"><i class="bi bi-calendar3"></i> График отсутствий</a>
+    }
+    else if (Model.IsTasksActive)
+    {
+        <div class="sub-header">Задачи</div>
+        <a href="/Tasks/CreatedByMe" class="sub-link @(Model.Action == "CreatedByMe" ? "active" : "")"><i class="bi bi-person-up"></i> Поставленные мной</a>
+        <a href="/Tasks/AssignedToMe" class="sub-link @(Model.Action == "AssignedToMe" ? "active" : "")"><i class="bi bi-person-check"></i> Назначенные мне</a>
+        <a href="/Tasks/CompletedTasks" class="sub-link @(Model.Action == "CompletedTasks" ? "active" : "")"><i class="bi bi-check2-all"></i> Выполненные</a>
+        <a href="/Tasks/OverdueTasks" class="sub-link @(Model.Action == "OverdueTasks" ? "active" : "")"><i class="bi bi-calendar-x text-danger"></i> Просроченные</a>
+        <hr />
+        <a href="/Tasks" class="sub-link @(Model.Action == "Index" ? "active" : "")"><i class="bi bi-list-ul"></i> Все задачи</a>
+    }
+    else if (Model.IsSettingsActive)
+    {
+        <div class="sub-header">Конструктор</div>
+        <hr />
+        <div class="px-3 small text-muted mb-2">Настройки системы</div>
+        <a href="/AppDefinitions" class="sub-link @(Model.Controller == "AppDefinitions" ? "active" : "")"><i class="bi bi-layers"></i> Список сущностей</a>
+        <a href="/AppCategories" class="sub-link @(Model.Controller == "AppCategories" ? "active" : "")"><i class="bi bi-folder2-open"></i> Разделы меню</a>
+        <hr />
+        <div class="px-3 small text-muted mb-2">Настройки компании</div>
+        <a href="/CompanySettings/WorkMode" class="sub-link @(Model.Controller == "CompanySettings" ? "active" : "")"><i class="bi bi-clock-history"></i> Режим работы</a>
+        <a href="/Services" class="sub-link @(Model.Controller == "Services" ? "active" : "")"><i class="bi bi-tag"></i> Справочник услуг</a>
+    }
+    else
+    {
+        <div class="sub-header">Главная</div>
+        <a href="/" class="sub-link active"><i class="bi bi-house"></i> Рабочий стол</a>
+    }
+</nav>
