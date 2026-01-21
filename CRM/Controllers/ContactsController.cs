@@ -45,7 +45,7 @@ namespace CRM.Controllers
                 .Include(c => c.Emails)
                 .AsQueryable();
 
-            // 2. ГЛОБАЛЬНЫЙ ПОИСК (ИСПРАВЛЕНО: приведение jsonb к text для PostgreSQL)
+            // 2. ГЛОБАЛЬНЫЙ ПОИСК
             if (!string.IsNullOrEmpty(searchString))
             {
                 var s = searchString.Trim();
@@ -58,7 +58,7 @@ namespace CRM.Controllers
                 );
             }
 
-            // 3. ДЕТАЛЬНАЯ ФИЛЬТРАЦИЯ (ИСПРАВЛЕНО: поддержка всех системных полей и каст jsonb)
+            // 3. ДЕТАЛЬНАЯ ФИЛЬТРАЦИЯ
             var filters = Request.Query.Where(q => q.Key.StartsWith("f_") && !string.IsNullOrEmpty(q.Value));
             foreach (var filter in filters)
             {

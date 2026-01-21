@@ -53,6 +53,10 @@ builder.Services.ConfigureApplicationCookie(options =>
     options.ExpireTimeSpan = TimeSpan.FromHours(24);
 });
 
+builder.Services.AddHttpContextAccessor();
+
+builder.Services.AddScoped<Core.Services.ICrmStyleService, Core.Services.CrmStyleService>();
+
 var app = builder.Build();
 
 // 5. Конвейер обработки (Middleware)

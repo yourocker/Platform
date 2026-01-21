@@ -24,7 +24,6 @@
     </ItemGroup>
 
     <ItemGroup>
-      <Folder Include="TagHelpers\" />
       <Folder Include="wwwroot\uploads\" />
       <Folder Include="wwwroot\uploads\AllFields\" />
       <Folder Include="wwwroot\uploads\temp\" />
