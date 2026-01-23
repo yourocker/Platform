@@ -1,6 +1,20 @@
 ﻿@model CRM.Models.NavigationViewModel
+@inject Core.Services.ICrmStyleService StyleService
+
+@{
+    // Получаем настройки оформления для вывода логотипа
+    var ui = StyleService.GetSettings();
+}
 
 <nav id="nav-main">
+    @* Блок логотипа компании *@
+    @if (!string.IsNullOrEmpty(ui.LogoPath))
+    {
+        <div class="nav-logo-container">
+            <a href="/"><img src="@ui.LogoPath" class="nav-logo" alt="Logo" /></a>
+        </div>
+    }
+
     <div id="sortable-menu" style="width: 100%; display: flex; flex-direction: column; align-items: center;">
         <a href="/" class="main-btn @(Model.Controller == "Home" ? "active" : "")" data-id="home" title="Дашборд">
             <i class="bi bi-speedometer2"></i>
@@ -60,6 +74,11 @@
         <a href="/Employees" class="sub-link @(Model.Controller == "Employees" ? "active" : "")"><i class="bi bi-person-badge"></i> Сотрудники</a>
         <a href="/Positions" class="sub-link @(Model.Controller == "Positions" ? "active" : "")"><i class="bi bi-briefcase"></i> Должности</a>
         <a href="/EmployeeSchedule" class="sub-link @(Model.Controller == "EmployeeSchedule" ? "active" : "")"><i class="bi bi-calendar3"></i> График отсутствий</a>
+        <hr />
+        <div class="px-3 small text-muted mb-2">Настройки компании</div>
+        <a href="/CompanySettings/WorkMode" class="sub-link @(Model.Controller == "CompanySettings" && Model.Action == "WorkMode" ? "active" : "")"><i class="bi bi-clock-history"></i> Режим работы</a>
+        <a href="/Services" class="sub-link @(Model.Controller == "Services" ? "active" : "")"><i class="bi bi-tag"></i> Справочник услуг</a>
+        <a href="/CompanySettings/InterfaceSettings" class="sub-link @(Model.Controller == "CompanySettings" && Model.Action == "InterfaceSettings" ? "active" : "")"><i class="bi bi-palette"></i> Оформление</a>
     }
     else if (Model.IsTasksActive)
     {
@@ -78,10 +97,6 @@
         <div class="px-3 small text-muted mb-2">Настройки системы</div>
         <a href="/AppDefinitions" class="sub-link @(Model.Controller == "AppDefinitions" ? "active" : "")"><i class="bi bi-layers"></i> Список сущностей</a>
         <a href="/AppCategories" class="sub-link @(Model.Controller == "AppCategories" ? "active" : "")"><i class="bi bi-folder2-open"></i> Разделы меню</a>
-        <hr />
-        <div class="px-3 small text-muted mb-2">Настройки компании</div>
-        <a href="/CompanySettings/WorkMode" class="sub-link @(Model.Controller == "CompanySettings" ? "active" : "")"><i class="bi bi-clock-history"></i> Режим работы</a>
-        <a href="/Services" class="sub-link @(Model.Controller == "Services" ? "active" : "")"><i class="bi bi-tag"></i> Справочник услуг</a>
     }
     else
     {

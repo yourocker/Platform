@@ -543,17 +543,49 @@ namespace Core.Migrations
                     b.Property<int>("BaseFontSize")
                         .HasColumnType("integer");
 
+                    b.Property<string>("CardBgColor")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("CardTextColor")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<Guid?>("EmployeeId")
                         .HasColumnType("uuid");
 
-                    b.Property<bool>("IsDarkMode")
-                        .HasColumnType("boolean");
+                    b.Property<string>("LogoPath")
+                        .HasColumnType("text");
 
                     b.Property<string>("MainBgColor")
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<string>("MenuTextColor")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("PageBgColor")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("PageTextColor")
+                        .IsRequired()
+                        .HasColumnType("text");
+
                     b.Property<string>("PrimaryColor")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("PrimaryContentColor")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("SubMenuBgColor")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("SubMenuTextColor")
                         .IsRequired()
                         .HasColumnType("text");
 

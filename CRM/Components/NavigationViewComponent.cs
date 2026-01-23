@@ -41,12 +41,12 @@ namespace CRM.Components
                 IsCRMActive = controller == "Contacts" || 
                               categories.Any(c => c.IsSystem && c.Name == "CRM" && c.Apps.Any(a => a.EntityCode == entityCode)),
 
-                IsCompanyActive = (new[] { "Positions", "Departments", "Employees", "EmployeeSchedule" }).Contains(controller) ||
+                IsCompanyActive = (new[] { "Positions", "Departments", "Employees", "EmployeeSchedule", "CompanySettings", "Services" }).Contains(controller) ||
                                   categories.Any(c => c.IsSystem && c.Name == "Компания" && c.Apps.Any(a => a.EntityCode == entityCode)),
 
                 IsTasksActive = controller == "Tasks",
 
-                IsSettingsActive = (new[] { "AppDefinitions", "AppCategories", "CompanySettings", "Services" }).Contains(controller)
+                IsSettingsActive = (new[] { "AppDefinitions", "AppCategories" }).Contains(controller)
             };
 
             return View(model);

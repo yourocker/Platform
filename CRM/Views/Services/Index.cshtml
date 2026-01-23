@@ -20,10 +20,10 @@
     @* --- ХЕДЕР: ЗАГОЛОВОК И УПРАВЛЕНИЕ --- *@
     <div class="row mb-4 align-items-center justify-content-between">
         <div class="col-auto">
-            <h3 class="mb-0 fw-bold text-secondary"><i class="bi bi-list-check me-2"></i>Справочник услуг</h3>
+            <h3 class="mb-0 fw-bold text-secondary"><i class="bi bi-list-check me-2"></i></h3>
             <span class="text-muted small">
                 @if (string.IsNullOrEmpty(currentSearch)) {
-                    <text>Древовидная структура (до 10 уровней)</text>
+                    <text></text>
                 } else {
                     <text>Результаты поиска: <strong>@Model.Count()</strong></text>
                 }
