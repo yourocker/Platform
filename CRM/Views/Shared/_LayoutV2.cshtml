@@ -3,13 +3,14 @@
 @using Microsoft.AspNetCore.Identity
 @using Core.Entities.Company
 @using Core.Entities.System
+@using Core.Services
 
-@inject AppDbContext Context
+@inject ICrmStyleService StyleService
 @inject UserManager<Employee> UserManager
 
 @{
-    // Загружаем настройки интерфейса из БД. Если настроек нет — берем значения по умолчанию.
-    var ui = await Context.UiSettings.FirstOrDefaultAsync() ?? new UiSettings();
+// Загружаем настройки интерфейса через сервис (с кэшированием).
+var ui = StyleService.GetSettings();
 }
 
 <!DOCTYPE html>
@@ -18,221 +19,286 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>@ViewData["Title"] - Medical CRM</title>
-    
+
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
-    
+
     <style>
-        :root { 
-            /* Динамические переменные из базы данных */
-            --main-bg: @ui.MainBgColor; 
-            --sub-bg: #ffffff; 
-            --accent: @ui.AccentColor; 
+        :root {
+            /* Основные брендовые цвета */
             --primary-color: @ui.PrimaryColor;
+            --primary-text: @ui.PrimaryContentColor;
+            --accent: @ui.AccentColor;
+
+            /* Узкое меню (Sidebar 1) */
+            --main-bg: @ui.MainBgColor;
+            --menu-text: @ui.MenuTextColor;
+
+            /* Широкое меню (Sidebar 2 / Sub-menu) */
+            --sub-bg: @ui.SubMenuBgColor;
+            --sub-text: @ui.SubMenuTextColor;
+
+            /* Рабочая область и текст */
+            --page-bg: @ui.PageBgColor;
+            --page-text: @ui.PageTextColor;
+
+            /* Карточки, таблицы и блоки данных */
+            --card-bg: @ui.CardBgColor;
+            --card-text: @ui.CardTextColor;
+
             --base-font-size: @(ui.BaseFontSize)px;
         }
 
-        body { 
-            background-color: #f4f7f6; 
-            overflow: hidden; 
-            height: 100vh; 
-            display: flex; 
-            margin: 0; 
+        body {
+            background-color: var(--page-bg);
+            color: var(--page-text);
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            margin: 0;
             font-family: 'Segoe UI', sans-serif;
             font-size: var(--base-font-size);
         }
 
-        /* Применение переменных к стилям макета */
-        #nav-main { 
-            width: 70px; 
-            background: var(--main-bg); 
-            display: flex; 
-            flex-direction: column; 
-            align-items: center; 
-            padding-top: 20px; 
-            z-index: 1050; 
-            flex-shrink: 0; 
+        /* Узкое меню */
+        #nav-main {
+            width: 70px;
+            background: var(--main-bg);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding-top: 20px;
+            z-index: 1050;
+            flex-shrink: 0;
         }
 
-        .main-btn { 
-            width: 48px; height: 48px; 
-            display: flex; align-items: center; justify-content: center; 
-            color: #a0a6ad; font-size: 1.5rem; margin-bottom: 12px; 
-            cursor: pointer; border-radius: 10px; transition: 0.2s; text-decoration: none; 
+        .nav-logo-container {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            margin-bottom: 20px;
         }
-        .main-btn:hover, .main-btn.active { background: rgba(255,255,255,0.1); color: #fff; }
-        .main-btn.active { color: var(--accent); background: #fff; }
-
-        #nav-sub { 
-            width: 240px; background: var(--sub-bg); border-right: 1px solid #dee2e6; 
-            display: flex; flex-direction: column; box-shadow: 2px 0 5px rgba(0,0,0,0.03); flex-shrink: 0; 
+        .nav-logo {
+            max-width: 48px;
+            max-height: 48px;
+            object-fit: contain;
         }
 
-        .sub-header { padding: 25px 20px; font-weight: 700; font-size: 1.1rem; border-bottom: 1px solid #f0f0f0; height: 60px; display: flex; align-items: center; }
-        .sub-link { padding: 12px 20px; color: #495057; text-decoration: none; display: flex; align-items: center; transition: 0.15s; }
-        .sub-link:hover { background: #f8f9fa; color: var(--accent); }
-        .sub-link.active { color: var(--accent); background: #eef5ff; font-weight: 600; }
+        .main-btn {
+            width: 48px; height: 48px;
+            display: flex; align-items: center; justify-content: center;
+            color: var(--menu-text);
+            opacity: 0.7;
+            font-size: 1.5rem; margin-bottom: 12px;
+            cursor: pointer; border-radius: 10px; transition: 0.2s; text-decoration: none;
+        }
+        .main-btn:hover { opacity: 1; color: var(--menu-text); background: rgba(255,255,255,0.1); }
+        .main-btn.active { color: var(--primary-text); background: var(--primary-color); opacity: 1; }
+
+        /* Вспомогательное меню */
+        #nav-sub {
+            width: 240px;
+            background: var(--sub-bg);
+            border-right: 1px solid rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.03);
+            flex-shrink: 0;
+        }
+
+        .sub-header {
+            padding: 25px 20px; font-weight: 700; font-size: 1.1rem;
+            border-bottom: 1px solid rgba(0,0,0,0.05); height: 60px;
+            display: flex; align-items: center; color: var(--sub-text);
+        }
+        .sub-link {
+            padding: 12px 20px; color: var(--sub-text); text-decoration: none;
+            display: flex; align-items: center; transition: 0.15s; opacity: 0.85;
+        }
+        .sub-link:hover { background: rgba(0,0,0,0.03); color: var(--primary-color); opacity: 1; }
+        .sub-link.active { color: var(--primary-color); background: rgba(var(--primary-color), 0.1); font-weight: 600; border-right: 3px solid var(--primary-color); }
         .sub-link i { margin-right: 12px; }
 
-        header.navbar { height: 60px; background: white; border-bottom: 1px solid #dee2e6; flex-shrink: 0; padding: 0 20px; }
+        /* Верхняя панель */
+        header.navbar {
+            height: 60px;
+            background: var(--card-bg);
+            color: var(--card-text);
+            border-bottom: 1px solid rgba(0,0,0,0.1);
+            flex-shrink: 0; padding: 0 20px;
+        }
 
         #main-area { flex-grow: 1; display: flex; flex-direction: column; overflow: hidden; }
         #content-wrapper { flex-grow: 1; overflow-y: auto; padding: 30px; position: relative; }
-        
-        #right-sidebar { width: 60px; background: #fff; border-left: 1px solid #dee2e6; display: flex; flex-direction: column; align-items: center; flex-shrink: 0; z-index: 1040; }
-        
+
+        #right-sidebar {
+            width: 60px; background: var(--card-bg);
+            border-left: 1px solid rgba(0,0,0,0.1);
+            display: flex; flex-direction: column; align-items: center; flex-shrink: 0; z-index: 1040;
+        }
+
+        /* Принудительное применение цветов карточек и таблиц */
+        .card { background-color: var(--card-bg) !important; color: var(--card-text) !important; border-color: rgba(0,0,0,0.1); }
+        .table { --bs-table-bg: var(--card-bg); --bs-table-color: var(--card-text); color: var(--card-text); border-color: rgba(0,0,0,0.1); }
+        .table td, .table th { background-color: var(--card-bg) !important; color: var(--card-text) !important; }
+
         .text-primary { color: var(--primary-color) !important; }
-        .btn-primary { background-color: var(--primary-color); border-color: var(--primary-color); }
+        .btn-primary {
+            background-color: var(--primary-color) !important;
+            border-color: var(--primary-color) !important;
+            color: var(--primary-text) !important;
+        }
+        .btn-primary:hover { filter: brightness(90%); }
         .sortable-ghost { opacity: 0.2; }
     </style>
 </head>
 <body>
 
-    @* Вызов компонента навигации, который мы создали на Шаге 2 *@
-    @await Component.InvokeAsync("Navigation")
+@* Вызов компонента навигации *@
+@await Component.InvokeAsync("Navigation")
 
-    <div id="main-area">
-        <header class="navbar d-flex align-items-center justify-content-between">
-            <div class="d-none d-sm-block">
-                <h5 class="m-0 text-muted">@ViewData["Title"]</h5>
+<div id="main-area">
+    <header class="navbar d-flex align-items-center justify-content-between">
+        <div class="d-none d-sm-block">
+            <h5 class="m-0 opacity-75">@ViewData["Title"]</h5>
+        </div>
+
+        <div class="d-flex align-items-center gap-3">
+            <div class="text-end lh-1 d-none d-md-block" id="user-clock-container">
+                <div class="fw-bold" id="clock-time" style="font-size: 1.1rem;">00:00</div>
+                <small class="opacity-50" id="clock-date" style="font-size: 0.8rem;">Загрузка...</small>
             </div>
 
-            <div class="d-flex align-items-center gap-3">
-                <div class="text-end lh-1 d-none d-md-block" id="user-clock-container">
-                    <div class="fw-bold" id="clock-time" style="font-size: 1.1rem;">00:00</div>
-                    <small class="text-muted" id="clock-date" style="font-size: 0.8rem;">Загрузка...</small>
-                </div>
+            <div class="vr mx-2"></div>
 
-                <div class="vr mx-2"></div>
+            @if (User.Identity.IsAuthenticated)
+            {
+            var user = await UserManager.GetUserAsync(User);
+            var displayName = user != null ? $"{user.FirstName} {user.LastName}" : User.Identity.Name;
+            var timezone = user?.TimezoneId ?? "UTC";
 
-                @if (User.Identity.IsAuthenticated)
-                {
-                    var user = await UserManager.GetUserAsync(User);
-                    var displayName = user != null ? $"{user.FirstName} {user.LastName}" : User.Identity.Name;
-                    var timezone = user?.TimezoneId ?? "UTC";
+            <input type="hidden" id="currentUserId" value="@user?.Id" />
+            <input type="hidden" id="user-timezone" value="@timezone" />
 
-                    <input type="hidden" id="currentUserId" value="@user?.Id" />
-                    <input type="hidden" id="user-timezone" value="@timezone" />
-
-                    <div class="dropdown">
-                        <button class="btn btn-light dropdown-toggle d-flex align-items-center gap-2 border-0 bg-transparent p-0" type="button" data-bs-toggle="dropdown">
-                            <div class="bg-primary text-white rounded-circle d-flex align-items-center justify-content-center" style="width: 36px; height: 36px;">
-                                @displayName?.Substring(0,1).ToUpper()
-                            </div>
-                        </button>
-                        <ul class="dropdown-menu dropdown-menu-end shadow border-0">
-                            <li class="px-3 py-2 text-muted small">@displayName</li>
-                            <li><hr class="dropdown-divider"></li>
-                            <li>
-                                <button class="dropdown-item" onclick="openProfileSettings()">
-                                    <i class="bi bi-person-gear me-2"></i> Настройки
-                                </button>
-                            </li>
-                            <li>
-                                <form asp-controller="Account" asp-action="Logout" method="post" class="d-inline">
-                                    <button type="submit" class="dropdown-item text-danger">
-                                        <i class="bi bi-box-arrow-right me-2"></i> Выйти
-                                    </button>
-                                </form>
-                            </li>
-                        </ul>
+            <div class="dropdown">
+                <button class="btn dropdown-toggle d-flex align-items-center gap-2 border-0 bg-transparent p-0" type="button" data-bs-toggle="dropdown">
+                    <div class="rounded-circle d-flex align-items-center justify-content-center"
+                         style="width: 36px; height: 36px; background-color: var(--primary-color); color: var(--primary-text);">
+                        @displayName?.Substring(0,1).ToUpper()
                     </div>
-                }
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end shadow border-0" style="background-color: var(--card-bg); color: var(--card-text);">
+                    <li class="px-3 py-2 opacity-50 small">@displayName</li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li>
+                        <button class="dropdown-item" onclick="openProfileSettings()" style="color: var(--card-text);">
+                            <i class="bi bi-person-gear me-2"></i> Настройки
+                        </button>
+                    </li>
+                    <li>
+                        <form asp-controller="Account" asp-action="Logout" method="post" class="d-inline">
+                            <button type="submit" class="dropdown-item text-danger">
+                                <i class="bi bi-box-arrow-right me-2"></i> Выйти
+                            </button>
+                        </form>
+                    </li>
+                </ul>
             </div>
-        </header>
-
-        <div id="content-wrapper">
-            <main role="main">
-                @RenderBody()
-            </main>
+            }
         </div>
-    </div>
+    </header>
 
-    @* Правая панель уведомлений *@
-    <div id="right-sidebar">
-        <div class="p-3 text-center border-bottom text-primary position-relative"
-             style="height: 60px; display: flex; align-items: center; justify-content: center; cursor: pointer;"
-             data-bs-toggle="offcanvas"
-             data-bs-target="#notificationSidebar"
-             aria-controls="notificationSidebar">
-            <i class="bi bi-bell-fill fs-5" title="Уведомления"></i>
-            <span id="notificationBadge" class="position-absolute top-0 start-50 translate-middle badge rounded-pill bg-danger" style="display:none; margin-top: 15px; margin-left: 10px; font-size: 0.6em;">0</span>
-        </div>
+    <div id="content-wrapper">
+        <main role="main">
+            @RenderBody()
+        </main>
     </div>
+</div>
 
-    @* Модальные окна и оффканвас (сохранено из оригинала) *@
-    <div class="modal fade" id="profileModal" tabindex="-1" aria-hidden="true">
-        <div class="modal-dialog modal-xl modal-dialog-centered">
-            <div class="modal-content" id="profileModalContent">
-                <div class="p-5 text-center">
-                    <div class="spinner-border text-primary" role="status"></div>
-                </div>
+@* Правая панель *@
+<div id="right-sidebar">
+    <div class="p-3 text-center border-bottom text-primary position-relative"
+         style="height: 60px; display: flex; align-items: center; justify-content: center; cursor: pointer;"
+         data-bs-toggle="offcanvas"
+         data-bs-target="#notificationSidebar">
+        <i class="bi bi-bell-fill fs-5" title="Уведомления"></i>
+        <span id="notificationBadge" class="position-absolute top-0 start-50 translate-middle badge rounded-pill bg-danger" style="display:none; margin-top: 15px; margin-left: 10px; font-size: 0.6em;">0</span>
+    </div>
+</div>
+
+@* Модальные окна *@
+<div class="modal fade" id="profileModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered">
+        <div class="modal-content" id="profileModalContent" style="background-color: var(--card-bg); color: var(--card-text);">
+            <div class="p-5 text-center">
+                <div class="spinner-border text-primary" role="status"></div>
             </div>
         </div>
     </div>
+</div>
 
-    <div class="offcanvas offcanvas-end" tabindex="-1" id="notificationSidebar">
-        <div class="offcanvas-header">
-            <h5 class="offcanvas-title">Уведомления</h5>
-            <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
-        </div>
-        <div class="offcanvas-body" id="notificationList">
-            <p class="text-center text-muted mt-4">Нет новых уведомлений</p>
-        </div>
+<div class="offcanvas offcanvas-end" tabindex="-1" id="notificationSidebar" style="background-color: var(--card-bg); color: var(--card-text);">
+    <div class="offcanvas-header border-bottom">
+        <h5 class="offcanvas-title">Уведомления</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
     </div>
+    <div class="offcanvas-body" id="notificationList">
+        <p class="text-center opacity-50 mt-4">Нет новых уведомлений</p>
+    </div>
+</div>
 
-    @* Подключение скриптов *@
-    <script src="~/lib/jquery/dist/jquery.min.js"></script>
-    <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
-    <script src="~/js/site.js" asp-append-version="true"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/6.0.25/signalr.min.js"></script>
-    <script src="~/js/notifications.js" asp-append-version="true"></script>
+@* Скрипты *@
+<script src="~/lib/jquery/dist/jquery.min.js"></script>
+<script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.0/Sortable.min.js"></script>
+<script src="~/js/site.js" asp-append-version="true"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/microsoft-signalr/6.0.25/signalr.min.js"></script>
+<script src="~/js/notifications.js" asp-append-version="true"></script>
 
-    <script>
-        // Инициализация сортировки основного меню
-        const el = document.getElementById('sortable-menu');
-        if(el) {
-            Sortable.create(el, {
-                animation: 150,
-                ghostClass: 'sortable-ghost',
-                store: {
-                    get: (s) => localStorage.getItem('main-menu-order')?.split('|') || [],
-                    set: (s) => localStorage.setItem('main-menu-order', s.toArray().join('|'))
-                }
-            });
-        }
-
-        $(document).ready(function() {
-            const order = localStorage.getItem('main-menu-order');
-            if (order && order.length > 0) {
-                const container = $('#sortable-menu');
-                order.split('|').forEach(id => {
-                    const item = container.find(`[data-id="${id}"]`);
-                    if (item.length) container.append(item);
-                });
+<script>
+    // Меню
+    const el = document.getElementById('sortable-menu');
+    if(el) {
+        Sortable.create(el, {
+            animation: 150,
+            ghostClass: 'sortable-ghost',
+            store: {
+                get: (s) => localStorage.getItem('main-menu-order')?.split('|') || [],
+                set: (s) => localStorage.setItem('main-menu-order', s.toArray().join('|'))
             }
         });
+    }
 
-        // Работа часов
-        function updateClock() {
-            const now = new Date();
-            const timeString = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
-            const dateString = now.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
-            if(document.getElementById('clock-time')) document.getElementById('clock-time').innerText = timeString;
-            if(document.getElementById('clock-date')) document.getElementById('clock-date').innerText = dateString;
+    $(document).ready(function() {
+        const order = localStorage.getItem('main-menu-order');
+        if (order && order.length > 0) {
+            const container = $('#sortable-menu');
+            order.split('|').forEach(id => {
+                const item = container.find(`[data-id="${id}"]`);
+                if (item.length) container.append(item);
+            });
         }
-        setInterval(updateClock, 1000);
-        updateClock();
+    });
 
-        function openProfileSettings() {
-            const modal = new bootstrap.Modal(document.getElementById('profileModal'));
-            modal.show();
-            $('#profileModalContent').load('/Profile/GetSettings');
-        }
-    </script>
+    // Часы
+    function updateClock() {
+        const now = new Date();
+        const timeString = now.toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' });
+        const dateString = now.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' });
+        if(document.getElementById('clock-time')) document.getElementById('clock-time').innerText = timeString;
+        if(document.getElementById('clock-date')) document.getElementById('clock-date').innerText = dateString;
+    }
+    setInterval(updateClock, 1000);
+    updateClock();
 
-    @await RenderSectionAsync("Scripts", required: false)
+    function openProfileSettings() {
+        const modal = new bootstrap.Modal(document.getElementById('profileModal'));
+        modal.show();
+        $('#profileModalContent').load('/Profile/GetSettings');
+    }
+</script>
+
+@await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>

@@ -1,0 +1,128 @@
+﻿@model Core.Entities.System.UiSettings
+@{
+    ViewData["Title"] = "Оформление системы";
+    Layout = "_LayoutV2";
+}
+
+@* Заголовок страницы с кнопкой сохранения *@
+<crm-page-header title="Настройки оформления" icon="palette" subtitle="Управление цветовой схемой и визуальным стилем CRM">
+    <button type="submit" form="settingsForm" crm-button variant="primary" icon="check-lg">Сохранить</button>
+</crm-page-header>
+
+<div class="row">
+    <div class="col-md-9">
+        <div crm-card>
+            <div class="card-body">
+                <form asp-action="SaveInterfaceSettings" id="settingsForm" method="post" enctype="multipart/form-data">
+                    @* Скрытые поля для сохранения ID и системных данных *@
+                    <input type="hidden" asp-for="Id" />
+                    <input type="hidden" asp-for="EmployeeId" />
+
+                    @* 1. БРЕНД И АКЦЕНТЫ *@
+                    <h5 class="mb-4 fw-bold text-primary">1. Основные акценты</h5>
+                    <div class="row g-4 mb-5">
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold text-muted text-uppercase">Основной цвет (Primary)</label>
+                            <input type="color" asp-for="PrimaryColor" class="form-control form-control-color shadow-sm w-100">
+                            <div class="form-text small">Цвет кнопок и активных элементов</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold text-muted text-uppercase">Текст на основном цвете</label>
+                            <input type="color" asp-for="PrimaryContentColor" class="form-control form-control-color shadow-sm w-100">
+                            <div class="form-text small">Цвет текста внутри кнопок</div>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold text-muted text-uppercase">Акцентный цвет</label>
+                            <input type="color" asp-for="AccentColor" class="form-control form-control-color shadow-sm w-100">
+                            <div class="form-text small">Дополнительные выделения</div>
+                        </div>
+                    </div>
+
+                    @* 2. ЛЕВЫЕ МЕНЮ *@
+                    <h5 class="mb-4 fw-bold text-primary">2. Навигационные панели</h5>
+                    <div class="row g-4 mb-5">
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold text-muted text-uppercase">Фон узкого меню</label>
+                            <input type="color" asp-for="MainBgColor" class="form-control form-control-color shadow-sm w-100">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold text-muted text-uppercase">Текст узкого меню</label>
+                            <input type="color" asp-for="MenuTextColor" class="form-control form-control-color shadow-sm w-100">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold text-muted text-uppercase">Фон подменю</label>
+                            <input type="color" asp-for="SubMenuBgColor" class="form-control form-control-color shadow-sm w-100">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold text-muted text-uppercase">Текст подменю</label>
+                            <input type="color" asp-for="SubMenuTextColor" class="form-control form-control-color shadow-sm w-100">
+                        </div>
+                    </div>
+
+                    @* 3. РАБОЧАЯ ОБЛАСТЬ И КАРТОЧКИ *@
+                    <h5 class="mb-4 fw-bold text-primary">3. Контент и таблицы</h5>
+                    <div class="row g-4 mb-5">
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold text-muted text-uppercase">Фон страницы</label>
+                            <input type="color" asp-for="PageBgColor" class="form-control form-control-color shadow-sm w-100">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold text-muted text-uppercase">Текст страницы</label>
+                            <input type="color" asp-for="PageTextColor" class="form-control form-control-color shadow-sm w-100">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold text-muted text-uppercase">Фон карточек/таблиц</label>
+                            <input type="color" asp-for="CardBgColor" class="form-control form-control-color shadow-sm w-100">
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold text-muted text-uppercase">Текст в карточках</label>
+                            <input type="color" asp-for="CardTextColor" class="form-control form-control-color shadow-sm w-100">
+                        </div>
+                    </div>
+
+                    <hr />
+
+                    @* 4. СИСТЕМНЫЕ ПАРАМЕТРЫ *@
+                    <div class="row g-4 align-items-end">
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold text-muted text-uppercase">Размер шрифта (px)</label>
+                            <input type="number" asp-for="BaseFontSize" class="form-control shadow-sm" min="10" max="24">
+                        </div>
+                        <div class="col-md-9">
+                            <label class="form-label small fw-bold text-muted text-uppercase">Логотип компании</label>
+                            <div class="input-group shadow-sm">
+                                <input type="file" name="logoFile" class="form-control" accept="image/*">
+                                @if (!string.IsNullOrEmpty(Model.LogoPath))
+                                {
+                                    <span class="input-group-text bg-white">
+                                        <img src="@Model.LogoPath" style="height: 24px;" alt="Current Logo" />
+                                    </span>
+                                }
+                            </div>
+                            <input type="hidden" asp-for="LogoPath" />
+                            <div class="form-text">Загрузите файл изображения (PNG, SVG, JPG).</div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    @* Информационный блок *@
+    <div class="col-md-3">
+        <div class="card border-0 shadow-sm bg-light mb-4">
+            <div class="card-body">
+                <h6 class="fw-bold"><i class="bi bi-info-circle me-2"></i> Как подбирать цвета?</h6>
+                <p class="small text-muted mb-0">
+                    Для хорошей читаемости всегда выбирайте контрастные пары. Если фон темный — текст должен быть максимально светлым, и наоборот.
+                </p>
+            </div>
+        </div>
+        <div class="card border-0 shadow-sm">
+            <div class="card-body small">
+                <div class="text-muted">Последнее изменение:</div>
+                <div class="fw-bold">@Model.UpdatedAt.ToString("dd.MM.yyyy HH:mm")</div>
+            </div>
+        </div>
+    </div>
+</div>

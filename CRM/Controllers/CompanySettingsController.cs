@@ -1,5 +1,7 @@
 ﻿using Core.Data;
 using Core.Entities.Company;
+using Core.Entities.System;
+using Core.Services;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System;
@@ -12,10 +14,74 @@ namespace CRM.Controllers
 {
     public class CompanySettingsController : BasePlatformController
     {
-        public CompanySettingsController(AppDbContext context, IWebHostEnvironment hostingEnvironment) 
+        private readonly ICrmStyleService _styleService;
+
+        public CompanySettingsController(
+            AppDbContext context, 
+            IWebHostEnvironment hostingEnvironment,
+            ICrmStyleService styleService) // Внедряем сервис стилей
             : base(context, hostingEnvironment)
         {
+            _styleService = styleService;
         }
+
+        /// <summary>
+        /// Страница настройки оформления интерфейса CRM.
+        /// </summary>
+        public IActionResult InterfaceSettings()
+        {
+            var settings = _styleService.GetSettings();
+            return View(settings);
+        }
+
+        /// <summary>
+        /// Сохранение настроек оформления.
+        /// </summary>
+        [HttpPost]
+        [HttpPost]
+        public async Task<IActionResult> SaveInterfaceSettings(UiSettings settings, IFormFile? logoFile)
+        {
+            if (settings == null) return RedirectToAction(nameof(InterfaceSettings));
+
+            // Обработка загрузки логотипа
+            if (logoFile != null && logoFile.Length > 0)
+            {
+                // Путь: wwwroot/uploads/logo
+                var uploadsFolder = Path.Combine(_hostingEnvironment.WebRootPath, "uploads", "logo");
+                if (!Directory.Exists(uploadsFolder)) Directory.CreateDirectory(uploadsFolder);
+
+                // Генерируем уникальное имя, чтобы избежать конфликтов
+                var fileName = Guid.NewGuid().ToString() + Path.GetExtension(logoFile.FileName);
+                var filePath = Path.Combine(uploadsFolder, fileName);
+
+                using (var fileStream = new FileStream(filePath, FileMode.Create))
+                {
+                    await logoFile.CopyToAsync(fileStream);
+                }
+
+                // Удаляем старый файл, если он был, чтобы не мусорить на диске
+                if (!string.IsNullOrEmpty(settings.LogoPath))
+                {
+                    var oldPath = Path.Combine(_hostingEnvironment.WebRootPath, settings.LogoPath.TrimStart('/'));
+                    if (System.IO.File.Exists(oldPath)) System.IO.File.Delete(oldPath);
+                }
+
+                settings.LogoPath = "/uploads/logo/" + fileName;
+            }
+            else
+            {
+                // Если новый файл не прислали, сохраняем путь к текущему логотипу из базы
+                var currentSettings = _styleService.GetSettings();
+                settings.LogoPath = currentSettings.LogoPath;
+            }
+
+            // Сохраняем все поля (включая новые цвета текста и иконок)
+            await _styleService.SaveSettingsAsync(settings);
+    
+            return RedirectToAction(nameof(InterfaceSettings));
+        }
+
+        // --- Старая рабочая реализация (НЕ ИЗМЕНЯТЬ) ---
 
         // Страница настройки режима работы и праздников
         public async Task<IActionResult> WorkMode()
