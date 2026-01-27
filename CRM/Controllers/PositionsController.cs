@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Core.Data;
@@ -17,104 +18,109 @@ namespace CRM.Controllers
         {
         }
 
-        // GET: Positions
-        public async Task<IActionResult> Index()
-        {
-            return View(await _context.Positions.OrderBy(p => p.Name).ToListAsync());
-        }
-
-        // GET: Positions/Create
-        public async Task<IActionResult> Create()
+        public async Task<IActionResult> Index(string? searchString, int? pageNumber, int? pageSize, Dictionary<string, string> filters)
         {
             await LoadDynamicFields("Position");
-            return View();
+            var query = _context.Positions.AsQueryable();
+
+            if (!string.IsNullOrWhiteSpace(searchString))
+                query = query.Where(p => EF.Functions.ILike(p.Name, $"%{searchString}%"));
+
+            if (filters != null && filters.Any())
+            {
+                foreach (var filter in filters)
+                {
+                    if (string.IsNullOrWhiteSpace(filter.Value)) continue;
+                    if (filter.Key == "f_Name")
+                        query = query.Where(p => EF.Functions.ILike(p.Name, $"%{filter.Value}%"));
+                    else if (filter.Key.StartsWith("f_dyn_"))
+                    {
+                        var fieldName = filter.Key.Replace("f_dyn_", "");
+                        query = query.Where(p => EF.Functions.ILike(p.Properties, $"%\"{fieldName}\":%\"{filter.Value}\"%"));
+                    }
+                }
+            }
+
+            int actualPageSize = pageSize ?? 10;
+            int actualPageNumber = pageNumber ?? 1;
+            int totalItems = await query.CountAsync();
+            
+            var positions = await query
+                .OrderBy(p => p.Name)
+                .Skip((actualPageNumber - 1) * actualPageSize)
+                .Take(actualPageSize)
+                .ToListAsync();
+
+            ViewBag.TotalItems = totalItems;
+            ViewBag.PageNumber = actualPageNumber;
+            ViewBag.PageSize = actualPageSize;
+            ViewBag.TotalPages = (int)Math.Ceiling(totalItems / (double)actualPageSize);
+            ViewBag.CurrentSearch = searchString;
+            ViewBag.CurrentFilters = filters ?? new Dictionary<string, string>();
+
+            return View(positions);
         }
 
-        // POST: Positions/Create
-        [HttpPost]
-        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Create() { await LoadDynamicFields("Position"); return View(); }
+
+        [HttpPost] [ValidateAntiForgeryToken]
         public async Task<IActionResult> Create(Position position, IFormCollection form)
         {
-            // 1. Загрузка файлов во временную папку
             await SaveDynamicProperties(position, form, "Position");
-
             if (ModelState.IsValid)
             {
                 position.Id = Guid.NewGuid();
                 _context.Add(position);
-                
-                // 2. Сохраняем запись
                 await _context.SaveChangesAsync();
-                
-                // 3. Перемещаем файлы из Temp в папку должности
                 FinalizeDynamicFilePaths(position, "Position", position.Id.ToString());
-                
-                // 4. Обновляем пути
                 await _context.SaveChangesAsync();
-
                 return RedirectToAction(nameof(Index));
             }
-            
             await LoadDynamicFields("Position");
             return View(position);
         }
 
-        // GET: Positions/Edit/5
         public async Task<IActionResult> Edit(Guid? id)
         {
             if (id == null) return NotFound();
-
             var position = await _context.Positions.FindAsync(id);
             if (position == null) return NotFound();
-
             await LoadDynamicFields("Position");
             return View(position);
         }
 
-        // POST: Positions/Edit/5
-        [HttpPost]
-        [ValidateAntiForgeryToken]
+        [HttpPost] [ValidateAntiForgeryToken]
         public async Task<IActionResult> Edit(Guid id, Position position, IFormCollection form)
         {
             if (id != position.Id) return NotFound();
-
-            // 1. Загрузка новых файлов во временную папку
             await SaveDynamicProperties(position, form, "Position");
-
             if (ModelState.IsValid)
             {
-                try
-                {
-                    // 2. Перемещаем новые файлы в постоянную папку
+                try {
                     FinalizeDynamicFilePaths(position, "Position", position.Id.ToString());
-
                     _context.Update(position);
                     await _context.SaveChangesAsync();
-                }
-                catch (DbUpdateConcurrencyException)
-                {
-                    if (!PositionExists(position.Id)) return NotFound();
-                    else throw;
+                } catch (DbUpdateConcurrencyException) {
+                    if (!PositionExists(position.Id)) return NotFound(); else throw;
                 }
                 return RedirectToAction(nameof(Index));
             }
-            
             await LoadDynamicFields("Position");
             return View(position);
         }
 
-        // GET: Positions/Delete/5
+        // --- GET: ПОДТВЕРЖДЕНИЕ УДАЛЕНИЯ ---
         public async Task<IActionResult> Delete(Guid? id)
         {
             if (id == null) return NotFound();
-
             var position = await _context.Positions.FirstOrDefaultAsync(m => m.Id == id);
             if (position == null) return NotFound();
-
+            
+            ViewBag.HasEmployees = await _context.StaffAppointments.AnyAsync(a => a.PositionId == id);
             return View(position);
         }
 
-        // POST: Positions/Delete/5
+        // --- POST: САМО УДАЛЕНИЕ ---
         [HttpPost, ActionName("Delete")]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteConfirmed(Guid id)
@@ -122,15 +128,16 @@ namespace CRM.Controllers
             var position = await _context.Positions.FindAsync(id);
             if (position != null)
             {
-                _context.Positions.Remove(position);
-                await _context.SaveChangesAsync();
+                var hasEmployees = await _context.StaffAppointments.AnyAsync(a => a.PositionId == id);
+                if (!hasEmployees) 
+                {
+                    _context.Positions.Remove(position);
+                    await _context.SaveChangesAsync();
+                }
             }
             return RedirectToAction(nameof(Index));
         }
 
-        private bool PositionExists(Guid id)
-        {
-            return _context.Positions.Any(e => e.Id == id);
-        }
+        private bool PositionExists(Guid id) => _context.Positions.Any(e => e.Id == id);
     }
 }

@@ -1,250 +1,208 @@
 ﻿@model Core.Entities.Company.Employee
-
 @{
     ViewData["Title"] = "Редактирование сотрудника";
-    bool isLocked = Model.IsDismissed; // Проверяем статус
+    bool isLocked = Model.IsDismissed;
 }
 
 <script src="https://cdn.jsdelivr.net/npm/inputmask@5.0.8/dist/inputmask.min.js"></script>
 
-@* Скрытый шаблон для добавления новых строк. Он всегда существует в DOM, даже если список пуст *@
+@* Шаблон для назначений *@
 <div id="appointment-template" style="display:none;">
-    <div class="row appointment-row mb-3 align-items-end">
+    <div class="row appointment-row mb-3 align-items-end g-2">
         <div class="col-md-5">
-            <label class="small text-muted">Должность</label>
-            <select name="selectedPositions" class="form-select">
+            <label class="small text-muted mb-1 d-block fw-bold">Должность</label>
+            <select name="selectedPositions" class="form-select form-select-sm">
                 <option value="">-- Выберите должность --</option>
-                @foreach(var p in (ViewBag.Positions as List<Core.Entities.Company.Position>)) 
-                { 
-                    <option value="@p.Id">@p.Name</option> 
-                }
+                @foreach(var p in (ViewBag.Positions as List<Core.Entities.Company.Position>)) { <option value="@p.Id">@p.Name</option> }
             </select>
         </div>
         <div class="col-md-5">
-            <label class="small text-muted">Подразделение</label>
-            <select name="selectedDepartments" class="form-select">
+            <label class="small text-muted mb-1 d-block fw-bold">Подразделение</label>
+            <select name="selectedDepartments" class="form-select form-select-sm">
                 <option value="">-- Выберите подразделение --</option>
-                @foreach(var d in (ViewBag.Departments as List<Core.Entities.Company.Department>)) 
-                { 
-                    <option value="@d.Id">@d.Name</option> 
-                }
+                @foreach(var d in (ViewBag.Departments as List<Core.Entities.Company.Department>)) { <option value="@d.Id">@d.Name</option> }
             </select>
         </div>
         <div class="col-md-2">
-            <button type="button" class="btn btn-outline-danger w-100" onclick="this.closest('.row').remove()">
-                <i class="bi bi-trash"></i>
-            </button>
+            <button type="button" class="btn btn-outline-danger btn-sm border-0 w-100" onclick="this.closest('.row').remove()"><i class="bi bi-trash"></i></button>
         </div>
     </div>
 </div>
 
-<div class="row justify-content-center">
-    <div class="col-md-9">
-        <div class="d-flex align-items-center justify-content-between mb-4">
-            <div class="d-flex align-items-center">
-                <a asp-action="Index" class="btn btn-outline-secondary btn-sm me-3">
-                    <i class="bi bi-arrow-left"></i>
-                </a>
-                <h2 class="mb-0">@(isLocked ? "Карточка уволенного сотрудника" : "Редактирование карточки")</h2>
-            </div>
-
-            @* Кнопка Уволить / Восстановить *@
-            <div>
-                @if (isLocked)
-                {
-                    <form asp-action="Restore" asp-route-id="@Model.Id" method="post">
-                        <button type="submit" class="btn btn-success">
-                            <i class="bi bi-person-check me-1"></i> Восстановить в штате
-                        </button>
-                    </form>
-                }
-                else
-                {
-                    <form asp-action="Dismiss" asp-route-id="@Model.Id" method="post" onsubmit="return confirm('Вы уверены, что хотите уволить сотрудника?')">
-                        <button type="submit" class="btn btn-outline-danger">
-                            <i class="bi bi-person-x me-1"></i> Уволить сотрудника
-                        </button>
-                    </form>
-                }
-            </div>
+<div class="container-fluid px-4">
+    <crm-page-header title="" icon="" subtitle="">
+        <div class="d-flex gap-2">
+            @if (isLocked)
+            {
+                <form asp-action="Restore" asp-route-id="@Model.Id" method="post">
+                    <button type="submit" crm-button variant="success" icon="person-check">Восстановить в штате</button>
+                </form>
+            }
+            else
+            {
+                <form asp-action="Dismiss" asp-route-id="@Model.Id" method="post" onsubmit="return confirm('Вы уверены, что хотите уволить сотрудника?')">
+                    <button type="submit" crm-button variant="outline-danger" icon="person-x">Уволить сотрудника</button>
+                </form>
+            }
         </div>
+    </crm-page-header>
 
-        @if (isLocked)
-        {
-            <div class="alert alert-warning border-0 shadow-sm mb-4">
-                <i class="bi bi-exclamation-triangle me-2"></i> 
-                Сотрудник уволен. Редактирование данных невозможно до момента восстановления.
-            </div>
-        }
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            @if (isLocked)
+            {
+                <div class="alert alert-warning border-0 shadow-sm mb-4">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i> 
+                    Сотрудник уволен. Редактирование данных невозможно до момента восстановления.
+                </div>
+            }
 
-        <form asp-action="Edit" method="post" enctype="multipart/form-data">
-            <input type="hidden" asp-for="Id" />
-            
-            <fieldset @(isLocked ? "disabled" : "")>
-                
-                @* 1. Личные данные *@
-                <div class="card shadow-sm border-0 mb-4 @(isLocked ? "bg-light" : "")">
-                    <div class="card-header bg-white py-3"><h5 class="mb-0 text-primary">Личные данные</h5></div>
-                    <div class="card-body p-4">
-                        <div class="row">
-                            <div class="col-md-4">
-                                <label class="fw-bold">Фамилия</label>
-                                <input asp-for="LastName" class="form-control" required />
-                            </div>
-                            <div class="col-md-4">
-                                <label class="fw-bold">Имя</label>
-                                <input asp-for="FirstName" class="form-control" required />
-                            </div>
-                            <div class="col-md-4">
-                                <label class="fw-bold">Отчество</label>
-                                <input asp-for="MiddleName" class="form-control" />
+            <form asp-action="Edit" method="post" enctype="multipart/form-data">
+                <input type="hidden" asp-for="Id" />
+                <fieldset @(isLocked ? "disabled" : "")>
+                    
+                    @* 1. Личные данные *@
+                    <div crm-card class="@(isLocked ? "bg-light opacity-75" : "")">
+                        <div class="card-header bg-transparent border-0 pt-3 px-4"><h5 class="mb-0 fw-bold text-muted text-uppercase small">Личные данные</h5></div>
+                        <div class="card-body p-4 pt-2">
+                            <div class="row g-3">
+                                <div class="col-md-4"><crm-input label="Фамилия" asp-for="LastName" required="required" /></div>
+                                <div class="col-md-4"><crm-input label="Имя" asp-for="FirstName" required="required" /></div>
+                                <div class="col-md-4"><crm-input label="Отчество" asp-for="MiddleName" /></div>
                             </div>
                         </div>
                     </div>
-                </div>
 
-                @* 2. Контакты *@
-                <div class="card shadow-sm border-0 mb-4 @(isLocked ? "bg-light" : "")">
-                    <div class="card-header bg-white py-3"><h5 class="mb-0 text-primary">Контакты</h5></div>
-                    <div class="card-body p-4">
-                        <div class="row">
-                            <div class="col-md-6">
-                                <label class="fw-bold">Телефоны</label>
-                                <div id="phone-list">
+                    @* 2. Контакты *@
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <div crm-card class="@(isLocked ? "bg-light" : "")">
+                                <div class="card-header bg-transparent border-0 d-flex justify-content-between align-items-center pt-3 px-3">
+                                    <label class="small fw-bold text-muted text-uppercase">Телефоны</label>
+                                    @if(!isLocked){ <button type="button" crm-button variant="white" icon="plus-circle" class="btn-sm border-0 text-primary shadow-none" onclick="addInput('phone-list', 'Phones')"></button> }
+                                </div>
+                                <div class="card-body p-3 pt-0" id="phone-list">
                                     @foreach (var phone in Model.Phones)
                                     {
                                         <div class="input-group mb-2">
-                                            <input name="Phones" class="form-control" value="@phone" />
-                                            @if(!isLocked){ <button type="button" class="btn btn-outline-danger" onclick="this.parentElement.remove()">-</button> }
+                                            <input name="Phones" class="form-control form-control-sm shadow-none" value="@phone" />
+                                            @if(!isLocked){ <button type="button" class="btn btn-sm btn-outline-danger shadow-none border-0" onclick="this.parentElement.remove()"><i class="bi bi-trash"></i></button> }
                                         </div>
                                     }
                                 </div>
-                                @if(!isLocked){ <button type="button" class="btn btn-sm btn-link p-0" onclick="addInput('phone-list', 'Phones')">+ Добавить</button> }
                             </div>
-                            <div class="col-md-6">
-                                <label class="fw-bold">Email</label>
-                                <div id="email-list">
+                        </div>
+                        <div class="col-md-6">
+                            <div crm-card class="@(isLocked ? "bg-light" : "")">
+                                <div class="card-header bg-transparent border-0 d-flex justify-content-between align-items-center pt-3 px-3">
+                                    <label class="small fw-bold text-muted text-uppercase">Email</label>
+                                    @if(!isLocked){ <button type="button" crm-button variant="white" icon="plus-circle" class="btn-sm border-0 text-primary shadow-none" onclick="addInput('email-list', 'Emails')"></button> }
+                                </div>
+                                <div class="card-body p-3 pt-0" id="email-list">
                                     @foreach (var email in Model.Emails)
                                     {
                                         <div class="input-group mb-2">
-                                            <input name="Emails" class="form-control" value="@email" />
-                                            @if(!isLocked){ <button type="button" class="btn btn-outline-danger" onclick="this.parentElement.remove()">-</button> }
+                                            <input name="Emails" class="form-control form-control-sm shadow-none" value="@email" />
+                                            @if(!isLocked){ <button type="button" class="btn btn-sm btn-outline-danger shadow-none border-0" onclick="this.parentElement.remove()"><i class="bi bi-trash"></i></button> }
                                         </div>
                                     }
                                 </div>
-                                @if(!isLocked){ <button type="button" class="btn btn-sm btn-link p-0" onclick="addInput('email-list', 'Emails')">+ Добавить</button> }
                             </div>
                         </div>
                     </div>
-                </div>
-                
-                @* 3. ДИНАМИЧЕСКИЕ ПОЛЯ *@
-                <partial name="_DynamicFields" model="Model" />
 
-                @* 4. Назначения *@
-                <div class="card shadow-sm border-0 mb-4 @(isLocked ? "bg-light" : "")">
-                    <div class="card-header bg-white py-3"><h5 class="mb-0 text-primary">Место работы</h5></div>
-                    <div class="card-body p-4">
-                        <div id="appointments-container">
-                            @foreach (var app in Model.StaffAppointments)
+                    @* 3. Динамические поля *@
+                    <div crm-card class="@(isLocked ? "bg-light" : "")">
+                        <div class="card-body p-4">
+                            <partial name="_DynamicFields" model="Model" />
+                        </div>
+                    </div>
+
+                    @* 4. Назначения *@
+                    <div crm-card class="@(isLocked ? "bg-light" : "")">
+                        <div class="card-header bg-transparent border-0 pt-3 px-4"><h5 class="mb-0 fw-bold text-muted text-uppercase small">Место работы</h5></div>
+                        <div class="card-body p-4 pt-0">
+                            <div id="appointments-container">
+                                @foreach (var app in Model.StaffAppointments)
+                                {
+                                    <div class="row appointment-row mb-3 align-items-end g-2">
+                                        <div class="col-md-5">
+                                            <label class="small text-muted mb-1 d-block fw-bold">Должность</label>
+                                            <select name="selectedPositions" class="form-select form-select-sm">
+                                                @foreach(var p in (ViewBag.Positions as List<Core.Entities.Company.Position>)) 
+                                                { <option value="@p.Id" selected="@(p.Id == app.PositionId)">@p.Name</option> }
+                                            </select>
+                                        </div>
+                                        <div class="col-md-5">
+                                            <label class="small text-muted mb-1 d-block fw-bold">Подразделение</label>
+                                            <select name="selectedDepartments" class="form-select form-select-sm">
+                                                @foreach(var d in (ViewBag.Departments as List<Core.Entities.Company.Department>)) 
+                                                { <option value="@d.Id" selected="@(d.Id == app.DepartmentId)">@d.Name</option> }
+                                            </select>
+                                        </div>
+                                        @if(!isLocked){ <div class="col-md-2"><button type="button" class="btn btn-sm btn-outline-danger border-0 w-100" onclick="this.closest('.row').remove()"><i class="bi bi-trash"></i></button></div> }
+                                    </div>
+                                }
+                            </div>
+                            @if(!isLocked){ <button type="button" crm-button variant="outline-primary" icon="plus-lg" class="btn-sm mt-2" onclick="addAppointment()">Добавить совмещение</button> }
+                        </div>
+                    </div>
+
+                    @* 5. Доступ *@
+                    <div crm-card class="@(isLocked ? "bg-light" : "")">
+                        <div class="card-header bg-transparent border-0 pt-3 px-4">
+                            <h5 class="mb-0 fw-bold text-muted text-uppercase small"><i class="bi bi-shield-lock me-1"></i> Доступ в систему</h5>
+                        </div>
+                        <div class="card-body p-4 pt-2">
+                            @if (ViewBag.HasLogin == true)
                             {
-                                <div class="row appointment-row mb-3 align-items-end">
-                                    <div class="col-md-5">
-                                        <label class="small text-muted">Должность</label>
-                                        <select name="selectedPositions" class="form-select">
-                                            @foreach(var p in (ViewBag.Positions as List<Core.Entities.Company.Position>)) 
-                                            { 
-                                                <option value="@p.Id" selected="@(p.Id == app.PositionId)">@p.Name</option> 
-                                            }
-                                        </select>
+                                <div class="row g-3 align-items-end">
+                                    <div class="col-md-5"><crm-input label="Логин (Email)" name="Login" value="@Model.UserName" autocomplete="off" /></div>
+                                    <div class="col-md-4"><crm-input label="Пароль" name="PassFake" value="********" readonly="readonly" /></div>
+                                    <div class="col-md-3">
+                                        <button type="button" crm-button variant="outline-danger" icon="key" class="w-100" data-bs-toggle="modal" data-bs-target="#resetPasswordModal">Сменить пароль</button>
                                     </div>
-                                    <div class="col-md-5">
-                                        <label class="small text-muted">Подразделение</label>
-                                        <select name="selectedDepartments" class="form-select">
-                                            @foreach(var d in (ViewBag.Departments as List<Core.Entities.Company.Department>)) 
-                                            { 
-                                                <option value="@d.Id" selected="@(d.Id == app.DepartmentId)">@d.Name</option> 
-                                            }
-                                        </select>
-                                    </div>
-                                    @if(!isLocked){ <div class="col-md-2"><button type="button" class="btn btn-outline-danger w-100" onclick="this.closest('.row').remove()"><i class="bi bi-trash"></i></button></div> }
+                                </div>
+                            }
+                            else
+                            {
+                                <div class="alert alert-warning border-0 small shadow-sm"><i class="bi bi-exclamation-circle me-1"></i> У сотрудника нет доступа. Заполните поля ниже для создания записи.</div>
+                                <div class="row g-3">
+                                    <div class="col-md-6"><crm-input label="Логин (Email)" name="Login" placeholder="ivanov@example.com" autocomplete="off" /></div>
+                                    <div class="col-md-6"><crm-input label="Создайте Пароль" name="NewPassword" type="password" autocomplete="new-password" /></div>
                                 </div>
                             }
                         </div>
-                        @if(!isLocked){ <button type="button" class="btn btn-sm btn-outline-primary mt-2" onclick="addAppointment()">+ Добавить совмещение</button> }
                     </div>
-                </div>
 
-                <hr class="my-4" />
-                <h4 class="mb-3"><i class="bi bi-shield-lock"></i> Доступ в систему</h4>
-
-                @if (ViewBag.HasLogin == true)
-                {
-                    <div class="row g-3 align-items-end">
-                        <div class="col-md-5">
-                            <label class="form-label">Логин (Email)</label>
-                            <input name="Login" value="@Model.UserName" class="form-control" autocomplete="off" />
-                            <div class="form-text">Вы можете изменить логин здесь.</div>
+                    @if (!isLocked)
+                    {
+                        <div class="d-flex justify-content-end gap-2 mb-5 mt-4">
+                            <a asp-action="Index" crm-button variant="outline-secondary" class="px-4">Отмена</a>
+                            <button type="submit" crm-button variant="primary" icon="check-lg" class="px-5 shadow">Сохранить изменения</button>
                         </div>
-                        <div class="col-md-4">
-                            <label class="form-label">Пароль</label>
-                            <input type="password" class="form-control bg-light" value="********" readonly />
-                        </div>
-                        <div class="col-md-3">
-                            <button type="button" class="btn btn-outline-danger w-100" data-bs-toggle="modal" data-bs-target="#resetPasswordModal">
-                                <i class="bi bi-key"></i> Сменить пароль
-                            </button>
-                        </div>
-                    </div>
-                }
-                else
-                {
-                    <div class="alert alert-warning">
-                        <i class="bi bi-exclamation-circle"></i> У сотрудника нет доступа в систему. Заполните поля ниже, чтобы создать учетную запись.
-                    </div>
-                    <div class="row g-3">
-                        <div class="col-md-6">
-                            <label class="form-label">Придумайте Логин (Email)</label>
-                            <input name="Login" class="form-control" placeholder="ivanov@example.com" autocomplete="off" />
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label">Создайте Пароль</label>
-                            <input name="NewPassword" type="password" class="form-control" autocomplete="new-password" />
-                        </div>
-                    </div>
-                }
-
-                @if (!isLocked)
-                {
-                    <div class="d-flex justify-content-end gap-2 mb-5 mt-4">
-                        <a asp-action="Index" class="btn btn-light px-4">Отмена</a>
-                        <button type="submit" class="btn btn-primary px-5">Сохранить изменения</button>
-                    </div>
-                }
-            </fieldset>
-        </form>
+                    }
+                </fieldset>
+            </form>
+        </div>
     </div>
 </div>
 
+@* Модальное окно сброса пароля *@
 <div class="modal fade" id="resetPasswordModal" tabindex="-1">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">Смена пароля сотрудника</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header bg-danger text-white border-0">
+                <h5 class="modal-title fw-bold">Смена пароля сотрудника</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
             </div>
-            <div class="modal-body">
-                <p>Вы устанавливаете новый пароль для сотрудника <strong>@Model.FullName</strong>. Старый пароль будет сброшен.</p>
+            <div class="modal-body p-4">
+                <p class="small">Установка нового пароля для <strong>@Model.FullName</strong>. Старый пароль будет сброшен.</p>
                 <form id="adminResetPassForm">
                     @Html.AntiForgeryToken()
                     <input type="hidden" name="id" value="@Model.Id" />
-                    <div class="mb-3">
-                        <label class="form-label">Новый пароль</label>
-                        <input type="password" name="newPassword" class="form-control" required minlength="4" />
-                    </div>
-                    <div class="d-grid">
-                        <button type="submit" class="btn btn-danger">Установить пароль</button>
-                    </div>
+                    <div class="mb-4"><crm-input label="Новый пароль" name="newPassword" type="password" required="required" /></div>
+                    <div class="d-grid"><button type="submit" crm-button variant="danger" icon="check-circle">Установить пароль</button></div>
                 </form>
             </div>
         </div>
@@ -253,60 +211,41 @@
 
 @section Scripts {
     @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
-    
     <script>
-        // --- 1. Скрипт масок и динамических полей ---
         function applyMasks() {
             Inputmask({"mask": "+7(999)999-99-99"}).mask(document.querySelectorAll('input[name="Phones"]'));
             Inputmask({"alias": "email"}).mask(document.querySelectorAll('input[name="Emails"]'));
         }
-
         document.addEventListener("DOMContentLoaded", applyMasks);
-        
         function addInput(cId, name) {
             const c = document.getElementById(cId);
-            const d = document.createElement('div'); d.className = 'input-group mb-2';
-            d.innerHTML = `<input name="${name}" class="form-control"><button type="button" class="btn btn-outline-danger" onclick="this.parentElement.remove()">-</button>`;
+            const d = document.createElement('div'); d.className = 'input-group mb-2 animate__animated animate__fadeIn';
+            d.innerHTML = `<input name="${name}" class="form-control form-control-sm shadow-none">
+                             <button type="button" class="btn btn-sm btn-outline-danger shadow-none border-0" onclick="this.parentElement.remove()"><i class="bi bi-trash"></i></button>`;
             c.appendChild(d);
             applyMasks();
         }
-
         function addAppointment() {
             const container = document.getElementById('appointments-container');
             const template = document.getElementById('appointment-template');
-            
-            // Находим строку внутри шаблона и клонируем её
-            const templateRow = template.querySelector('.appointment-row');
-            const newRow = templateRow.cloneNode(true);
-            
-            // Очищаем выбранные значения в новой строке
-            newRow.querySelectorAll('select').forEach(select => {
-                select.value = "";
-            });
-
+            const newRow = template.querySelector('.appointment-row').cloneNode(true);
+            newRow.classList.add('animate__animated', 'animate__fadeIn');
+            newRow.querySelectorAll('select').forEach(select => select.value = "");
             container.appendChild(newRow);
         }
-
-        // --- 2. Скрипт отправки формы смены пароля (AJAX) ---
         $('#adminResetPassForm').on('submit', function(e) {
             e.preventDefault();
             var form = $(this);
             var btn = form.find('button[type="submit"]');
-            
             btn.prop('disabled', true).text('Сохранение...');
-
             $.post('/Employees/AdminResetPassword', form.serialize())
                 .done(function() {
                     alert('Пароль успешно изменен!');
                     $('#resetPasswordModal').modal('hide');
                     form[0].reset();
                 })
-                .fail(function(xhr) {
-                    alert('Ошибка: ' + xhr.responseText);
-                })
-                .always(function() {
-                    btn.prop('disabled', false).text('Установить пароль');
-                });
+                .fail(function(xhr) { alert('Ошибка: ' + xhr.responseText); })
+                .always(function() { btn.prop('disabled', false).html('<i class="bi bi-check-circle me-1"></i> Установить пароль'); });
         });
     </script>
 }

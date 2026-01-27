@@ -2,12 +2,19 @@
 @inject Core.Services.ICrmStyleService StyleService
 
 @{
-    // Получаем настройки оформления для вывода логотипа
     var ui = StyleService.GetSettings();
+    
+    // Находим категории для вывода их динамических приложений в системные блоки
+    var companyCat = Model.CustomCategories.FirstOrDefault(c => c.Name == "Компания");
+    var settingsCat = Model.CustomCategories.FirstOrDefault(c => c.Name == "Конструктор");
+
+    // Определяем активную кастомную категорию (для тех, что созданы полностью вручную)
+    var activeCustomCategory = Model.CustomCategories
+        .Where(c => !c.IsSystem)
+        .FirstOrDefault(c => c.Apps.Any(a => a.EntityCode == Model.EntityCode));
 }
 
 <nav id="nav-main">
-    @* Блок логотипа компании *@
     @if (!string.IsNullOrEmpty(ui.LogoPath))
     {
         <div class="nav-logo-container">
@@ -35,6 +42,7 @@
             <i class="bi bi-list-check"></i>
         </a>
 
+        @* Вывод полностью кастомных разделов (Склады, Оборудование и т.д.) *@
         @foreach (var cat in Model.CustomCategories.Where(c => !c.IsSystem))
         {
             var isActive = cat.Apps.Any(a => a.EntityCode == Model.EntityCode);
@@ -53,16 +61,11 @@
     @if (Model.IsCRMActive && Model.CrmCategory != null)
     {
         <div class="sub-header">@Model.CrmCategory.Name</div>
-        var contactApp = Model.CrmCategory.Apps.FirstOrDefault(a => a.EntityCode == "Contact");
-        if (contactApp != null)
+        @foreach (var app in Model.CrmCategory.Apps.OrderBy(a => a.IsSystem ? 0 : 1).ThenBy(a => a.Name))
         {
-            <a href="/Contacts" class="sub-link @(Model.Controller == "Contacts" ? "active" : "")">
-                <i class="bi bi-@contactApp.Icon"></i> @contactApp.Name
-            </a>
-        }
-        @foreach (var app in Model.CrmCategory.Apps.Where(a => a.EntityCode != "Contact"))
-        {
-            <a href="/Data/@app.EntityCode" class="sub-link @(Model.EntityCode == app.EntityCode ? "active" : "")">
+            @* Для Контактов (системных) оставляем старый роут, для остальных — /Data/ *@
+            var url = app.EntityCode == "Contact" ? "/Contacts" : $"/Data/{app.EntityCode}";
+            <a href="@url" class="sub-link @(Model.EntityCode == app.EntityCode || (app.EntityCode == "Contact" && Model.Controller == "Contacts") ? "active" : "")">
                 <i class="bi bi-@app.Icon"></i> @app.Name
             </a>
         }
@@ -74,6 +77,18 @@
         <a href="/Employees" class="sub-link @(Model.Controller == "Employees" ? "active" : "")"><i class="bi bi-person-badge"></i> Сотрудники</a>
         <a href="/Positions" class="sub-link @(Model.Controller == "Positions" ? "active" : "")"><i class="bi bi-briefcase"></i> Должности</a>
         <a href="/EmployeeSchedule" class="sub-link @(Model.Controller == "EmployeeSchedule" ? "active" : "")"><i class="bi bi-calendar3"></i> График отсутствий</a>
+        
+        @* ДИНАМИЧЕСКИЕ ПРИЛОЖЕНИЯ В КОМПАНИИ *@
+        @if (companyCat != null)
+        {
+            @foreach (var app in companyCat.Apps.Where(a => !a.IsSystem))
+            {
+                <a href="/Data/@app.EntityCode" class="sub-link @(Model.EntityCode == app.EntityCode ? "active" : "")">
+                    <i class="bi bi-@app.Icon"></i> @app.Name
+                </a>
+            }
+        }
+        
         <hr />
         <div class="px-3 small text-muted mb-2">Настройки компании</div>
         <a href="/CompanySettings/WorkMode" class="sub-link @(Model.Controller == "CompanySettings" && Model.Action == "WorkMode" ? "active" : "")"><i class="bi bi-clock-history"></i> Режим работы</a>
@@ -86,17 +101,38 @@
         <a href="/Tasks/CreatedByMe" class="sub-link @(Model.Action == "CreatedByMe" ? "active" : "")"><i class="bi bi-person-up"></i> Поставленные мной</a>
         <a href="/Tasks/AssignedToMe" class="sub-link @(Model.Action == "AssignedToMe" ? "active" : "")"><i class="bi bi-person-check"></i> Назначенные мне</a>
         <a href="/Tasks/CompletedTasks" class="sub-link @(Model.Action == "CompletedTasks" ? "active" : "")"><i class="bi bi-check2-all"></i> Выполненные</a>
-        <a href="/Tasks/OverdueTasks" class="sub-link @(Model.Action == "OverdueTasks" ? "active" : "")"><i class="bi bi-calendar-x text-danger"></i> Просроченные</a>
         <hr />
         <a href="/Tasks" class="sub-link @(Model.Action == "Index" ? "active" : "")"><i class="bi bi-list-ul"></i> Все задачи</a>
     }
     else if (Model.IsSettingsActive)
     {
         <div class="sub-header">Конструктор</div>
+
+        @* ДИНАМИЧЕСКИЕ ПРИЛОЖЕНИЯ В КОНСТРУКТОРЕ *@
+        @if (settingsCat != null)
+        {
+            @foreach (var app in settingsCat.Apps.Where(a => !a.IsSystem))
+            {
+                <a href="/Data/@app.EntityCode" class="sub-link @(Model.EntityCode == app.EntityCode ? "active" : "")">
+                    <i class="bi bi-@app.Icon"></i> @app.Name
+                </a>
+            }
+        }
+
         <hr />
         <div class="px-3 small text-muted mb-2">Настройки системы</div>
         <a href="/AppDefinitions" class="sub-link @(Model.Controller == "AppDefinitions" ? "active" : "")"><i class="bi bi-layers"></i> Список сущностей</a>
         <a href="/AppCategories" class="sub-link @(Model.Controller == "AppCategories" ? "active" : "")"><i class="bi bi-folder2-open"></i> Разделы меню</a>
+    }
+    else if (activeCustomCategory != null)
+    {
+        <div class="sub-header">@activeCustomCategory.Name</div>
+        @foreach (var app in activeCustomCategory.Apps.OrderBy(a => a.Name))
+        {
+            <a href="/Data/@app.EntityCode" class="sub-link @(Model.EntityCode == app.EntityCode ? "active" : "")">
+                <i class="bi bi-@app.Icon"></i> @app.Name
+            </a>
+        }
     }
     else
     {

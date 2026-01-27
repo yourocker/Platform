@@ -1,89 +1,51 @@
 ﻿@using Core.Entities.Platform
 @using Newtonsoft.Json
 @using Microsoft.AspNetCore.Html
-@using Microsoft.EntityFrameworkCore
-@using Core.Data
 @model IEnumerable<Core.Entities.Platform.GenericObject>
-@inject AppDbContext dbContext
 
 @{
     var definition = ViewBag.Definition as AppDefinition;
+    var dynamicFields = ViewBag.DynamicFields as List<AppFieldDefinition> ?? new List<AppFieldDefinition>();
+    var namesMap = ViewBag.NamesMap as Dictionary<Guid, string> ?? new Dictionary<Guid, string>();
+    
     ViewData["Title"] = definition?.Name ?? "Объекты";
 
-    // 1. СОБИРАЕМ ВСЕ GUID ИЗ ДАННЫХ ПРЯМО ТУТ
-    var allGuids = new HashSet<Guid>();
-    var guidRegex = new System.Text.RegularExpressions.Regex(@"([a-fA-F0-9]{8}[-][a-fA-F0-9]{4}[-][a-fA-F0-9]{4}[-][a-fA-F0-9]{4}[-][a-fA-F0-9]{12})");
-
-    if (Model != null)
-    {
-        foreach (var obj in Model.Where(o => !string.IsNullOrEmpty(o.Properties)))
-        {
-            var matches = guidRegex.Matches(obj.Properties);
-            foreach (System.Text.RegularExpressions.Match match in matches)
-            {
-                if (Guid.TryParse(match.Value, out Guid g)) allGuids.Add(g);
-            }
-        }
-    }
-
-    // 2. СЛОВАРЬ ИМЕН (ИЩЕМ ВЕЗДЕ)
-    var namesMap = new Dictionary<Guid, string>();
-    if (allGuids.Any())
-    {
-        // Ищем в GenericObjects
-        var gNames = dbContext.GenericObjects.Where(g => allGuids.Contains(g.Id)).Select(g => new { g.Id, g.Name }).ToList();
-        foreach (var n in gNames) namesMap[n.Id] = n.Name;
-
-        // Ищем в Пациентах
-        var pNames = dbContext.Patients.Where(p => allGuids.Contains(p.Id)).Select(p => new { p.Id, Name = p.FullName }).ToList();
-        foreach (var n in pNames) namesMap[n.Id] = n.Name;
-
-        // Ищем в Сотрудниках
-        var eNames = dbContext.Employees.Where(e => allGuids.Contains(e.Id)).Select(e => new { e.Id, Name = e.FullName }).ToList();
-        foreach (var n in eNames) namesMap[n.Id] = n.Name;
-
-        // Ищем в Определениях сущностей
-        var defNames = dbContext.AppDefinitions.Where(d => allGuids.Contains(d.Id)).Select(d => new { d.Id, d.Name }).ToList();
-        foreach (var n in defNames) namesMap[n.Id] = n.Name;
-    }
+    // Метаданные пагинации из контроллера
+    int totalItems = ViewBag.TotalItems ?? 0;
+    int pageNumber = ViewBag.PageNumber ?? 1;
+    int pageSize = ViewBag.PageSize ?? 10;
+    int totalPages = ViewBag.TotalPages ?? 1;
+    string currentSearch = ViewBag.CurrentSearch;
+    var currentFilters = ViewBag.CurrentFilters as Dictionary<string, string> ?? new Dictionary<string, string>();
 }
 
 @functions {
-    string Truncate(string value)
-    {
+    string Truncate(string value) {
         if (string.IsNullOrEmpty(value)) return value;
         return value.Length <= 25 ? value : value.Substring(0, 25) + "...";
     }
 
+    // --- ЛОГИКА ОТОБРАЖЕНИЯ ЗНАЧЕНИЙ СОХРАНЕНА ПОЛНОСТЬЮ ---
     IHtmlContent renderValue(AppFieldDefinition field, string strVal, Dictionary<Guid, string> namesMap)
     {
         if (string.IsNullOrWhiteSpace(strVal)) return HtmlString.Empty;
-        
-        // Чистим от кавычек и скобок
         var cleanVal = strVal.Trim('[', ']', '"', ' ');
 
-        // Проверка на GUID
         if (Guid.TryParse(cleanVal, out Guid id))
         {
             if (namesMap != null && namesMap.TryGetValue(id, out var objectName))
             {
-                return new HtmlString($@"<span class=""badge bg-info text-dark border border-info"" title=""{objectName}"">
-                                        <i class=""bi bi-link-45deg""></i> {objectName}</span>");
+                return new HtmlString($@"<span class=""badge bg-info text-dark border border-info"" title=""{objectName}""><i class=""bi bi-link-45deg""></i> {objectName}</span>");
             }
-            // Если GUID есть, но в базе его нет
-            return new HtmlString($@"<span class=""badge bg-light text-muted border"" title=""ID не найден в БД"">
-                                    <i class=""bi bi-question-circle""></i> {cleanVal.Substring(0, 8)}...</span>");
+            return new HtmlString($@"<span class=""badge bg-light text-muted border"" title=""ID не найден""><i class=""bi bi-question-circle""></i> {cleanVal.Substring(0, 8)}...</span>");
         }
 
-        // Файлы
         if (field.DataType == FieldDataType.File)
         {
             var fileName = System.IO.Path.GetFileName(cleanVal);
-            return new HtmlString($@"<a href=""{cleanVal}"" target=""_blank"" class=""badge bg-light text-primary border text-decoration-none"" title=""{fileName}"">
-                                    <i class=""bi bi-paperclip""></i> {Truncate(fileName)}</a>");
+            return new HtmlString($@"<a href=""{cleanVal}"" target=""_blank"" class=""badge bg-light text-primary border text-decoration-none"" onclick=""event.stopPropagation();"" title=""{fileName}""><i class=""bi bi-paperclip""></i> {Truncate(fileName)}</a>");
         }
         
-        // Логика
         if (field.DataType == FieldDataType.Boolean)
         {
             return cleanVal.ToLower() == "true" 
@@ -91,7 +53,6 @@
                 : new HtmlString(@"<span class=""badge bg-light text-muted border"">Нет</span>");
         }
 
-        // Даты
         if (field.DataType == FieldDataType.Date || field.DataType == FieldDataType.DateTime)
         {
             if (DateTime.TryParse(cleanVal, out DateTime dt))
@@ -105,89 +66,125 @@
     }
 }
 
-<div class="container-fluid mt-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2><i class="bi bi-@(definition?.Icon ?? "box")"></i> @definition?.Name</h2>
-        <a asp-controller="GenericObjects" asp-action="Create" asp-route-entityCode="@definition?.EntityCode" class="btn btn-primary">
-            <i class="bi bi-plus-lg"></i> Добавить запись
-        </a>
-    </div>
+<div class="container-fluid px-4">
+    @* --- ХЕДЕР: УПРАВЛЕНИЕ ВИДОМ И ФИЛЬТРАМИ --- *@
+    <crm-page-header title="" icon="" subtitle="">
+        @* Выбор колонок *@
+        <div class="dropdown">
+            <button crm-button variant="outline-secondary" icon="view-list" class="dropdown-toggle shadow-sm" type="button" data-bs-toggle="dropdown" aria-expanded="false" data-bs-auto-close="outside">
+                Вид таблицы
+            </button>
+            <ul class="dropdown-menu shadow border-0" id="columnSelector" style="max-height: 400px; overflow-y: auto; min-width: 250px;">
+                <li><h6 class="dropdown-header">Системные</h6></li>
+                <li><div class="dropdown-item"><div class="form-check"><input class="form-check-input col-chk" type="checkbox" value="col-name" checked> <label class="form-check-label">Название</label></div></div></li>
+                <li><div class="dropdown-item"><div class="form-check"><input class="form-check-input col-chk" type="checkbox" value="col-created" checked> <label class="form-check-label">Создано</label></div></div></li>
+                <li><hr class="dropdown-divider"></li>
+                <li><h6 class="dropdown-header">Поля конструктора</h6></li>
+                @foreach (var field in dynamicFields)
+                {
+                    <li><div class="dropdown-item"><div class="form-check"><input class="form-check-input col-chk" type="checkbox" value="col-dyn-@field.SystemName" checked> <label class="form-check-label">@field.Label</label></div></div></li>
+                }
+            </ul>
+        </div>
 
-    <div class="card shadow-sm">
-        <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0">
-                <thead class="table-light">
-                    <tr>
-                        <th>Название</th>
-                        @if (definition?.Fields != null)
-                        {
-                            @foreach (var field in definition.Fields.OrderBy(f => f.SortOrder))
+        <button crm-button variant="outline-primary" icon="funnel" class="shadow-sm" type="button" data-bs-toggle="collapse" data-bs-target="#filterPanel">Фильтры</button>
+        
+        <a asp-controller="GenericObjects" asp-action="Create" asp-route-entityCode="@definition?.EntityCode" crm-button variant="primary" icon="plus-lg" class="shadow-sm px-4">
+            Добавить запись
+        </a>
+    </crm-page-header>
+
+    @* --- ФОРМА ПОИСКА И ФИЛЬТРОВ --- *@
+    <form asp-action="Index" method="get" id="mainFilterForm">
+        <input type="hidden" name="entityCode" value="@definition?.EntityCode" />
+        <input type="hidden" name="pageSize" value="@pageSize" id="hiddenPageSize" />
+        <input type="hidden" name="pageNumber" value="1" id="hiddenPageNumber" />
+
+        <div crm-card class="mb-4">
+            <div class="card-body p-3">
+                <div class="input-group input-group-lg border rounded-3 overflow-hidden">
+                    <span class="input-group-text bg-white border-0"><i class="bi bi-search text-primary"></i></span>
+                    <input type="text" name="searchString" value="@currentSearch" class="form-control border-0 shadow-none instant-filter" placeholder="Быстрый поиск по названию..." autocomplete="off"/>
+                </div>
+
+                <div class="collapse @(currentFilters.Any() ? "show" : "")" id="filterPanel">
+                    <div class="pt-4 mt-3 border-top">
+                        <div class="row row-cols-1 row-cols-md-3 row-cols-lg-4 g-3">
+                            <div class="col">
+                                <crm-input label="Название" name="filters[f_Name]" value="@(currentFilters.GetValueOrDefault("filters[f_Name]"))" class="instant-filter" />
+                            </div>
+                            @foreach (var field in dynamicFields)
                             {
-                                <th>@field.Label</th>
+                                <div class="col">
+                                    <crm-input label="@field.Label" name="filters[f_dyn_@field.SystemName]" value="@(currentFilters.GetValueOrDefault("filters[f_dyn_" + field.SystemName + "]"))" class="instant-filter" />
+                                </div>
                             }
+                        </div>
+                        <div class="text-end mt-3">
+                            <a asp-action="Index" asp-route-entityCode="@definition?.EntityCode" class="btn btn-link btn-sm text-danger text-decoration-none p-0">Сбросить всё</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+
+    @* --- ТАБЛИЦА ДАННЫХ --- *@
+    <div crm-card class="overflow-hidden">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0" id="genericTable">
+                <thead class="bg-light text-muted small text-uppercase">
+                    <tr>
+                        <th class="ps-4 col-name">Название</th>
+                        @foreach (var field in dynamicFields)
+                        {
+                            <th class="col-dyn-@field.SystemName">@field.Label</th>
                         }
-                        <th>Создано</th>
-                        <th class="text-end">Действия</th>
+                        <th class="col-created">Создано</th>
+                        <th class="text-end pe-4" style="width: 120px;">Действия</th>
                     </tr>
                 </thead>
                 <tbody>
-                    @if (Model != null)
+                    @if (!Model.Any())
+                    {
+                        <crm-table-empty is-search="@(!string.IsNullOrEmpty(currentSearch) || currentFilters.Any())" />
+                    }
+                    else
                     {
                         @foreach (var item in Model)
                         {
                             var dynamicValues = new Dictionary<string, object>();
-                            if (!string.IsNullOrEmpty(item.Properties))
-                            {
-                                try 
-                                {
-                                    dynamicValues = JsonConvert.DeserializeObject<Dictionary<string, object>>(item.Properties) 
-                                                   ?? new Dictionary<string, object>();
-                                }
-                                catch { }
+                            if (!string.IsNullOrEmpty(item.Properties)) {
+                                try { dynamicValues = JsonConvert.DeserializeObject<Dictionary<string, object>>(item.Properties) ?? new Dictionary<string, object>(); } catch { }
                             }
-
                             <tr>
-                                <td><strong>@item.Name</strong></td>
-                                @if (definition?.Fields != null)
+                                <td class="ps-4 col-name fw-bold text-dark">@item.Name</td>
+                                @foreach (var field in dynamicFields)
                                 {
-                                    @foreach (var field in definition.Fields.OrderBy(f => f.SortOrder))
-                                    {
-                                        <td>
-                                            @if (dynamicValues.TryGetValue(field.SystemName, out var val) && val != null)
-                                            {
-                                                <div class="d-flex flex-column align-items-start gap-1">
+                                    <td class="col-dyn-@field.SystemName">
+                                        @if (dynamicValues.TryGetValue(field.SystemName, out var val) && val != null)
+                                        {
+                                            <div class="d-flex flex-column align-items-start gap-1">
                                                 @if (field.IsArray && val is Newtonsoft.Json.Linq.JArray jArray)
                                                 {
-                                                    @foreach (var subVal in jArray)
-                                                    {
-                                                        @renderValue(field, subVal.ToString(), namesMap)
-                                                    }
+                                                    @foreach (var subVal in jArray) { @renderValue(field, subVal.ToString(), namesMap) }
                                                 }
                                                 else
                                                 {
                                                     @renderValue(field, val.ToString(), namesMap)
                                                 }
-                                                </div>
-                                            }
-                                            else
-                                            {
-                                                <span class="text-muted small">-</span>
-                                            }
-                                        </td>
-                                    }
+                                            </div>
+                                        }
+                                        else { <span class="text-muted small">—</span> }
+                                    </td>
                                 }
-                                <td class="text-muted small">@item.CreatedAt.ToString("g")</td>
-                                <td class="text-end">
-                                    <div class="btn-group">
-                                        <a asp-controller="GenericObjects" asp-action="Edit" asp-route-id="@item.Id" class="btn btn-sm btn-outline-primary">
-                                            <i class="bi bi-pencil"></i>
-                                        </a>
-                                        <form asp-controller="GenericObjects" asp-action="Delete" asp-route-id="@item.Id" method="post" 
-                                              onsubmit="return confirm('Удалить запись?');" style="display:inline;">
+                                <td class="col-created text-muted small">@item.CreatedAt.ToString("g")</td>
+                                <td class="text-end pe-4">
+                                    <div class="btn-group btn-group-sm shadow-sm" onclick="event.stopPropagation();">
+                                        <a asp-action="Edit" asp-route-id="@item.Id" crm-button variant="white" icon="pencil" icon-class="text-primary" class="border"></a>
+                                        <form asp-action="Delete" asp-route-id="@item.Id" method="post" onsubmit="return confirm('Удалить запись?');" style="display:inline;">
                                             @Html.AntiForgeryToken()
-                                            <button type="submit" class="btn btn-sm btn-outline-danger">
-                                                <i class="bi bi-trash"></i>
-                                            </button>
+                                            <button type="submit" crm-button variant="white" icon="trash" icon-class="text-danger" class="border"></button>
                                         </form>
                                     </div>
                                 </td>
@@ -197,5 +194,75 @@
                 </tbody>
             </table>
         </div>
+
+        @* --- ПАГИНАЦИЯ --- *@
+        <div class="card-footer bg-transparent py-3 border-top">
+            <div class="row align-items-center">
+                <div class="col-md-3 text-muted small">Показано <strong>@Model.Count()</strong> из <strong>@totalItems</strong></div>
+                <div class="col-md-6 d-flex justify-content-center"><crm-pagination total-pages="@totalPages" current-page="@pageNumber" /></div>
+                <div class="col-md-3 text-end">
+                    <select class="form-select form-select-sm d-inline-block w-auto" onchange="changePageSize(this.value)">
+                        @foreach (var size in new[] { 10, 25, 50, 100 }) { <option value="@size" selected="@(pageSize == size)">@size на стр.</option> }
+                    </select>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
+
+<script>
+    let filterTimeout;
+    document.querySelectorAll('.instant-filter').forEach(el => {
+        el.addEventListener('input', function() {
+            clearTimeout(filterTimeout);
+            filterTimeout = setTimeout(() => { 
+                document.getElementById('hiddenPageNumber').value = 1;
+                document.getElementById('mainFilterForm').submit(); 
+            }, 700);
+        });
+    });
+
+    function changePageSize(val) {
+        document.getElementById('hiddenPageSize').value = val;
+        document.getElementById('mainFilterForm').submit();
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        // Управление колонками (Уникальный ключ для каждой сущности)
+        const ENTITY_CODE = '@definition?.EntityCode';
+        const STORAGE_KEY = 'crm_cols_gen_' + ENTITY_CODE;
+        const checkboxes = document.querySelectorAll('.col-chk');
+
+        function toggleColumn(className, isVisible) {
+            document.querySelectorAll('.' + className).forEach(el => { el.style.display = isVisible ? '' : 'none'; });
+        }
+
+        let savedCols = JSON.parse(localStorage.getItem(STORAGE_KEY));
+        if (savedCols) {
+            checkboxes.forEach(chk => {
+                chk.checked = savedCols.includes(chk.value);
+                toggleColumn(chk.value, chk.checked);
+            });
+        }
+
+        checkboxes.forEach(chk => {
+            chk.addEventListener('change', function() {
+                toggleColumn(this.value, this.checked);
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(Array.from(checkboxes).filter(i => i.checked).map(i => i.value)));
+            });
+        });
+
+        // Кликабельность строк
+        document.querySelectorAll('#genericTable tbody tr').forEach(row => {
+            row.addEventListener('click', function(e) {
+                if (e.target.closest('.btn-group') || e.target.closest('a') || e.target.closest('form')) return;
+                const link = this.querySelector('a[href*="/Edit/"]');
+                if (link) window.location.href = link.href;
+            });
+        });
+    });
+</script>
+
+<style>
+    .table-hover tbody tr:hover { background-color: rgba(13, 110, 253, 0.03); cursor: pointer; }
+</style>

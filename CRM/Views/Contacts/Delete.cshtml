@@ -1,6 +1,6 @@
 ﻿@model Core.Entities.CRM.Contact
 @{
-    ViewData["Title"] = "Удаление";
+    ViewData["Title"] = "Удаление контакта";
 }
 
 <div class="container py-5">
@@ -8,23 +8,39 @@
         <div class="col-md-6 col-lg-5">
             <div crm-card class="text-center">
                 <div class="card-body p-5">
+                    @* Иконка предупреждения *@
                     <div class="mb-4">
                         <i class="bi bi-exclamation-octagon text-danger display-1 opacity-25"></i>
                     </div>
                     
-                    <h3 class="fw-bold text-secondary mb-3">Подтвердите удаление</h3>
-                    <p class="text-muted mb-4">
-                        Вы действительно хотите безвозвратно удалить контакт<br/>
-                        <strong class="text-dark fs-5">@Model.FullName</strong>?
-                    </p>
+                    <h3 class="fw-bold text-secondary mb-3">Удаление контакта</h3>
+                    
+                    <div class="alert alert-warning border-0 shadow-sm mb-4 text-start small">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        <strong>Внимание!</strong> Вы собираетесь безвозвратно удалить контакт 
+                        <strong class="text-dark">@Model.FullName</strong>. 
+                        Все связанные данные и история взаимодействия будут потеряны.
+                    </div>
+
+                    @* Сведения для проверки *@
+                    <div class="mb-4 text-start p-3 bg-light rounded border">
+                        <div class="small text-muted text-uppercase fw-bold mb-2" style="font-size: 0.7rem;">Данные записи</div>
+                        <div class="mb-1"><strong>ФИО:</strong> @Model.FullName</div>
+                        @if (Model.Phones.Any())
+                        {
+                            <div class="mb-1"><strong>Телефон:</strong> @Model.Phones.First().Number</div>
+                        }
+                        <div class="text-muted small">ID: @Model.Id</div>
+                    </div>
 
                     <form asp-action="Delete" method="post">
                         <input type="hidden" asp-for="Id" />
                         
                         <div class="d-grid gap-2">
                             <button type="submit" crm-button variant="danger" icon="trash" class="btn-lg">
-                                Удалить навсегда
+                                Подтвердить удаление
                             </button>
+                            
                             <a asp-action="Index" crm-button variant="outline-secondary" class="btn-lg">
                                 Отмена
                             </a>

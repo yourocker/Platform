@@ -3,7 +3,6 @@
 @{
     ViewData["Title"] = "Разделы меню";
 
-    // Метаданные пагинации из ViewBag
     int totalItems = ViewBag.TotalItems ?? 0;
     int pageNumber = ViewBag.PageNumber ?? 1;
     int pageSize = ViewBag.PageSize ?? 10;
@@ -12,10 +11,10 @@
 }
 
 <div class="container-fluid px-4">
-    @* --- ХЕДЕР СТРАНИЦЫ --- *@
+    @* --- УНИФИЦИРОВАННЫЙ ХЕДЕР --- *@
     <crm-page-header title="" icon="" subtitle="">
 
-        @* Настройка видимости колонок (Dropdown) *@
+        @* Настройка видимости колонок *@
         <div class="dropdown">
             <button crm-button variant="outline-secondary" icon="view-list" class="dropdown-toggle shadow-sm" type="button" id="columnToggle" data-bs-toggle="dropdown" aria-expanded="false" data-bs-auto-close="outside">
                 Вид таблицы
@@ -29,12 +28,12 @@
             </ul>
         </div>
 
-        @* Кнопка управления фильтрами *@
+        @* Фильтры *@
         <button crm-button variant="outline-primary" icon="funnel" class="shadow-sm" type="button" data-bs-toggle="collapse" data-bs-target="#filterPanel">
             Фильтры
         </button>
 
-        @* Кнопка перехода к созданию *@
+        @* Создание *@
         <a asp-action="Create" crm-button variant="primary" icon="plus-lg" class="shadow-sm px-4">
             Создать
         </a>
@@ -47,18 +46,15 @@
 
         <div crm-card class="mb-4">
             <div class="card-body p-3">
-                @* Быстрый поиск *@
                 <div class="input-group input-group-lg border rounded-3 overflow-hidden">
                     <span class="input-group-text bg-white border-0"><i class="bi bi-search text-primary"></i></span>
-                    <input type="text" name="searchString" value="@currentSearch" class="form-control border-0 shadow-none instant-filter" placeholder="Начните вводить для поиска" autocomplete="off"/>
+                    <input type="text" name="searchString" value="@currentSearch" class="form-control border-0 shadow-none instant-filter" placeholder="Поиск по названию раздела..." autocomplete="off"/>
                 </div>
 
-                @* Детальные фильтры (Спойлер) *@
                 <div class="collapse @(!string.IsNullOrEmpty(currentSearch) ? "show" : "")" id="filterPanel">
                     <div class="pt-4 mt-3 border-top">
                         <div class="row row-cols-1 row-cols-md-3 g-3">
                             <div class="col">
-                                @* Используем crm-input для унификации шрифта *@
                                 <crm-input label="Название" name="f_Name" value="@currentSearch" class="instant-filter" />
                             </div>
                         </div>
@@ -77,7 +73,7 @@
             <table class="table table-hover align-middle mb-0" id="categoriesTable">
                 <thead class="bg-light text-muted small text-uppercase">
                     <tr>
-                        <th class="pl-5 col-order" style="width: 120px;">Порядок</th>
+                        <th class="ps-4 col-order" style="width: 120px;">Порядок</th>
                         <th class="col-icon" style="width: 80px;">Иконка</th>
                         <th class="col-name">Название</th>
                         <th class="col-status">Статус</th>
@@ -85,57 +81,58 @@
                     </tr>
                 </thead>
                 <tbody>
-    @foreach (var item in Model)
-    {
-        <tr>
-            <td class="pl-5 col-order">
-                <span class="badge bg-light text-dark border fw-medium"># @item.SortOrder</span>
-            </td>
-            <td class="col-icon">
-                <div class="d-flex align-items-center justify-content-center bg-light rounded shadow-sm" style="width: 40px; height: 40px;">
-                    <i class="bi bi-@item.Icon fs-5 text-primary"></i>
-                </div>
-            </td>
-            <td class="col-name">
-                <div class="fw-bold text-dark">@item.Name</div>
-                @if (item.IsSystem)
-                {
-                    <span class="badge bg-info bg-opacity-10 text-info border-0 small py-1">Системный раздел</span>
-                }
-            </td>
-            <td class="col-status">
-                @if (item.IsSystem)
-                {
-                    <span class="badge bg-info bg-opacity-10 text-info border-0 small py-1">Защищено</span>
-                }
-                else
-                {
-                    <span class="badge bg-light text-muted border-0 small py-1">Пользовательский</span>
-                }
-            </td>
-            <td class="text-end pe-4">
-                <div class="btn-group btn-group-sm shadow-sm">
-                    @if (!item.IsSystem)
+                    @if (!Model.Any())
                     {
-                        @* Редактирование разрешено ТОЛЬКО для несистемных разделов *@
-                        <a asp-action="Edit" asp-route-id="@item.Id" 
-                           crm-button variant="white" icon="pencil-fill" icon-class="text-primary" 
-                           class="border" title="Редактировать"></a>
-
-                        <a asp-action="Delete" asp-route-id="@item.Id" 
-                           crm-button variant="white" icon="trash-fill" icon-class="text-danger" 
-                           class="border" title="Удалить"></a>
+                        @* ПРИМЕНЕНИЕ НОВОГО ФУНДАМЕНТА ПУСТЫХ СОСТОЯНИЙ *@
+                        <crm-table-empty is-search="@(!string.IsNullOrEmpty(currentSearch))" />
                     }
                     else
                     {
-                        @* Для системных — только замок *@
-                        <button crm-button variant="white" icon="lock-fill" class="border disabled opacity-50" title="Системный раздел защищен"></button>
+                        @foreach (var item in Model)
+                        {
+                            <tr>
+                                <td class="ps-4 col-order">
+                                    <span class="badge bg-light text-dark border fw-medium"># @item.SortOrder</span>
+                                </td>
+                                <td class="col-icon">
+                                    <div class="d-flex align-items-center justify-content-center bg-light rounded shadow-sm" style="width: 40px; height: 40px;">
+                                        <i class="bi bi-@item.Icon fs-5 text-primary"></i>
+                                    </div>
+                                </td>
+                                <td class="col-name">
+                                    <div class="fw-bold text-dark">@item.Name</div>
+                                    @if (item.IsSystem)
+                                    {
+                                        <span class="badge bg-info bg-opacity-10 text-info border-0 small py-1">Системный раздел</span>
+                                    }
+                                </td>
+                                <td class="col-status">
+                                    @if (item.IsSystem)
+                                    {
+                                        <span class="badge bg-info bg-opacity-10 text-info border-0 small py-1">Защищено</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge bg-light text-muted border-0 small py-1">Пользовательский</span>
+                                    }
+                                </td>
+                                <td class="text-end pe-4">
+                                    <div class="btn-group btn-group-sm shadow-sm">
+                                        @if (!item.IsSystem)
+                                        {
+                                            <a asp-action="Edit" asp-route-id="@item.Id" crm-button variant="white" icon="pencil-fill" icon-class="text-primary" class="border" title="Редактировать"></a>
+                                            <a asp-action="Delete" asp-route-id="@item.Id" crm-button variant="white" icon="trash-fill" icon-class="text-danger" class="border" title="Удалить"></a>
+                                        }
+                                        else
+                                        {
+                                            <button crm-button variant="white" icon="lock-fill" class="border disabled opacity-50" title="Системный раздел защищен"></button>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
                     }
-                </div>
-            </td>
-        </tr>
-    }
-</tbody>
+                </tbody>
             </table>
         </div>
 
@@ -146,9 +143,7 @@
                     Показано <strong>@Model.Count()</strong> из <strong>@totalItems</strong>
                 </div>
                 <div class="col-md-6 d-flex justify-content-center">
-                    <nav aria-label="Page navigation">
-                        <crm-pagination total-pages="@totalPages" current-page="@pageNumber" />
-                    </nav>
+                    <crm-pagination total-pages="@totalPages" current-page="@pageNumber" />
                 </div>
                 <div class="col-md-3 text-end">
                     <div class="d-inline-flex align-items-center">
@@ -166,7 +161,6 @@
     </div>
 </div>
 
-@* --- СКРИПТЫ --- *@
 <script>
     let filterTimeout;
     document.querySelectorAll('.instant-filter').forEach(el => {
@@ -185,7 +179,7 @@
     }
 
     document.addEventListener('DOMContentLoaded', function() {
-        const STORAGE_KEY = 'crm_categories_table_columns'; // Уникальный ключ для этой таблицы
+        const STORAGE_KEY = 'crm_categories_table_columns';
         const checkboxes = document.querySelectorAll('.col-chk');
 
         let savedCols = JSON.parse(localStorage.getItem(STORAGE_KEY));
@@ -214,7 +208,5 @@
 
 <style>
     .table-hover tbody tr:hover { background-color: rgba(13, 110, 253, 0.03); cursor: pointer; }
-    .form-check-input:checked { background-color: #0d6efd; border-color: #0d6efd; }
-    /* Обеспечиваем одинаковые отступы в хелпере */
     .dropdown-menu { font-size: 0.85rem; }
 </style>
