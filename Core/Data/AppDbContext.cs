@@ -10,6 +10,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Core.Entities.System;
 using Core.Data.Interceptors;
+using Core.Entities.CRM;
 
 namespace Core.Data
 {
@@ -63,6 +64,16 @@ namespace Core.Data
         
         // --- Таблица настроек интерфейса ---
         public DbSet<UiSettings> UiSettings { get; set; }
+        
+        // --- CRM ---
+        public DbSet<CrmPipeline> CrmPipelines { get; set; }
+        public DbSet<CrmStage> CrmStages { get; set; }
+        public DbSet<Lead> Leads { get; set; }
+        public DbSet<Deal> Deals { get; set; }
+        public DbSet<CrmResource> CrmResources { get; set; }
+        public DbSet<CrmResourceBooking> CrmResourceBookings { get; set; }
+        public DbSet<CrmDealItem> CrmDealItems { get; set; }
+        public DbSet<CrmEvent> CrmEvents { get; set; }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
@@ -205,6 +216,60 @@ namespace Core.Data
             {
                 entity.ToTable("UiSettings");
                 entity.HasIndex(e => e.EmployeeId);
+            });
+            
+            // 12. Настройка CRM: Воронки и Этапы
+            modelBuilder.Entity<CrmPipeline>(entity =>
+            {
+                entity.ToTable("CrmPipelines");
+                entity.HasKey(e => e.Id);
+                
+                entity.HasMany(p => p.Stages)
+                    .WithOne(s => s.Pipeline)
+                    .HasForeignKey(s => s.PipelineId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<CrmStage>(entity =>
+            {
+                entity.ToTable("CrmStages");
+                entity.HasIndex(e => e.PipelineId);
+            });
+
+            // 13. Настройка CRM: Лиды
+            modelBuilder.Entity<Lead>(entity =>
+            {
+                entity.ToTable("CrmLeads");
+                
+                // Наследование от GenericObject требует сохранения поддержки JSONB
+                entity.Property(e => e.Properties).HasColumnType("jsonb");
+                
+                entity.HasIndex(e => e.StageId);
+                entity.HasIndex(e => e.ResponsibleId);
+            });
+
+            // 14. Настройка CRM: Сделки
+            modelBuilder.Entity<Deal>(entity =>
+            {
+                entity.ToTable("CrmDeals");
+                
+                entity.Property(e => e.Properties).HasColumnType("jsonb");
+                
+                entity.HasIndex(e => e.StageId);
+                entity.HasIndex(e => e.ResponsibleId);
+                entity.HasIndex(e => e.ContactId);
+            });
+            
+            // 15. Настройка CRM: ресурсы и товары
+            modelBuilder.Entity<CrmResource>().ToTable("CrmResources");
+            modelBuilder.Entity<CrmResourceBooking>().ToTable("CrmResourceBookings");
+            modelBuilder.Entity<CrmDealItem>().ToTable("CrmDealItems");
+            
+            // 16. События в CRM
+            modelBuilder.Entity<CrmEvent>(entity => {
+                entity.ToTable("CrmEvents");
+                entity.HasIndex(e => new { e.TargetId, e.TargetEntityCode }); // Для быстрого поиска истории карточки
+                entity.HasIndex(e => e.CreatedAt);
             });
         }
     }

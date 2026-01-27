@@ -1,0 +1,71 @@
+﻿@model CRM.ViewModels.CRM.LeadsViewModel
+@{
+var ui = (Context.RequestServices.GetService(typeof(Core.Services.ICrmStyleService)) as Core.Services.ICrmStyleService)?.GetSettings();
+}
+
+<div class="kanban-board d-flex gap-3 pb-4 overflow-x-auto" style="min-height: 70vh;">
+    @foreach (var stage in Model.Stages)
+    {
+    var stageLeads = Model.Leads.Where(l => l.StageId == stage.Id).ToList();
+
+    <div class="kanban-column flex-shrink-0" style="width: 320px;" data-stage-id="@stage.Id">
+        <div class="kanban-header p-2 mb-2 d-flex justify-content-between align-items-center rounded-3 shadow-sm border-top border-4"
+             style="background-color: @ui.CardBgColor; border-color: @stage.Color !important; color: @ui.CardTextColor;">
+            <span class="fw-bold text-uppercase small">@stage.Name</span>
+            <span class="badge bg-light text-dark border">@stageLeads.Count</span>
+        </div>
+
+        <div class="kanban-cards-container d-flex flex-column gap-2 p-1" style="min-height: 200px;" id="stage-@stage.Id">
+            @foreach (var lead in stageLeads)
+            {
+            <div crm-card class="mb-0 shadow-sm border-start border-4 cursor-move" data-id="@lead.Id"
+                 style="border-left-color: @stage.Color !important;">
+                <div class="card-body p-3">
+                    <a asp-action="Details" asp-route-id="@lead.Id" class="text-decoration-none text-dark d-block">
+                        <div class="fw-bold mb-1">@lead.Name</div>
+                        <div class="small text-muted">@lead.CreatedAt.ToString("dd.MM HH:mm")</div>
+                    </a>
+                </div>
+            </div>
+            }
+        </div>
+    </div>
+    }
+</div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        @foreach (var stage in Model.Stages)
+        {
+        <text>
+        new Sortable(document.getElementById('stage-@stage.Id'), {
+            group: 'kanban',
+            animation: 150,
+            onEnd: function (evt) {
+                const leadId = evt.item.getAttribute('data-id');
+                const newStageId = evt.to.id.replace('stage-', '');
+                if (evt.from !== evt.to) {
+                    updateLeadStage(leadId, newStageId);
+                }
+            }
+        });
+        </text>
+        }
+    });
+
+    function updateLeadStage(leadId, newStageId) {
+        const formData = new FormData();
+        formData.append('leadId', leadId);
+        formData.append('newStageId', newStageId);
+
+        fetch('/Leads/ChangeStage', {
+            method: 'POST',
+            body: new URLSearchParams(formData)
+        }).then(res => {
+            if (!res.ok) {
+                alert('Ошибка смены этапа');
+                location.reload();
+            }
+        });
+    }
+</script>
