@@ -1,105 +1,116 @@
 ﻿@model Core.Entities.CRM.Contact
-@{ ViewData["Title"] = "Редактирование контакта"; }
+@{
+    ViewData["Title"] = "Редактирование";
+}
 
-<div class="row justify-content-center">
-    <div class="col-md-10">
-        <div class="d-flex align-items-center justify-content-between mb-4">
-            <div>
-                <h3 class="fw-bold text-secondary mb-0"><i class="bi bi-pencil-square me-2"></i>Редактирование контакта</h3>
-                <div class="text-muted small">@Model.FullName</div>
+<div class="container-fluid px-4">
+    <crm-page-header title="Редактирование" icon="pencil-square" subtitle="@Model.FullName">
+    </crm-page-header>
+
+    <form asp-action="Edit" method="post" enctype="multipart/form-data">
+        <input type="hidden" asp-for="Id" />
+        <input type="hidden" asp-for="EntityCode" />
+
+        <div class="row">
+            <div class="col-lg-8">
+                @* Основные данные *@
+                <div crm-card>
+                    <div class="card-body p-4">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <crm-input label="Фамилия" name="LastName" value="@Model.LastName" required="required" />
+                            </div>
+                            <div class="col-md-4">
+                                <crm-input label="Имя" name="FirstName" value="@Model.FirstName" required="required" />
+                            </div>
+                            <div class="col-md-4">
+                                <crm-input label="Отчество" name="MiddleName" value="@Model.MiddleName" />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                @* Телефоны и Email *@
+                <div class="row">
+                    <div class="col-md-6">
+                        <div crm-card>
+                            <div class="card-header bg-transparent border-0 d-flex justify-content-between align-items-center pt-3 px-3">
+                                <label class="small fw-bold text-muted text-uppercase">Телефоны</label>
+                                <button type="button" crm-button variant="white" icon="plus-circle" class="btn-sm border-0 text-primary" onclick="addCollectionItem('phone-list', 'PhoneNumbers', 'tel')"></button>
+                            </div>
+                            <div class="card-body p-3 pt-0" id="phone-list">
+                                @foreach (var p in Model.Phones)
+                                {
+                                    <div class="input-group mb-2">
+                                        <input type="tel" name="PhoneNumbers" value="@p.Number" class="form-control form-control-sm" />
+                                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.parentElement.remove()"><i class="bi bi-trash"></i></button>
+                                    </div>
+                                }
+                                @if (!Model.Phones.Any())
+                                {
+                                    <div class="input-group mb-2">
+                                        <input type="tel" name="PhoneNumbers" class="form-control form-control-sm" placeholder="+7..." />
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div crm-card>
+                            <div class="card-header bg-transparent border-0 d-flex justify-content-between align-items-center pt-3 px-3">
+                                <label class="small fw-bold text-muted text-uppercase">Email адреса</label>
+                                <button type="button" crm-button variant="white" icon="plus-circle" class="btn-sm border-0 text-primary" onclick="addCollectionItem('email-list', 'EmailAddresses', 'email')"></button>
+                            </div>
+                            <div class="card-body p-3 pt-0" id="email-list">
+                                @foreach (var e in Model.Emails)
+                                {
+                                    <div class="input-group mb-2">
+                                        <input type="email" name="EmailAddresses" value="@e.Email" class="form-control form-control-sm" />
+                                        <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.parentElement.remove()"><i class="bi bi-trash"></i></button>
+                                    </div>
+                                }
+                                @if (!Model.Emails.Any())
+                                {
+                                    <div class="input-group mb-2">
+                                        <input type="email" name="EmailAddresses" class="form-control form-control-sm" placeholder="mail@example.com" />
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                @* Динамические поля *@
+                <div crm-card>
+                    <div class="card-header bg-transparent border-0 pt-3 px-3">
+                        <label class="small fw-bold text-muted text-uppercase">Дополнительные поля</label>
+                    </div>
+                    <div class="card-body p-3">
+                        <partial name="_DynamicFields" model="Model" />
+                    </div>
+                </div>
+
+                @* --- БЛОК КНОПОК УПРАВЛЕНИЯ --- *@
+                <div class="mt-4 pb-5 d-flex gap-2">
+                    <button type="submit" crm-button variant="primary" icon="check-lg" class="px-5 py-2 fs-6 shadow">
+                        Сохранить изменения
+                    </button>
+                    <a asp-action="Index" crm-button variant="outline-secondary" icon="x-lg" class="px-4 py-2 fs-6">
+                        Отмена
+                    </a>
+                </div>
             </div>
         </div>
-
-        <form asp-action="Edit" method="post" enctype="multipart/form-data">
-            <input type="hidden" asp-for="Id" />
-            <input type="hidden" asp-for="EntityCode" />
-
-            <div class="card shadow-sm border-0 mb-4">
-                <div class="card-header bg-white py-3 border-0"><h5 class="mb-0 fw-bold">Основная информация</h5></div>
-                <div class="card-body p-4 pt-0">
-                    <div class="row">
-                        <div class="col-md-4 mb-3">
-                            <label class="form-label text-muted small fw-bold">ФАМИЛИЯ</label>
-                            <input asp-for="LastName" class="form-control" required />
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <label class="form-label text-muted small fw-bold">ИМЯ</label>
-                            <input asp-for="FirstName" class="form-control" required />
-                        </div>
-                        <div class="col-md-4 mb-3">
-                            <label class="form-label text-muted small fw-bold">ОТЧЕСТВО</label>
-                            <input asp-for="MiddleName" class="form-control" />
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="row">
-                <div class="col-md-6 mb-4">
-                    <div class="card shadow-sm border-0 h-100">
-                        <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center">
-                            <h5 class="mb-0 fw-bold">Телефоны</h5>
-                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="addInput('phone-container', 'PhoneNumbers', 'tel')">+ Добавить</button>
-                        </div>
-                        <div class="card-body" id="phone-container">
-                            @foreach (var p in Model.Phones)
-                            {
-                                <div class="input-group mb-2">
-                                    <input type="tel" name="PhoneNumbers" class="form-control" value="@p.Number" />
-                                    <button type="button" class="btn btn-outline-danger" onclick="this.parentElement.remove()"><i class="bi bi-x"></i></button>
-                                </div>
-                            }
-                            @if (!Model.Phones.Any())
-                            {
-                                <input type="tel" name="PhoneNumbers" class="form-control mb-2" placeholder="+7..." />
-                            }
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-6 mb-4">
-                    <div class="card shadow-sm border-0 h-100">
-                        <div class="card-header bg-white border-0 d-flex justify-content-between align-items-center">
-                            <h5 class="mb-0 fw-bold">Email</h5>
-                            <button type="button" class="btn btn-sm btn-outline-primary" onclick="addInput('email-container', 'EmailAddresses', 'email')">+ Добавить</button>
-                        </div>
-                        <div class="card-body" id="email-container">
-                            @foreach (var e in Model.Emails)
-                            {
-                                <div class="input-group mb-2">
-                                    <input type="email" name="EmailAddresses" class="form-control" value="@e.Email" />
-                                    <button type="button" class="btn btn-outline-danger" onclick="this.parentElement.remove()"><i class="bi bi-x"></i></button>
-                                </div>
-                            }
-                            @if (!Model.Emails.Any())
-                            {
-                                <input type="email" name="EmailAddresses" class="form-control mb-2" placeholder="mail@example.com" />
-                            }
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <div class="card shadow-sm border-0 mb-4">
-                <div class="card-body p-4">
-                    <partial name="_DynamicFields" model="Model" />
-                </div>
-            </div>
-
-            <div class="d-flex justify-content-between">
-                <a asp-action="Index" class="btn btn-link text-muted">Отмена</a>
-                <button type="submit" class="btn btn-primary px-5 shadow">Сохранить изменения</button>
-            </div>
-        </form>
-    </div>
+    </form>
 </div>
 
 <script>
-    function addInput(containerId, name, type) {
+    function addCollectionItem(containerId, name, type) {
         const container = document.getElementById(containerId);
         const div = document.createElement('div');
         div.className = 'input-group mb-2';
-        div.innerHTML = `<input type="${type}" name="${name}" class="form-control">
-                         <button type="button" class="btn btn-outline-danger" onclick="this.parentElement.remove()"><i class="bi bi-x"></i></button>`;
+        div.innerHTML = `<input type="${type}" name="${name}" class="form-control form-control-sm">
+                         <button type="button" class="btn btn-sm btn-outline-danger" onclick="this.parentElement.remove()"><i class="bi bi-trash"></i></button>`;
         container.appendChild(div);
     }
 </script>

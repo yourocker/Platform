@@ -5,30 +5,52 @@ using Core.Data;
 using Core.Entities.Platform;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.AspNetCore.Hosting; // ДОБАВЛЕНО: Для IWebHostEnvironment
+using Microsoft.AspNetCore.Hosting;
 
 namespace CRM.Controllers
 {
     public class AppCategoriesController : BasePlatformController
     {
-        // ИСПРАВЛЕНО: Конструктор теперь принимает два параметра и передает их родителю
         public AppCategoriesController(AppDbContext context, IWebHostEnvironment hostingEnvironment) 
             : base(context, hostingEnvironment)
         {
         }
 
-        public async Task<IActionResult> Index()
+        // ИСПРАВЛЕНО: Теперь принимает параметры для унифицированного Index
+        public async Task<IActionResult> Index(string searchString, int pageNumber = 1, int pageSize = 10)
         {
-            var categories = await _context.AppCategories
-                .OrderBy(c => c.SortOrder)
+            var query = _context.AppCategories.AsQueryable();
+
+            // 1. Логика поиска
+            if (!string.IsNullOrEmpty(searchString))
+            {
+                query = query.Where(c => c.Name.Contains(searchString));
+            }
+
+            // 2. Считаем общее кол-во для пагинации
+            var totalItems = await query.CountAsync();
+    
+            // 3. ПРАВИЛЬНАЯ СОРТИРОВКА: 
+            // Сначала системные (IsSystem = true), затем пользовательские (IsSystem = false), 
+            // и внутри этих групп уже по SortOrder.
+            var categories = await query
+                .OrderByDescending(c => c.IsSystem) // True (1) выше чем False (0)
+                .ThenBy(c => c.SortOrder)           // Затем по указанному порядку
+                .Skip((pageNumber - 1) * pageSize)
+                .Take(pageSize)
                 .ToListAsync();
+
+            // 4. Заполняем ViewBag для вьюхи
+            ViewBag.TotalItems = totalItems;
+            ViewBag.PageNumber = pageNumber;
+            ViewBag.PageSize = pageSize;
+            ViewBag.TotalPages = (int)Math.Ceiling(totalItems / (double)pageSize);
+            ViewBag.CurrentSearch = searchString;
+
             return View(categories);
         }
 
-        public IActionResult Create()
-        {
-            return View();
-        }
+        public IActionResult Create() => View();
 
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -47,10 +69,8 @@ namespace CRM.Controllers
         public async Task<IActionResult> Edit(Guid? id)
         {
             if (id == null) return NotFound();
-
             var category = await _context.AppCategories.FindAsync(id);
             if (category == null) return NotFound();
-
             return View(category);
         }
 
@@ -77,7 +97,6 @@ namespace CRM.Controllers
             return View(category);
         }
 
-        // Удаление раздела
         public async Task<IActionResult> Delete(Guid? id)
         {
             if (id == null) return NotFound();
@@ -88,7 +107,6 @@ namespace CRM.Controllers
 
             if (category == null) return NotFound();
 
-            // Проверка: нельзя удалить раздел, если в нем есть сущности
             if (category.Apps.Any())
             {
                 ViewBag.CanDelete = false;

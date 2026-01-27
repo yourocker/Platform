@@ -70,7 +70,7 @@ var currentFilters = ViewBag.CurrentFilters as Dictionary<string, string> ?? new
                 @* Быстрый поиск *@
                 <div class="input-group input-group-lg border rounded-3 overflow-hidden">
                     <span class="input-group-text bg-white border-0"><i class="bi bi-search text-primary"></i></span>
-                    <input type="text" name="searchString" value="@currentSearch" class="form-control border-0 shadow-none instant-filter" placeholder="Начните вводить для мгновенного поиска по всем полям..." autocomplete="off"/>
+                    <input type="text" name="searchString" value="@currentSearch" class="form-control border-0 shadow-none instant-filter" placeholder="Начните вводить для поиска" autocomplete="off"/>
                 </div>
 
                 @* Детальные фильтры (Спойлер) *@

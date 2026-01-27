@@ -1,73 +1,220 @@
-﻿@model IEnumerable<Core.Entities.Platform.AppCategory>
-
+﻿@using Core.Entities.Platform
+@model IEnumerable<AppCategory>
 @{
     ViewData["Title"] = "Разделы меню";
+
+    // Метаданные пагинации из ViewBag
+    int totalItems = ViewBag.TotalItems ?? 0;
+    int pageNumber = ViewBag.PageNumber ?? 1;
+    int pageSize = ViewBag.PageSize ?? 10;
+    int totalPages = ViewBag.TotalPages ?? 1;
+    string currentSearch = ViewBag.CurrentSearch;
 }
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h2>Разделы меню</h2>
-    <a asp-action="Create" class="btn btn-primary">
-        <i class="bi bi-plus-lg"></i> Добавить раздел
-    </a>
-</div>
+<div class="container-fluid px-4">
+    @* --- ХЕДЕР СТРАНИЦЫ --- *@
+    <crm-page-header title="" icon="" subtitle="">
 
-<div class="card shadow-sm border-0">
-    <div class="card-body p-0">
-        <table class="table table-hover mb-0">
-            <thead class="bg-light">
-            <tr>
-                <th class="ps-4">Порядок</th>
-                <th>Иконка</th>
-                <th>Название</th>
-                <th class="text-end pe-4">Действия</th>
-            </tr>
-            </thead>
-            <tbody>
-            @foreach (var item in Model.OrderBy(c => c.SortOrder))
-            {
-                <tr>
-                    <td class="ps-4">@item.SortOrder</td>
-                    <td>
-                        <i class="bi bi-@item.Icon text-primary me-2"></i> 
-                        <span class="text-muted small">(@item.Icon)</span>
-                    </td>
-                    <td>
-                        <span class="fw-bold">@item.Name</span>
-                        @if (item.IsSystem)
-                        {
-                            <span class="badge bg-light text-muted border ms-2">Системный</span>
-                        }
-                    </td>
-                    <td class="text-end pe-4">
-                        <div class="btn-group btn-group-sm">
-                            @if (!item.IsSystem)
-                            {
-                                @* Для твоих разделов кнопки активны *@
-                                <a asp-action="Edit" asp-route-id="@item.Id" class="btn btn-outline-secondary" title="Редактировать">
-                                    <i class="bi bi-pencil"></i>
-                                </a>
-                                <a asp-action="Delete" asp-route-id="@item.Id" class="btn btn-outline-danger" title="Удалить">
-                                    <i class="bi bi-trash"></i>
-                                </a>
-                            }
-                            else
-                            {
-                                @* Для системных (Компания, Пациенты) — замок, как в сущностях *@
-                                <button type="button" class="btn btn-outline-secondary disabled" title="Системный раздел защищен">
-                                    <i class="bi bi-lock-fill"></i>
-                                </button>
-                            }
+        @* Настройка видимости колонок (Dropdown) *@
+        <div class="dropdown">
+            <button crm-button variant="outline-secondary" icon="view-list" class="dropdown-toggle shadow-sm" type="button" id="columnToggle" data-bs-toggle="dropdown" aria-expanded="false" data-bs-auto-close="outside">
+                Вид таблицы
+            </button>
+            <ul class="dropdown-menu shadow border-0" aria-labelledby="columnToggle" id="columnSelector" style="min-width: 250px;">
+                <li><h6 class="dropdown-header">Поля таблицы</h6></li>
+                <li><div class="dropdown-item"><div class="form-check"><input class="form-check-input col-chk" type="checkbox" value="col-order" checked> <label class="form-check-label">Порядок</label></div></div></li>
+                <li><div class="dropdown-item"><div class="form-check"><input class="form-check-input col-chk" type="checkbox" value="col-icon" checked> <label class="form-check-label">Иконка</label></div></div></li>
+                <li><div class="dropdown-item"><div class="form-check"><input class="form-check-input col-chk" type="checkbox" value="col-name" checked> <label class="form-check-label">Название</label></div></div></li>
+                <li><div class="dropdown-item"><div class="form-check"><input class="form-check-input col-chk" type="checkbox" value="col-status" checked> <label class="form-check-label">Тип (Системный)</label></div></div></li>
+            </ul>
+        </div>
+
+        @* Кнопка управления фильтрами *@
+        <button crm-button variant="outline-primary" icon="funnel" class="shadow-sm" type="button" data-bs-toggle="collapse" data-bs-target="#filterPanel">
+            Фильтры
+        </button>
+
+        @* Кнопка перехода к созданию *@
+        <a asp-action="Create" crm-button variant="primary" icon="plus-lg" class="shadow-sm px-4">
+            Создать
+        </a>
+    </crm-page-header>
+
+    @* --- ФИЛЬТРЫ И ПОИСК --- *@
+    <form asp-action="Index" method="get" id="mainFilterForm">
+        <input type="hidden" name="pageSize" value="@pageSize" id="hiddenPageSize" />
+        <input type="hidden" name="pageNumber" value="1" id="hiddenPageNumber" />
+
+        <div crm-card class="mb-4">
+            <div class="card-body p-3">
+                @* Быстрый поиск *@
+                <div class="input-group input-group-lg border rounded-3 overflow-hidden">
+                    <span class="input-group-text bg-white border-0"><i class="bi bi-search text-primary"></i></span>
+                    <input type="text" name="searchString" value="@currentSearch" class="form-control border-0 shadow-none instant-filter" placeholder="Начните вводить для поиска" autocomplete="off"/>
+                </div>
+
+                @* Детальные фильтры (Спойлер) *@
+                <div class="collapse @(!string.IsNullOrEmpty(currentSearch) ? "show" : "")" id="filterPanel">
+                    <div class="pt-4 mt-3 border-top">
+                        <div class="row row-cols-1 row-cols-md-3 g-3">
+                            <div class="col">
+                                @* Используем crm-input для унификации шрифта *@
+                                <crm-input label="Название" name="f_Name" value="@currentSearch" class="instant-filter" />
+                            </div>
                         </div>
-                    </td>
-                </tr>
-            }
-            @if (!Model.Any())
-            {
-                <tr>
-                    <td colspan="4" class="text-center py-4 text-muted">Разделы еще не созданы</td>
-                </tr>
-            }
-            </tbody>
-        </table>
+                        <div class="text-end mt-3">
+                            <a asp-action="Index" class="btn btn-link btn-sm text-danger text-decoration-none">Очистить всё</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+
+    @* --- ТАБЛИЦА --- *@
+    <div crm-card class="overflow-hidden">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0" id="categoriesTable">
+                <thead class="bg-light text-muted small text-uppercase">
+                    <tr>
+                        <th class="pl-5 col-order" style="width: 120px;">Порядок</th>
+                        <th class="col-icon" style="width: 80px;">Иконка</th>
+                        <th class="col-name">Название</th>
+                        <th class="col-status">Статус</th>
+                        <th class="text-end pe-4">Действия</th>
+                    </tr>
+                </thead>
+                <tbody>
+    @foreach (var item in Model)
+    {
+        <tr>
+            <td class="pl-5 col-order">
+                <span class="badge bg-light text-dark border fw-medium"># @item.SortOrder</span>
+            </td>
+            <td class="col-icon">
+                <div class="d-flex align-items-center justify-content-center bg-light rounded shadow-sm" style="width: 40px; height: 40px;">
+                    <i class="bi bi-@item.Icon fs-5 text-primary"></i>
+                </div>
+            </td>
+            <td class="col-name">
+                <div class="fw-bold text-dark">@item.Name</div>
+                @if (item.IsSystem)
+                {
+                    <span class="badge bg-info bg-opacity-10 text-info border-0 small py-1">Системный раздел</span>
+                }
+            </td>
+            <td class="col-status">
+                @if (item.IsSystem)
+                {
+                    <span class="badge bg-info bg-opacity-10 text-info border-0 small py-1">Защищено</span>
+                }
+                else
+                {
+                    <span class="badge bg-light text-muted border-0 small py-1">Пользовательский</span>
+                }
+            </td>
+            <td class="text-end pe-4">
+                <div class="btn-group btn-group-sm shadow-sm">
+                    @if (!item.IsSystem)
+                    {
+                        @* Редактирование разрешено ТОЛЬКО для несистемных разделов *@
+                        <a asp-action="Edit" asp-route-id="@item.Id" 
+                           crm-button variant="white" icon="pencil-fill" icon-class="text-primary" 
+                           class="border" title="Редактировать"></a>
+
+                        <a asp-action="Delete" asp-route-id="@item.Id" 
+                           crm-button variant="white" icon="trash-fill" icon-class="text-danger" 
+                           class="border" title="Удалить"></a>
+                    }
+                    else
+                    {
+                        @* Для системных — только замок *@
+                        <button crm-button variant="white" icon="lock-fill" class="border disabled opacity-50" title="Системный раздел защищен"></button>
+                    }
+                </div>
+            </td>
+        </tr>
+    }
+</tbody>
+            </table>
+        </div>
+
+        @* --- ПАГИНАЦИЯ --- *@
+        <div class="card-footer bg-transparent py-3 border-top">
+            <div class="row align-items-center">
+                <div class="col-md-3 text-muted small">
+                    Показано <strong>@Model.Count()</strong> из <strong>@totalItems</strong>
+                </div>
+                <div class="col-md-6 d-flex justify-content-center">
+                    <nav aria-label="Page navigation">
+                        <crm-pagination total-pages="@totalPages" current-page="@pageNumber" />
+                    </nav>
+                </div>
+                <div class="col-md-3 text-end">
+                    <div class="d-inline-flex align-items-center">
+                        <span class="text-muted small me-2">На странице:</span>
+                        <select class="form-select form-select-sm" style="width: auto;" onchange="changePageSize(this.value)">
+                            @foreach (var size in new[] { 10, 25, 50, 100 })
+                            {
+                                <option value="@size" selected="@(pageSize == size)">@size</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
+
+@* --- СКРИПТЫ --- *@
+<script>
+    let filterTimeout;
+    document.querySelectorAll('.instant-filter').forEach(el => {
+        el.addEventListener('input', function() {
+            clearTimeout(filterTimeout);
+            filterTimeout = setTimeout(() => {
+                document.getElementById('hiddenPageNumber').value = 1;
+                document.getElementById('mainFilterForm').submit();
+            }, 700);
+        });
+    });
+
+    function changePageSize(val) {
+        document.getElementById('hiddenPageSize').value = val;
+        document.getElementById('mainFilterForm').submit();
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const STORAGE_KEY = 'crm_categories_table_columns'; // Уникальный ключ для этой таблицы
+        const checkboxes = document.querySelectorAll('.col-chk');
+
+        let savedCols = JSON.parse(localStorage.getItem(STORAGE_KEY));
+        if (savedCols) {
+            checkboxes.forEach(chk => {
+                chk.checked = savedCols.includes(chk.value);
+                toggleColumn(chk.value, chk.checked);
+            });
+        }
+
+        checkboxes.forEach(chk => {
+            chk.addEventListener('change', function() {
+                toggleColumn(this.value, this.checked);
+                const activeCols = Array.from(checkboxes).filter(i => i.checked).map(i => i.value);
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(activeCols));
+            });
+        });
+
+        function toggleColumn(className, isVisible) {
+            document.querySelectorAll('.' + className).forEach(el => {
+                el.style.display = isVisible ? '' : 'none';
+            });
+        }
+    });
+</script>
+
+<style>
+    .table-hover tbody tr:hover { background-color: rgba(13, 110, 253, 0.03); cursor: pointer; }
+    .form-check-input:checked { background-color: #0d6efd; border-color: #0d6efd; }
+    /* Обеспечиваем одинаковые отступы в хелпере */
+    .dropdown-menu { font-size: 0.85rem; }
+</style>
