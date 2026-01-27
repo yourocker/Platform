@@ -23,30 +23,54 @@ namespace CRM.Controllers
         }
 
         public async Task<IActionResult> Index(Guid? pipelineId, string view = "kanban", string searchString = "", int pageNumber = 1, int pageSize = 10)
-        {
-            var pipelines = await _context.CrmPipelines.Where(p => p.TargetEntityCode == "Lead" && p.IsActive).ToListAsync();
-            var currentPipeline = pipelineId.HasValue 
-                ? pipelines.FirstOrDefault(p => p.Id == pipelineId) 
-                : pipelines.OrderBy(p => p.SortOrder).FirstOrDefault();
+{
+    // 1. Нормализуем режим отображения
+    view = string.IsNullOrEmpty(view) ? "kanban" : view.ToLower().Trim();
 
-            if (currentPipeline == null) return NotFound("Воронка не найдена.");
+    var pipelines = await _context.CrmPipelines.Where(p => p.TargetEntityCode == "Lead" && p.IsActive).ToListAsync();
+    var currentPipeline = pipelineId.HasValue 
+        ? pipelines.FirstOrDefault(p => p.Id == pipelineId) 
+        : pipelines.OrderBy(p => p.SortOrder).FirstOrDefault();
 
-            var stages = await _context.CrmStages.Where(s => s.PipelineId == currentPipeline.Id).OrderBy(s => s.SortOrder).ToListAsync();
-            var appDef = await _context.AppDefinitions.Include(a => a.Fields).FirstOrDefaultAsync(a => a.EntityCode == "Lead");
-            var dynamicFields = appDef?.Fields.OrderBy(f => f.SortOrder).ToList() ?? new();
+    if (currentPipeline == null) return NotFound("Воронка не найдена.");
 
-            var query = _context.Leads.Where(l => l.PipelineId == currentPipeline.Id && !l.IsConverted).AsQueryable();
-            if (!string.IsNullOrEmpty(searchString))
-            {
-                var s = searchString.Trim();
-                query = query.Where(l => EF.Functions.ILike(l.Name, $"%{s}%") || (l.Properties != null && EF.Functions.ILike((string)(object)l.Properties, $"%{s}%")));
-            }
+    var stages = await _context.CrmStages.Where(s => s.PipelineId == currentPipeline.Id).OrderBy(s => s.SortOrder).ToListAsync();
+    var appDef = await _context.AppDefinitions.Include(a => a.Fields).FirstOrDefaultAsync(a => a.EntityCode == "Lead");
+    var dynamicFields = appDef?.Fields.OrderBy(f => f.SortOrder).ToList() ?? new();
 
-            var totalItems = await query.CountAsync();
-            var leads = await query.Include(l => l.CurrentStage).OrderByDescending(l => l.CreatedAt).Skip((pageNumber - 1) * pageSize).Take(pageSize).ToListAsync();
+    var query = _context.Leads.Where(l => l.PipelineId == currentPipeline.Id && !l.IsConverted).AsQueryable();
+    
+    // Фильтрация
+    if (!string.IsNullOrEmpty(searchString))
+    {
+        var s = searchString.Trim();
+        query = query.Where(l => EF.Functions.ILike(l.Name, $"%{s}%") || (l.Properties != null && EF.Functions.ILike((string)(object)l.Properties, $"%{s}%")));
+    }
 
-            return View(new LeadsViewModel { CurrentPipeline = currentPipeline, AllPipelines = pipelines, Stages = stages, Leads = leads, DynamicFields = dynamicFields, ViewMode = view, SearchString = searchString, PageNumber = pageNumber, PageSize = pageSize, TotalItems = totalItems });
-        }
+    var totalItems = await query.CountAsync();
+    
+    // 2. В режиме Канбан отключаем пагинацию (берем топ-500 для доски), в Списке оставляем как есть
+    List<Lead> leads;
+    if (view == "kanban") {
+        leads = await query.Include(l => l.CurrentStage).OrderByDescending(l => l.CreatedAt).Take(500).ToListAsync();
+    } else {
+        leads = await query.Include(l => l.CurrentStage).OrderByDescending(l => l.CreatedAt)
+                           .Skip((pageNumber - 1) * pageSize).Take(pageSize).ToListAsync();
+    }
+
+    return View(new LeadsViewModel { 
+        CurrentPipeline = currentPipeline, 
+        AllPipelines = pipelines, 
+        Stages = stages, 
+        Leads = leads, 
+        DynamicFields = dynamicFields, 
+        ViewMode = view, // Здесь всегда lowercase
+        SearchString = searchString, 
+        PageNumber = pageNumber, 
+        PageSize = pageSize, 
+        TotalItems = totalItems 
+    });
+}
 
         public async Task<IActionResult> Details(Guid id)
         {
