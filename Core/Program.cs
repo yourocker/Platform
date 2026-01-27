@@ -7,6 +7,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Telegram.Bot;
+using Core.Interfaces.CRM;
+using Core.Services.CRM;
 
 // 1. Builder create
 var builder = Host.CreateApplicationBuilder(args);
@@ -42,7 +44,13 @@ builder.Services.AddScoped<UpdateHandler>();
 // 6. Регистрируем фоновый сервис, который "держит" бота включенным
 builder.Services.AddHostedService<BotBackgroundService>();
 
-// 7. Собираем и запускаем приложение
+// 7. CRM
+builder.Services.AddScoped<ICrmService, CrmService>();
+
+// 8. Бронирование ресурсов
+builder.Services.AddScoped<ICrmResourceManager, CrmResourceManager>();
+
+// Собираем и запускаем приложение
 var host = builder.Build();
 
 Console.WriteLine("Приложение инициализировано. Запуск сервисов...");

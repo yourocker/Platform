@@ -107,6 +107,200 @@ namespace Core.Migrations
                     b.ToTable("ContactPhones", (string)null);
                 });
 
+            modelBuilder.Entity("Core.Entities.CRM.CrmDealItem", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("DealId")
+                        .HasColumnType("uuid");
+
+                    b.Property<decimal>("DiscountAmount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<string>("Note")
+                        .HasColumnType("text");
+
+                    b.Property<decimal>("Price")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("Quantity")
+                        .HasColumnType("numeric");
+
+                    b.Property<Guid>("ServiceItemId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DealId");
+
+                    b.HasIndex("ServiceItemId");
+
+                    b.ToTable("CrmDealItems", (string)null);
+                });
+
+            modelBuilder.Entity("Core.Entities.CRM.CrmEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Content")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid?>("EmployeeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsPinned")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("TargetEntityCode")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("TargetId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Title")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedAt");
+
+                    b.HasIndex("EmployeeId");
+
+                    b.HasIndex("TargetId", "TargetEntityCode");
+
+                    b.ToTable("CrmEvents", (string)null);
+                });
+
+            modelBuilder.Entity("Core.Entities.CRM.CrmPipeline", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("TargetEntityCode")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("CrmPipelines", (string)null);
+                });
+
+            modelBuilder.Entity("Core.Entities.CRM.CrmResource", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Description")
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("EmployeeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.ToTable("CrmResources", (string)null);
+                });
+
+            modelBuilder.Entity("Core.Entities.CRM.CrmResourceBooking", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Comment")
+                        .HasColumnType("text");
+
+                    b.Property<Guid?>("DealItemId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("EndTime")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<bool>("IsOverbooking")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("ResourceId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("StartTime")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("DealItemId");
+
+                    b.HasIndex("ResourceId");
+
+                    b.ToTable("CrmResourceBookings", (string)null);
+                });
+
+            modelBuilder.Entity("Core.Entities.CRM.CrmStage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Color")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("PipelineId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("RequiredFieldIdsJson")
+                        .HasColumnType("text");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("StageType")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("PipelineId");
+
+                    b.ToTable("CrmStages", (string)null);
+                });
+
             modelBuilder.Entity("Core.Entities.Company.CompanyHoliday", b =>
                 {
                     b.Property<Guid>("Id")
@@ -907,6 +1101,89 @@ namespace Core.Migrations
                     b.ToTable("Contacts", (string)null);
                 });
 
+            modelBuilder.Entity("Core.Entities.CRM.Deal", b =>
+                {
+                    b.HasBaseType("Core.Entities.Platform.GenericObject");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid?>("ContactId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<Guid>("PipelineId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ResponsibleId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("SourceLeadId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("StageChangedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid>("StageId")
+                        .HasColumnType("uuid");
+
+                    b.HasIndex("ContactId");
+
+                    b.HasIndex("PipelineId");
+
+                    b.HasIndex("ResponsibleId");
+
+                    b.HasIndex("StageId");
+
+                    b.ToTable("CrmDeals", (string)null);
+                });
+
+            modelBuilder.Entity("Core.Entities.CRM.Lead", b =>
+                {
+                    b.HasBaseType("Core.Entities.Platform.GenericObject");
+
+                    b.Property<decimal>("Amount")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid?>("ContactId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ConvertedDealId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Currency")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<bool>("IsConverted")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("PipelineId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("ResponsibleId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("StageChangedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid>("StageId")
+                        .HasColumnType("uuid");
+
+                    b.HasIndex("ContactId");
+
+                    b.HasIndex("PipelineId");
+
+                    b.HasIndex("ResponsibleId");
+
+                    b.HasIndex("StageId");
+
+                    b.ToTable("CrmLeads", (string)null);
+                });
+
             modelBuilder.Entity("Core.Entities.CRM.ServiceCategory", b =>
                 {
                     b.HasBaseType("Core.Entities.Platform.GenericObject");
@@ -1005,6 +1282,62 @@ namespace Core.Migrations
                         .IsRequired();
 
                     b.Navigation("Contact");
+                });
+
+            modelBuilder.Entity("Core.Entities.CRM.CrmDealItem", b =>
+                {
+                    b.HasOne("Core.Entities.CRM.Deal", "Deal")
+                        .WithMany("Items")
+                        .HasForeignKey("DealId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Core.Entities.CRM.ServiceItem", "ServiceItem")
+                        .WithMany()
+                        .HasForeignKey("ServiceItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Deal");
+
+                    b.Navigation("ServiceItem");
+                });
+
+            modelBuilder.Entity("Core.Entities.CRM.CrmEvent", b =>
+                {
+                    b.HasOne("Core.Entities.Company.Employee", "Employee")
+                        .WithMany()
+                        .HasForeignKey("EmployeeId");
+
+                    b.Navigation("Employee");
+                });
+
+            modelBuilder.Entity("Core.Entities.CRM.CrmResourceBooking", b =>
+                {
+                    b.HasOne("Core.Entities.CRM.CrmDealItem", "DealItem")
+                        .WithMany()
+                        .HasForeignKey("DealItemId");
+
+                    b.HasOne("Core.Entities.CRM.CrmResource", "Resource")
+                        .WithMany("Bookings")
+                        .HasForeignKey("ResourceId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("DealItem");
+
+                    b.Navigation("Resource");
+                });
+
+            modelBuilder.Entity("Core.Entities.CRM.CrmStage", b =>
+                {
+                    b.HasOne("Core.Entities.CRM.CrmPipeline", "Pipeline")
+                        .WithMany("Stages")
+                        .HasForeignKey("PipelineId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Pipeline");
                 });
 
             modelBuilder.Entity("Core.Entities.Company.Department", b =>
@@ -1185,6 +1518,80 @@ namespace Core.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Core.Entities.CRM.Deal", b =>
+                {
+                    b.HasOne("Core.Entities.CRM.Contact", "Contact")
+                        .WithMany()
+                        .HasForeignKey("ContactId");
+
+                    b.HasOne("Core.Entities.Platform.GenericObject", null)
+                        .WithOne()
+                        .HasForeignKey("Core.Entities.CRM.Deal", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Core.Entities.CRM.CrmPipeline", "Pipeline")
+                        .WithMany()
+                        .HasForeignKey("PipelineId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Core.Entities.Company.Employee", "Responsible")
+                        .WithMany()
+                        .HasForeignKey("ResponsibleId");
+
+                    b.HasOne("Core.Entities.CRM.CrmStage", "CurrentStage")
+                        .WithMany()
+                        .HasForeignKey("StageId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Contact");
+
+                    b.Navigation("CurrentStage");
+
+                    b.Navigation("Pipeline");
+
+                    b.Navigation("Responsible");
+                });
+
+            modelBuilder.Entity("Core.Entities.CRM.Lead", b =>
+                {
+                    b.HasOne("Core.Entities.CRM.Contact", "Contact")
+                        .WithMany()
+                        .HasForeignKey("ContactId");
+
+                    b.HasOne("Core.Entities.Platform.GenericObject", null)
+                        .WithOne()
+                        .HasForeignKey("Core.Entities.CRM.Lead", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Core.Entities.CRM.CrmPipeline", "Pipeline")
+                        .WithMany()
+                        .HasForeignKey("PipelineId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Core.Entities.Company.Employee", "Responsible")
+                        .WithMany()
+                        .HasForeignKey("ResponsibleId");
+
+                    b.HasOne("Core.Entities.CRM.CrmStage", "CurrentStage")
+                        .WithMany()
+                        .HasForeignKey("StageId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Contact");
+
+                    b.Navigation("CurrentStage");
+
+                    b.Navigation("Pipeline");
+
+                    b.Navigation("Responsible");
+                });
+
             modelBuilder.Entity("Core.Entities.CRM.ServiceCategory", b =>
                 {
                     b.HasOne("Core.Entities.Platform.GenericObject", null)
@@ -1243,6 +1650,16 @@ namespace Core.Migrations
                     b.Navigation("Author");
                 });
 
+            modelBuilder.Entity("Core.Entities.CRM.CrmPipeline", b =>
+                {
+                    b.Navigation("Stages");
+                });
+
+            modelBuilder.Entity("Core.Entities.CRM.CrmResource", b =>
+                {
+                    b.Navigation("Bookings");
+                });
+
             modelBuilder.Entity("Core.Entities.Company.Department", b =>
                 {
                     b.Navigation("Children");
@@ -1280,6 +1697,11 @@ namespace Core.Migrations
                     b.Navigation("Emails");
 
                     b.Navigation("Phones");
+                });
+
+            modelBuilder.Entity("Core.Entities.CRM.Deal", b =>
+                {
+                    b.Navigation("Items");
                 });
 
             modelBuilder.Entity("Core.Entities.CRM.ServiceCategory", b =>
