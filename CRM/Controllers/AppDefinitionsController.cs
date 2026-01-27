@@ -1,7 +1,7 @@
 ﻿using System;
 using System.Linq;
 using System.Threading.Tasks;
-using System.Text.RegularExpressions; // Добавлено для проверки Regex
+using System.Text.RegularExpressions;
 using Core.Data;
 using Core.Entities.Platform;
 using Microsoft.AspNetCore.Mvc;
@@ -14,24 +14,48 @@ public class AppDefinitionsController(AppDbContext context) : Controller
 {
     private readonly AppDbContext _context = context;
 
-    public async Task<IActionResult> Index()
+    public async Task<IActionResult> Index(string search, int pageNumber = 1, int pageSize = 10)
     {
-        var apps = await _context.AppDefinitions
+        // 1. Начинаем формирование запроса
+        var query = _context.AppDefinitions
             .Include(a => a.Fields)
             .Include(a => a.Category)
+            .AsQueryable();
+
+        // 2. Логика поиска (фильтруем по имени или коду)
+        if (!string.IsNullOrEmpty(search))
+        {
+            var searchLower = search.ToLower();
+            query = query.Where(a => a.Name.ToLower().Contains(searchLower) || 
+                                     a.EntityCode.ToLower().Contains(searchLower));
+        }
+
+        // 3. Считаем общее количество ПОСЛЕ фильтрации
+        var totalItems = await query.CountAsync();
+
+        // 4. Пагинация и сортировка
+        var apps = await query
             .OrderBy(a => a.Name)
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
             .ToListAsync();
+
+        // 5. Наполнение ViewBag для вьюхи (строго по эталону)
+        ViewBag.TotalItems = totalItems;
+        ViewBag.PageNumber = pageNumber;
+        ViewBag.PageSize = pageSize;
+        ViewBag.TotalPages = (int)Math.Ceiling((double)totalItems / pageSize);
+        ViewBag.CurrentSearch = search;
+
         return View(apps);
     }
 
     [HttpGet]
     public async Task<IActionResult> Create()
     {
-        // Загружаем категории для выпадающего списка в форме
         var categories = await _context.AppCategories.OrderBy(c => c.SortOrder).ToListAsync();
         ViewBag.Categories = new SelectList(categories, "Id", "Name");
 
-        // Создаем модель с начальными значениями (иконка по умолчанию)
         var model = new AppDefinition { Icon = "box" };
         return View(model);
     }
@@ -43,8 +67,6 @@ public class AppDefinitionsController(AppDbContext context) : Controller
         if (ModelState.IsValid)
         {
             app.Id = Guid.NewGuid();
-            
-            // Если иконка не выбрана, ставим стандартную
             if (string.IsNullOrEmpty(app.Icon)) app.Icon = "box";
 
             _context.AppDefinitions.Add(app);
@@ -52,7 +74,6 @@ public class AppDefinitionsController(AppDbContext context) : Controller
             return RedirectToAction(nameof(Index));
         }
 
-        // Если валидация не прошла, возвращаем категории обратно во вьюху
         var categories = await _context.AppCategories.OrderBy(c => c.SortOrder).ToListAsync();
         ViewBag.Categories = new SelectList(categories, "Id", "Name");
         

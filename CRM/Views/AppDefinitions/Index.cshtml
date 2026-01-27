@@ -1,90 +1,227 @@
-﻿@model IEnumerable<Core.Entities.Platform.AppDefinition>
-
+﻿@using Core.Entities.Platform
+@model IEnumerable<AppDefinition>
 @{
-    ViewData["Title"] = "Список сущностей";
+ViewData["Title"] = "Конструктор сущностей";
+
+int totalItems = ViewBag.TotalItems ?? 0;
+int pageNumber = ViewBag.PageNumber ?? 1;
+int pageSize = ViewBag.PageSize ?? 10;
+int totalPages = ViewBag.TotalPages ?? 1;
+string currentSearch = ViewBag.CurrentSearch;
 }
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <h2>Конструктор сущностей</h2>
-    <a asp-action="Create" class="btn btn-primary">
-        <i class="bi bi-plus-lg"></i> Создать сущность
-    </a>
-</div>
+<div class="container-fluid px-4">
+    @* --- ХЕДЕР СТРАНИЦЫ (ПУСТОЙ КОНТЕЙНЕР ПО ЭТАЛОНУ) --- *@
+    <crm-page-header title="" icon="" subtitle="">
 
-<div class="card shadow-sm border-0">
-    <div class="card-body p-0">
-        <table class="table table-hover mb-0">
-            <thead class="bg-light">
+        @* 1. Вид таблицы (Dropdown) *@
+        <div class="dropdown">
+            <button crm-button variant="outline-secondary" icon="view-list" class="dropdown-toggle shadow-sm" type="button" id="columnToggle" data-bs-toggle="dropdown" aria-expanded="false" data-bs-auto-close="outside">
+                Вид таблицы
+            </button>
+            <ul class="dropdown-menu shadow border-0" aria-labelledby="columnToggle" id="columnSelector" style="min-width: 250px;">
+                <li><h6 class="dropdown-header">Поля таблицы</h6></li>
+                <li><div class="dropdown-item"><div class="form-check"><input class="form-check-input col-chk" type="checkbox" value="col-icon" checked> <label class="form-check-label">Иконка</label></div></div></li>
+                <li><div class="dropdown-item"><div class="form-check"><input class="form-check-input col-chk" type="checkbox" value="col-name" checked> <label class="form-check-label">Название</label></div></div></li>
+                <li><div class="dropdown-item"><div class="form-check"><input class="form-check-input col-chk" type="checkbox" value="col-code" checked> <label class="form-check-label">Системный код</label></div></div></li>
+                <li><div class="dropdown-item"><div class="form-check"><input class="form-check-input col-chk" type="checkbox" value="col-cat" checked> <label class="form-check-label">Раздел меню</label></div></div></li>
+                <li><div class="dropdown-item"><div class="form-check"><input class="form-check-input col-chk" type="checkbox" value="col-fields" checked> <label class="form-check-label">Поля</label></div></div></li>
+            </ul>
+        </div>
+
+        @* 2. Кнопка фильтров *@
+        <button crm-button variant="outline-primary" icon="funnel" class="shadow-sm" type="button" data-bs-toggle="collapse" data-bs-target="#filterPanel">
+            Фильтры
+        </button>
+
+        @* 3. Кнопка создания *@
+        <a asp-action="Create" crm-button variant="primary" icon="plus-lg" class="shadow-sm px-4">
+            Создать
+        </a>
+    </crm-page-header>
+
+    @* --- ПАНЕЛЬ ФИЛЬТРАЦИИ --- *@
+    <form asp-action="Index" method="get" id="mainFilterForm">
+        <input type="hidden" name="pageSize" value="@pageSize" id="hiddenPageSize" />
+        <input type="hidden" name="pageNumber" value="1" id="hiddenPageNumber" />
+
+        <div crm-card class="mb-4">
+            <div class="card-body p-3">
+                <div class="input-group input-group-lg border rounded-3 overflow-hidden">
+                    <span class="input-group-text bg-white border-0"><i class="bi bi-search text-primary"></i></span>
+                    <input type="text" name="search" value="@currentSearch" class="form-control border-0 shadow-none instant-filter" placeholder="Начните вводить для поиска..." autocomplete="off"/>
+                </div>
+
+                <div class="collapse @(!string.IsNullOrEmpty(currentSearch) ? "show" : "")" id="filterPanel">
+                    <div class="pt-4 mt-3 border-top">
+                        <div class="row row-cols-1 row-cols-md-3 g-3">
+                            <div class="col">
+                                <crm-input label="Название или код" name="f_Search" value="@currentSearch" class="instant-filter" />
+                            </div>
+                        </div>
+                        <div class="text-end mt-3">
+                            <a asp-action="Index" class="btn btn-link btn-sm text-danger text-decoration-none">Очистить всё</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+
+    @* --- ТАБЛИЦА --- *@
+    <div crm-card class="overflow-hidden">
+        <div class="table-responsive">
+            <table class="table table-hover align-middle mb-0" id="entitiesTable">
+                <thead class="bg-light text-muted small text-uppercase">
                 <tr>
-                    <th class="ps-4">Название</th>
-                    <th>Системный код</th>
-                    <th>Раздел меню</th>
-                    <th>Поля</th>
+                    @* ПЕРВАЯ КОЛОНКА - ИКОНКА С ОТСТУПОМ PS-4 *@
+                    <th class="ps-4 col-icon" style="width: 80px;">Иконка</th>
+                    <th class="col-name">Название</th>
+                    <th class="col-code">Системный код</th>
+                    <th class="col-cat">Раздел меню</th>
+                    <th class="col-fields">Поля</th>
                     <th class="text-end pe-4">Действия</th>
                 </tr>
-            </thead>
-            <tbody>
+                </thead>
+                <tbody>
                 @foreach (var item in Model)
                 {
-                    <tr>
-                        <td class="ps-4">
-                            <i class="bi bi-@item.Icon text-primary me-2"></i>
-                            <span class="fw-bold">@item.Name</span>
-                            @if (item.IsSystem)
-                            {
-                                <span class="badge bg-light text-muted border ms-1">Системная</span>
-                            }
-                        </td>
-                        <td><code>@item.EntityCode</code></td>
-                        <td>
-                            @if (item.Category != null)
-                            {
-                                <span class="badge bg-info text-dark">
-                                    <i class="bi bi-@item.Category.Icon me-1"></i> @item.Category.Name
+                <tr>
+                    @* ИКОНКА В НАЧАЛЕ СТРОКИ *@
+                    <td class="ps-4 col-icon">
+                        <div class="d-flex align-items-center justify-content-center bg-light rounded shadow-sm" style="width: 40px; height: 40px;">
+                            <i class="bi bi-@item.Icon fs-5 text-primary"></i>
+                        </div>
+                    </td>
+                    <td class="col-name">
+                        <div class="fw-bold text-dark">@item.Name</div>
+                        @if (item.IsSystem)
+                        {
+                        <span class="badge bg-info bg-opacity-10 text-info border-0 small py-1">Системная</span>
+                        }
+                    </td>
+                    <td class="col-code">
+                        <code class="text-primary bg-light px-2 py-1 rounded">@item.EntityCode</code>
+                    </td>
+                    <td class="col-cat">
+                        @if (item.Category != null)
+                        {
+                        <span class="badge bg-info bg-opacity-10 text-info border-0 small py-1">
+                                        <i class="bi bi-@item.Category.Icon me-1"></i> @item.Category.Name
+                                    </span>
+                        }
+                        else
+                        {
+                        <span class="text-muted small">Не задан</span>
+                        }
+                    </td>
+                    <td class="col-fields">
+                                <span class="badge bg-light text-dark border-0 small py-1">
+                                    <i class="bi bi-list-check me-1"></i> @(item.Fields?.Count ?? 0)
                                 </span>
+                    </td>
+                    <td class="text-end pe-4">
+                        <div class="btn-group btn-group-sm shadow-sm">
+                            <a asp-action="Fields" asp-route-id="@item.Id"
+                               crm-button variant="white" icon="gear-fill" icon-class="text-primary"
+                               class="border" title="Настроить поля"></a>
+
+                            @if (!item.IsSystem)
+                            {
+                            <a asp-action="Edit" asp-route-id="@item.Id"
+                               crm-button variant="white" icon="pencil-fill" icon-class="text-primary"
+                               class="border" title="Редактировать"></a>
+
+                            <a asp-action="Delete" asp-route-id="@item.Id"
+                               crm-button variant="white" icon="trash-fill" icon-class="text-danger"
+                               class="border" title="Удалить"></a>
                             }
                             else
                             {
-                                <span class="text-muted small">Не отображается</span>
+                            <button crm-button variant="white" icon="lock-fill" class="border disabled opacity-50" title="Защищено"></button>
                             }
-                        </td>
-                        <td>
-                            @* Переход к полям доступен ВСЕМ сущностям *@
-                            <a asp-action="Fields" asp-route-id="@item.Id" class="text-decoration-none">
-                                <span class="badge bg-light text-primary border">
-                                    <i class="bi bi-list-check me-1"></i> @(item.Fields?.Count ?? 0) полей
-                                </span>
-                            </a>
-                        </td>
-                        <td class="text-end pe-4">
-                            <div class="btn-group btn-group-sm">
-                                @* ГЛАВНАЯ КНОПКА: Настройка полей (доступна для расширения системных сущностей) *@
-                                <a asp-action="Fields" asp-route-id="@item.Id" class="btn btn-outline-primary" title="Настроить поля">
-                                    <i class="bi bi-gear-fill"></i>
-                                </a>
-
-                                @if (!item.IsSystem)
-                                {
-                                    @* Редактирование и удаление только для кастомных сущностей *@
-                                    <a asp-action="Edit" asp-route-id="@item.Id" class="btn btn-outline-secondary" title="Редактировать параметры">
-                                        <i class="bi bi-pencil"></i>
-                                    </a>
-                                    <a asp-action="Delete" asp-route-id="@item.Id" class="btn btn-outline-danger" title="Удалить">
-                                        <i class="bi bi-trash"></i>
-                                    </a>
-                                }
-                                else
-                                {
-                                    @* Для системных сущностей показываем замок вместо редактирования/удаления *@
-                                    <button type="button" class="btn btn-outline-secondary disabled" title="Системная сущность: параметры защищены">
-                                        <i class="bi bi-lock-fill"></i>
-                                    </button>
-                                }
-                            </div>
-                        </td>
-                    </tr>
+                        </div>
+                    </td>
+                </tr>
                 }
-            </tbody>
-        </table>
+                </tbody>
+            </table>
+        </div>
+
+        @* --- ПОДВАЛ (ПАГИНАЦИЯ) --- *@
+        <div class="card-footer bg-transparent py-3 border-top">
+            <div class="row align-items-center">
+                <div class="col-md-3 text-muted small">
+                    Показано <strong>@Model.Count()</strong> из <strong>@totalItems</strong>
+                </div>
+                <div class="col-md-6 d-flex justify-content-center">
+                    <nav aria-label="Page navigation">
+                        <crm-pagination total-pages="@totalPages" current-page="@pageNumber" />
+                    </nav>
+                </div>
+                <div class="col-md-3 text-end">
+                    <div class="d-inline-flex align-items-center">
+                        <span class="text-muted small me-2">На странице:</span>
+                        <select class="form-select form-select-sm" style="width: auto;" onchange="changePageSize(this.value)">
+                            @foreach (var size in new[] { 10, 25, 50, 100 })
+                            {
+                            <option value="@size" selected="@(pageSize == size)">@size</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
+
+<script>
+    let filterTimeout;
+    document.querySelectorAll('.instant-filter').forEach(el => {
+        el.addEventListener('input', function() {
+            clearTimeout(filterTimeout);
+            filterTimeout = setTimeout(() => {
+                document.getElementById('hiddenPageNumber').value = 1;
+                document.getElementById('mainFilterForm').submit();
+            }, 700);
+        });
+    });
+
+    function changePageSize(val) {
+        document.getElementById('hiddenPageSize').value = val;
+        document.getElementById('mainFilterForm').submit();
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const STORAGE_KEY = 'crm_definitions_table_columns';
+        const checkboxes = document.querySelectorAll('.col-chk');
+
+        let savedCols = JSON.parse(localStorage.getItem(STORAGE_KEY));
+        if (savedCols) {
+            checkboxes.forEach(chk => {
+                chk.checked = savedCols.includes(chk.value);
+                toggleColumn(chk.value, chk.checked);
+            });
+        }
+
+        checkboxes.forEach(chk => {
+            chk.addEventListener('change', function() {
+                toggleColumn(this.value, this.checked);
+                const activeCols = Array.from(checkboxes).filter(i => i.checked).map(i => i.value);
+                localStorage.setItem(STORAGE_KEY, JSON.stringify(activeCols));
+            });
+        });
+
+        function toggleColumn(className, isVisible) {
+            document.querySelectorAll('.' + className).forEach(el => {
+                el.style.display = isVisible ? '' : 'none';
+            });
+        }
+    });
+</script>
+
+<style>
+    .table-hover tbody tr:hover { background-color: rgba(13, 110, 253, 0.03); cursor: pointer; }
+    .form-check-input:checked { background-color: #0d6efd; border-color: #0d6efd; }
+    .dropdown-menu { font-size: 0.85rem; }
+</style>

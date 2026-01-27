@@ -1,70 +1,100 @@
 ﻿@model Core.Entities.CRM.Contact
-@{ ViewData["Title"] = "Просмотр контакта"; }
+@{
+    ViewData["Title"] = Model.FullName;
+}
 
-<div class="row justify-content-center">
-    <div class="col-md-10">
-        <div class="d-flex align-items-center justify-content-between mb-4">
-            <div>
-                <h3 class="fw-bold text-secondary mb-0"><i class="bi bi-person-vcard me-2"></i>@Model.FullName</h3>
-                <span class="badge bg-light text-primary border mt-2">ID: @Model.Id</span>
-            </div>
-            <div class="btn-group shadow-sm">
-                <a asp-action="Edit" asp-route-id="@Model.Id" class="btn btn-outline-primary px-3">
-                    <i class="bi bi-pencil me-1"></i> Изменить
-                </a>
-                <a asp-action="Index" class="btn btn-outline-secondary px-3">
-                    <i class="bi bi-list me-1"></i> К списку
-                </a>
-            </div>
-        </div>
+<div class="container-fluid px-4">
+    @* --- ХЕДЕР СТРАНИЦЫ --- *@
+    <crm-page-header title="@Model.FullName" icon="person-vcard" subtitle="ID: @Model.Id">
+        <a asp-action="Index" crm-button variant="outline-secondary" icon="arrow-left">
+            К списку
+        </a>
+        <a asp-action="Edit" asp-route-id="@Model.Id" crm-button variant="primary" icon="pencil-square">
+            Изменить
+        </a>
+    </crm-page-header>
 
-        <div class="card shadow-sm border-0 mb-4">
-            <div class="card-header bg-white py-3 border-0"><h5 class="mb-0 fw-bold">Информация</h5></div>
-            <div class="card-body p-4 pt-0">
-                <div class="row mb-4">
-                    <div class="col-md-4">
-                        <label class="text-muted small fw-bold d-block">ФАМИЛИЯ</label>
-                        <div class="fs-5">@Model.LastName</div>
+    <div class="row">
+        @* Левая колонка: Основные данные *@
+        <div class="col-lg-7">
+            <div crm-card>
+                <div class="card-header bg-transparent border-0 pt-4 px-4">
+                    <h5 class="fw-bold mb-0">Персональная информация</h5>
+                </div>
+                <div class="card-body p-4">
+                    <div class="row g-4">
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold text-muted text-uppercase d-block">Фамилия</label>
+                            <span class="fs-5">@Model.LastName</span>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold text-muted text-uppercase d-block">Имя</label>
+                            <span class="fs-5">@Model.FirstName</span>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label small fw-bold text-muted text-uppercase d-block">Отчество</label>
+                            <span class="fs-5">@(Model.MiddleName ?? "—")</span>
+                        </div>
                     </div>
-                    <div class="col-md-4">
-                        <label class="text-muted small fw-bold d-block">ИМЯ</label>
-                        <div class="fs-5">@Model.FirstName</div>
-                    </div>
-                    <div class="col-md-4">
-                        <label class="text-muted small fw-bold d-block">ОТЧЕСТВО</label>
-                        <div class="fs-5">@(Model.MiddleName ?? "—")</div>
+
+                    <hr class="my-4 text-muted opacity-25">
+
+                    <div class="row g-4">
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted text-uppercase d-block mb-2">Телефоны</label>
+                            @if (Model.Phones.Any())
+                            {
+                                @foreach (var phone in Model.Phones)
+                                {
+                                    <div class="d-flex align-items-center mb-2">
+                                        <i class="bi bi-telephone me-2 text-primary"></i>
+                                        <span>@phone.Number</span>
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                <span class="text-muted">Нет данных</span>
+                            }
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small fw-bold text-muted text-uppercase d-block mb-2">Email адреса</label>
+                            @if (Model.Emails.Any())
+                            {
+                                @foreach (var email in Model.Emails)
+                                {
+                                    <div class="d-flex align-items-center mb-2">
+                                        <i class="bi bi-envelope me-2 text-primary"></i>
+                                        <a href="mailto:@email.Email" class="text-decoration-none text-dark">@email.Email</a>
+                                    </div>
+                                }
+                            }
+                            else
+                            {
+                                <span class="text-muted">Нет данных</span>
+                            }
+                        </div>
                     </div>
                 </div>
+            </div>
+        </div>
 
-                <div class="row">
-                    <div class="col-md-6">
-                        <label class="text-muted small fw-bold d-block">ТЕЛЕФОНЫ</label>
-                        <ul class="list-unstyled">
-                            @foreach(var p in Model.Phones) { <li><i class="bi bi-telephone me-2 text-primary"></i>@p.Number</li> }
-                            @if(!Model.Phones.Any()){ <li class="text-muted">Нет данных</li> }
-                        </ul>
-                    </div>
-                    <div class="col-md-6">
-                        <label class="text-muted small fw-bold d-block">EMAIL</label>
-                        <ul class="list-unstyled">
-                            @foreach(var e in Model.Emails) { <li><i class="bi bi-envelope me-2 text-primary"></i>@e.Email</li> }
-                            @if(!Model.Emails.Any()){ <li class="text-muted">Нет данных</li> }
-                        </ul>
-                    </div>
+        @* Правая колонка: Динамические поля *@
+        <div class="col-lg-5">
+            <div crm-card>
+                <div class="card-header bg-transparent border-0 pt-4 px-4">
+                    <h5 class="fw-bold mb-0">Дополнительные сведения</h5>
+                </div>
+                <div class="card-body p-4">
+                    <partial name="_DynamicFields" model="Model" />
                 </div>
             </div>
-        </div>
-
-        <div class="card shadow-sm border-0 mb-4">
-            <div class="card-body p-4">
-                <partial name="_DynamicFields" model="Model" />
+            
+            <div class="text-end mt-2">
+                <a asp-action="Delete" asp-route-id="@Model.Id" class="text-danger small text-decoration-none opacity-75">
+                    <i class="bi bi-trash me-1"></i> Удалить контакт
+                </a>
             </div>
-        </div>
-        
-        <div class="text-end">
-            <a asp-action="Delete" asp-route-id="@Model.Id" class="btn btn-link text-danger text-decoration-none small">
-                <i class="bi bi-trash"></i> Удалить контакт
-            </a>
         </div>
     </div>
 </div>

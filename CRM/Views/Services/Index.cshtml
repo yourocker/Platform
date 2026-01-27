@@ -85,7 +85,7 @@
             <div class="card-body p-3">
                 <div class="input-group input-group-lg border rounded-3 overflow-hidden">
                     <span class="input-group-text bg-white border-0"><i class="bi bi-search text-primary"></i></span>
-                    <input type="text" name="searchString" value="@currentSearch" class="form-control border-0 shadow-none" placeholder="Мгновенный поиск услуги или раздела..." autocomplete="off" />
+                    <input type="text" name="searchString" value="@currentSearch" class="form-control border-0 shadow-none" placeholder="Начните вводить для поиска" autocomplete="off" />
                     @if(!string.IsNullOrEmpty(currentSearch)) {
                         <a href="@Url.Action("Index")" class="btn btn-white border-0 d-flex align-items-center text-danger"><i class="bi bi-x-lg"></i></a>
                     }

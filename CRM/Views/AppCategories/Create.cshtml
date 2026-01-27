@@ -1,45 +1,106 @@
 ﻿@model Core.Entities.Platform.AppCategory
-
 @{
-    ViewData["Title"] = "Новый раздел";
+ViewData["Title"] = "Новый раздел";
 }
 
-<div class="row justify-content-center">
-    <div class="col-md-6">
-        <div class="d-flex align-items-center mb-4">
-            <a asp-action="Index" class="btn btn-outline-secondary btn-sm me-3">
-                <i class="bi bi-arrow-left"></i>
-            </a>
-            <h2 class="mb-0">Новый раздел меню</h2>
-        </div>
+<style>
+    :root { --primary-color: #0d6efd; }
+    .icon-box {
+        padding: 1.5rem 0.5rem; border: 1px solid #f0f0f0; border-radius: 10px;
+        transition: 0.1s; cursor: pointer; background: #fff; height: 100%;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .icon-box:hover { background-color: var(--primary-color); color: #fff !important; transform: scale(1.1); z-index: 5; }
+    .icon-box i { font-size: 1.8rem; }
+    #IconInput[readonly] { background-color: #f8f9fa; cursor: default; }
+</style>
 
-        <div class="card shadow-sm border-0">
-            <div class="card-body p-4">
-                <form asp-action="Create">
-                    <div class="mb-3">
-                        <label asp-for="Name" class="form-label fw-bold"></label>
-                        <input asp-for="Name" class="form-control" placeholder="Например: Склад" required />
-                    </div>
+<div class="container-fluid px-4">
+    <crm-page-header title="Новый раздел" icon="plus-square-fill" subtitle="Создание элемента навигации"></crm-page-header>
 
-                    <div class="mb-3">
-                        <label asp-for="Icon" class="form-label fw-bold"></label>
-                        <div class="input-group">
-                            <span class="input-group-text"><i class="bi bi-folder"></i></span>
-                            <input asp-for="Icon" class="form-control" placeholder="Название иконки Bootstrap (например: box)" />
+    <div asp-validation-summary="All" class="text-danger mb-3 small fw-bold"></div>
+
+    <form asp-action="Create" method="post">
+        <input type="hidden" asp-for="IsSystem" value="false" />
+
+        <div class="row">
+            <div class="col-lg-6">
+                <div crm-card>
+                    <div class="card-body p-4">
+                        <div class="row g-3">
+                            @* Стандартное поле *@
+                            <div class="col-12">
+                                <crm-input label="Название раздела" name="Name" value="@Model?.Name" required="required" />
+                            </div>
+
+                            @* ПОЛЕ ИКОНКИ: Теперь через crm-input для 100% унификации шрифта *@
+                            <div class="col-md-8">
+                                <crm-input label="Иконка">
+                                    <div class="input-group">
+                                        <span class="input-group-text bg-light border-end-0">
+                                            <i id="iconPreview" class="bi bi-folder text-primary"></i>
+                                        </span>
+                                        <input type="text" name="Icon" id="IconInput" class="form-control border-start-0" readonly value="@(Model?.Icon ?? "folder")" />
+                                        <button class="btn btn-outline-primary shadow-none" type="button" data-bs-toggle="modal" data-bs-target="#iconModal">Выбрать</button>
+                                    </div>
+                                </crm-input>
+                            </div>
+
+                            @* Стандартное поле *@
+                            <div class="col-md-4">
+                                <crm-input label="Порядок" name="SortOrder" value="@(Model?.SortOrder.ToString() ?? "0")" />
+                            </div>
                         </div>
-                        <small class="text-muted">Используются иконки Bootstrap (bi-название)</small>
                     </div>
+                </div>
 
-                    <div class="mb-4">
-                        <label asp-for="SortOrder" class="form-label fw-bold"></label>
-                        <input asp-for="SortOrder" type="number" class="form-control" value="0" />
-                    </div>
+                <div class="mt-4 d-flex gap-2">
+                    <button type="submit" crm-button variant="primary" icon="check-lg" class="px-5">Создать</button>
+                    <a asp-action="Index" crm-button variant="outline-secondary">Отмена</a>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
 
-                    <div class="d-grid">
-                        <button type="submit" class="btn btn-primary px-5">Создать раздел</button>
-                    </div>
-                </form>
+@* Модалка (Код иконок оставляем тот же, он работает идеально) *@
+<div class="modal fade" id="iconModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-light border-0"><h5 class="modal-title fw-bold">Библиотека иконок</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+            <div class="modal-body p-4" id="modalScrollBody">
+                <div class="row row-cols-4 row-cols-md-6 g-2 text-center" id="iconGrid"></div>
+                <div id="sentinel" style="height: 50px;"></div>
             </div>
         </div>
     </div>
 </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const icons = ['activity','alarm','archive','award','bag','bank','bar-chart','basket','bell','book','bookmark','box','briefcase','building','calculator','calendar','camera','cart','cash','chat','check','clipboard','clock','cloud','code','collection','compass','cpu','credit-card','database','diagram-3','display','envelope','eye','file-earmark-text','flag','folder','gear','gift','globe','graph-up','grid','hammer','heart','house','image','inbox','info-circle','journal-text','key','laptop','layers','link','list','lock','map','mic','moon','mouse','music-note','newspaper','palette','paperclip','patch-check','pen','pencil','people','person','phone','play','plug','plus','plus-circle','printer','puzzle','question','question-circle','receipt','save','search','send','server','shield','shop','star','tags','terminal','tools','trash','truck','tv','unlock','upload','wallet','watch','whatsapp','wifi','wrench','zoom-in','shield-check','box-seam','truck-flatbed','house-door','person-badge','person-gear','people-fill','telephone','envelope-at','globe-europe-africa','lightning','bug','fire','gem','magic','plugin','command','terminal-fill','layers-half','stack'];
+
+        let offset = 0;
+        let rendering = false;
+        const grid = document.getElementById('iconGrid');
+        const sentinel = document.getElementById('sentinel');
+
+        const draw = () => {
+            if (rendering || offset >= icons.length) return;
+            rendering = true;
+            const batch = icons.slice(offset, offset + 60);
+            const html = batch.map(n => `<div class="col"><div class="icon-box" onclick="selectIcon('${n}')"><i class="bi bi-${n}"></i></div></div>`).join('');
+            grid.insertAdjacentHTML('beforeend', html);
+            offset += 60;
+            setTimeout(() => { rendering = false; }, 50);
+        };
+
+        new IntersectionObserver(e => { if(e[0].isIntersecting) draw(); }, { root: document.getElementById('modalScrollBody') }).observe(sentinel);
+
+        window.selectIcon = (n) => {
+            document.getElementById('IconInput').value = n;
+            document.getElementById('iconPreview').className = `bi bi-${n} text-primary`;
+            bootstrap.Modal.getInstance(document.getElementById('iconModal')).hide();
+        };
+    });
+</script>

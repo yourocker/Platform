@@ -1,24 +1,36 @@
 ﻿@model Core.Entities.CRM.Contact
-@{ ViewData["Title"] = "Удаление контакта"; }
+@{
+    ViewData["Title"] = "Удаление";
+}
 
-<div class="row justify-content-center mt-5">
-    <div class="col-md-6">
-        <div class="card border-0 shadow-lg">
-            <div class="card-body p-5 text-center">
-                <div class="display-1 text-danger mb-4"><i class="bi bi-exclamation-triangle"></i></div>
-                <h2 class="fw-bold mb-3">Удаление</h2>
-                <p class="text-muted mb-4 fs-5">
-                    Вы действительно хотите безвозвратно удалить контакт:<br/>
-                    <strong class="text-dark">@Model.FullName</strong>?
-                </p>
-
-                <form asp-action="Delete" method="post">
-                    <input type="hidden" asp-for="Id" />
-                    <div class="d-grid gap-3">
-                        <button type="submit" class="btn btn-danger btn-lg shadow-sm">Да, удалить</button>
-                        <a asp-action="Index" class="btn btn-light btn-lg">Отмена</a>
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6 col-lg-5">
+            <div crm-card class="text-center">
+                <div class="card-body p-5">
+                    <div class="mb-4">
+                        <i class="bi bi-exclamation-octagon text-danger display-1 opacity-25"></i>
                     </div>
-                </form>
+                    
+                    <h3 class="fw-bold text-secondary mb-3">Подтвердите удаление</h3>
+                    <p class="text-muted mb-4">
+                        Вы действительно хотите безвозвратно удалить контакт<br/>
+                        <strong class="text-dark fs-5">@Model.FullName</strong>?
+                    </p>
+
+                    <form asp-action="Delete" method="post">
+                        <input type="hidden" asp-for="Id" />
+                        
+                        <div class="d-grid gap-2">
+                            <button type="submit" crm-button variant="danger" icon="trash" class="btn-lg">
+                                Удалить навсегда
+                            </button>
+                            <a asp-action="Index" crm-button variant="outline-secondary" class="btn-lg">
+                                Отмена
+                            </a>
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
     </div>

@@ -1,35 +1,127 @@
 ﻿@model Core.Entities.Platform.AppCategory
-@{ ViewData["Title"] = "Редактирование раздела"; }
-<div class="row justify-content-center">
-    <div class="col-md-6">
-        <div class="d-flex align-items-center mb-4">
-            <a asp-action="Index" class="btn btn-outline-secondary btn-sm me-3"><i class="bi bi-arrow-left"></i></a>
-            <h2 class="mb-0">Редактирование раздела</h2>
-        </div>
-        <div class="card shadow-sm border-0">
-            <div class="card-body p-4">
-                <form asp-action="Edit">
-                    <input type="hidden" asp-for="Id" />
-                    <div class="mb-3">
-                        <label asp-for="Name" class="form-label fw-bold"></label>
-                        <input asp-for="Name" class="form-control" required />
-                    </div>
-                    <div class="mb-3">
-                        <label asp-for="Icon" class="form-label fw-bold"></label>
-                        <div class="input-group">
-                            <span class="input-group-text"><i class="bi bi-@Model.Icon"></i></span>
-                            <input asp-for="Icon" class="form-control" />
+@{
+ViewData["Title"] = "Редактирование раздела";
+}
+
+<style>
+    :root { --primary-color: #0d6efd; }
+    .icon-box {
+        padding: 1.5rem 0.5rem; border: 1px solid #f0f0f0; border-radius: 10px;
+        transition: 0.1s; cursor: pointer; background: #fff; height: 100%;
+        display: flex; align-items: center; justify-content: center;
+    }
+    .icon-box:hover { background-color: var(--primary-color); color: #fff !important; transform: scale(1.1); z-index: 5; }
+    .icon-box i { font-size: 1.8rem; }
+    #IconInput[readonly] { background-color: #f8f9fa; cursor: default; }
+</style>
+
+<div class="container-fluid px-4">
+    <crm-page-header title="Редактирование раздела" icon="pencil-square" subtitle="Изменение параметров меню"></crm-page-header>
+
+    <div asp-validation-summary="All" class="text-danger mb-3 small fw-bold"></div>
+
+    <form asp-action="Edit" method="post">
+        @* Скрытые системные поля *@
+        <input type="hidden" asp-for="Id" />
+        <input type="hidden" asp-for="IsSystem" />
+
+        <div class="row">
+            <div class="col-lg-6">
+                <div crm-card>
+                    <div class="card-body p-4">
+                        <div class="row g-3">
+                            @* 1. Название *@
+                            <div class="col-12">
+                                <crm-input label="Название раздела" name="Name" value="@Model?.Name" required="required" />
+                            </div>
+
+                            @* 2. Иконка (через обновленный TagHelper) *@
+                            <div class="col-md-8">
+                                <crm-input label="Иконка">
+                                    <div class="input-group">
+                                        <span class="input-group-text bg-light border-end-0">
+                                            <i id="iconPreview" class="bi bi-@Model.Icon text-primary"></i>
+                                        </span>
+                                        <input type="text" name="Icon" id="IconInput" class="form-control border-start-0" readonly value="@Model.Icon" />
+                                        <button class="btn btn-outline-primary shadow-none" type="button" data-bs-toggle="modal" data-bs-target="#iconModal">Выбрать</button>
+                                    </div>
+                                </crm-input>
+                            </div>
+
+                            @* 3. Порядок *@
+                            <div class="col-md-4">
+                                <crm-input label="Порядок" name="SortOrder" value="@Model.SortOrder.ToString()" />
+                            </div>
                         </div>
                     </div>
-                    <div class="mb-4">
-                        <label asp-for="SortOrder" class="form-label fw-bold"></label>
-                        <input asp-for="SortOrder" type="number" class="form-control" />
-                    </div>
-                    <div class="d-grid">
-                        <button type="submit" class="btn btn-primary px-5">Сохранить изменения</button>
-                    </div>
-                </form>
+                </div>
+
+                <div class="mt-4 d-flex gap-2">
+                    <button type="submit" crm-button variant="primary" icon="check-lg" class="px-5">
+                        Сохранить изменения
+                    </button>
+                    <a asp-action="Index" crm-button variant="outline-secondary">
+                        Отмена
+                    </a>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+@* МОДАЛКА ВЫБОРА ИКОНОК *@
+<div class="modal fade" id="iconModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered modal-lg modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header bg-light border-0">
+                <h5 class="modal-title fw-bold">Библиотека иконок</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body p-4" id="modalScrollBody">
+                <div class="row row-cols-4 row-cols-md-6 g-2 text-center" id="iconGrid"></div>
+                <div id="sentinel" style="height: 50px;"></div>
             </div>
         </div>
     </div>
 </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const icons = ['activity','alarm','archive','award','bag','bank','bar-chart','basket','bell','book','bookmark','box','briefcase','building','calculator','calendar','camera','cart','cash','chat','check','clipboard','clock','cloud','code','collection','compass','cpu','credit-card','database','diagram-3','display','envelope','eye','file-earmark-text','flag','folder','gear','gift','globe','graph-up','grid','hammer','heart','house','image','inbox','info-circle','journal-text','key','laptop','layers','link','list','lock','map','mic','moon','mouse','music-note','newspaper','palette','paperclip','patch-check','pen','pencil','people','person','phone','play','plug','plus','plus-circle','printer','puzzle','question','question-circle','receipt','save','search','send','server','shield','shop','star','tags','terminal','tools','trash','truck','tv','unlock','upload','wallet','watch','whatsapp','wifi','wrench','zoom-in','shield-check','box-seam','truck-flatbed','house-door','person-badge','person-gear','people-fill','telephone','envelope-at','globe-europe-africa','lightning','bug','fire','gem','magic','plugin','command','terminal-fill','layers-half','stack','airplane','apple','attachment','balloon','bandaid','battery-full','bezier','bicycle','bluetooth','book-half','brightness-high','broadcast','calendar-date','capslock','card-checklist','cart-check','cloud-download','controller','cup-hot','dice-5','earbuds','eraser','eyedropper','fingerprint','fuel-pump','gender-ambiguous','gpu-card','hand-index-thumb','headset','infinity','joystick','keyboard','lungs','magnet','medicine-bottle','megaphone','memory','messenger','microscope','motherboard','mortboard','outlet','paint-bucket','pc-display','prescription','projector','qr-code','radioactive','reception-4','robot','safe2','sd-card','sim','snow','speakers','speedometer','subtract','suit-diamond','sun','table','tablet','target','thermometer-half','ticket-perforated','train-front','translate','umbrella','vector-pen','vignette','virus','voicemail','volume-up','water','webcam','window-sidebar','xbox','yield','yin-yang'];
+
+        let offset = 0;
+        let rendering = false;
+        const grid = document.getElementById('iconGrid');
+        const sentinel = document.getElementById('sentinel');
+
+        const drawBatch = () => {
+            if (rendering || offset >= icons.length) return;
+            rendering = true;
+
+            const batch = icons.slice(offset, offset + 60);
+            const html = batch.map(n => `
+                <div class="col">
+                    <div class="icon-box" onclick="selectIcon('${n}')">
+                        <i class="bi bi-${n}"></i>
+                    </div>
+                </div>`).join('');
+
+            grid.insertAdjacentHTML('beforeend', html);
+            offset += 60;
+
+            setTimeout(() => { rendering = false; }, 50);
+        };
+
+        const obs = new IntersectionObserver(entries => {
+            if (entries[0].isIntersecting) drawBatch();
+        }, { root: document.getElementById('modalScrollBody'), rootMargin: '200px' });
+
+        obs.observe(sentinel);
+
+        window.selectIcon = (name) => {
+            document.getElementById('IconInput').value = name;
+            document.getElementById('iconPreview').className = `bi bi-${name} text-primary`;
+            bootstrap.Modal.getInstance(document.getElementById('iconModal')).hide();
+        };
+    });
+</script>
