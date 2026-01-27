@@ -10,109 +10,117 @@ using Microsoft.AspNetCore.Hosting;
 using Newtonsoft.Json;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
-using Microsoft.AspNetCore.Mvc.Rendering; // Нужно для SelectListItem
+using Microsoft.AspNetCore.Mvc.Rendering;
 
 namespace CRM.Controllers;
 
+// Устанавливаем базовый маршрут для всех действий контроллера
+[Route("Data")]
 public class GenericObjectsController(AppDbContext context, IWebHostEnvironment hostingEnvironment) : BasePlatformController(context, hostingEnvironment)
 {
-    // --- ВСПОМОГАТЕЛЬНЫЙ МЕТОД: ГАРАНТИРОВАННАЯ ЗАГРУЗКА ПОЛЕЙ ---
-    // Мы используем его, чтобы не зависеть от скрытой логики BasePlatformController
     private async Task LoadDefinitionWithFields(string entityCode)
     {
-        // 1. Явно грузим Definition + Fields
         var definition = await _context.AppDefinitions
             .Include(d => d.Fields)
             .FirstOrDefaultAsync(d => d.EntityCode == entityCode);
 
         if (definition != null)
         {
-            // Сортируем поля и кладем в ViewBag, который ждет _DynamicFields.cshtml
             ViewBag.DynamicFields = definition.Fields.OrderBy(f => f.SortOrder).ToList();
             ViewBag.DefinitionName = definition.Name;
 
-            // 2. Загружаем данные для выпадающих списков (EntityLink)
             var lookupData = new Dictionary<string, List<SelectListItem>>();
             
             foreach (var field in definition.Fields.Where(f => f.DataType == FieldDataType.EntityLink))
             {
                 var items = new List<SelectListItem>();
-                
-                // Пробуем найти сущности по коду цели (TargetEntityCode)
-                // Сначала ищем в GenericObjects
                 var genericItems = await _context.GenericObjects
                     .Where(g => g.EntityCode == field.TargetEntityCode)
                     .Select(g => new SelectListItem { Value = g.Id.ToString(), Text = g.Name })
                     .ToListAsync();
                 
-                if (genericItems.Any())
-                {
-                    items.AddRange(genericItems);
-                }
+                if (genericItems.Any()) items.AddRange(genericItems);
                 else
                 {
-                    // Если в Generic пусто, пробуем системные справочники (пример для Сотрудников/Отделов)
-                    // Добавь сюда другие системные сущности по мере необходимости
                     if (field.TargetEntityCode == "Employees")
-                    {
-                        items = await _context.Employees
-                            .Select(e => new SelectListItem { Value = e.Id.ToString(), Text = e.FullName })
-                            .ToListAsync();
-                    }
+                        items = await _context.Employees.Select(e => new SelectListItem { Value = e.Id.ToString(), Text = e.FullName }).ToListAsync();
                     else if (field.TargetEntityCode == "Departments")
-                    {
-                        items = await _context.Departments
-                            .Select(d => new SelectListItem { Value = d.Id.ToString(), Text = d.Name })
-                            .ToListAsync();
-                    }
+                        items = await _context.Departments.Select(d => new SelectListItem { Value = d.Id.ToString(), Text = d.Name }).ToListAsync();
                     else if (field.TargetEntityCode == "Patients")
-                    {
-                        items = await _context.Patients
-                            .Select(p => new SelectListItem { Value = p.Id.ToString(), Text = p.FullName })
-                            .ToListAsync();
-                    }
+                        items = await _context.Patients.Select(p => new SelectListItem { Value = p.Id.ToString(), Text = p.FullName }).ToListAsync();
                 }
-                
                 lookupData[field.SystemName] = items;
             }
-
             ViewBag.LookupData = lookupData;
         }
     }
-    // -------------------------------------------------------------
 
-    public async Task<IActionResult> Index(string entityCode)
+    // Маршрут: /Data/{entityCode} (например /Data/Sklad)
+    [HttpGet("{entityCode}")]
+    public async Task<IActionResult> Index(string entityCode, string? searchString, int? pageNumber, int? pageSize, [FromQuery] Dictionary<string, string>? filters)
     {
         if (string.IsNullOrEmpty(entityCode)) return NotFound();
         
         var definition = await _context.AppDefinitions
             .Include(d => d.Fields)
-            .OrderBy(d => d.Name)
             .FirstOrDefaultAsync(d => d.EntityCode == entityCode);
 
         if (definition == null) return NotFound();
 
         ViewBag.Definition = definition;
         ViewBag.EntityCode = entityCode;
+        ViewBag.DynamicFields = definition.Fields.OrderBy(f => f.SortOrder).ToList();
 
-        var objects = await _context.GenericObjects
+        var query = _context.GenericObjects
             .Where(o => o.EntityCode == entityCode)
+            .AsQueryable();
+
+        // 1. Быстрый поиск по системному имени
+        if (!string.IsNullOrWhiteSpace(searchString))
+        {
+            query = query.Where(o => EF.Functions.ILike(o.Name, $"%{searchString}%"));
+        }
+
+        // 2. Тотальная фильтрация по динамическим полям (Properties)
+        if (filters != null && filters.Any())
+        {
+            foreach (var filter in filters)
+            {
+                if (string.IsNullOrWhiteSpace(filter.Value)) continue;
+
+                if (filter.Key.Contains("f_Name"))
+                {
+                    query = query.Where(o => EF.Functions.ILike(o.Name, $"%{filter.Value}%"));
+                }
+                else if (filter.Key.Contains("f_dyn_"))
+                {
+                    var fieldName = filter.Key.Split("f_dyn_").Last();
+                    query = query.Where(o => EF.Functions.ILike(o.Properties, $"%\"{fieldName}\":%\"{filter.Value}\"%"));
+                }
+            }
+        }
+
+        // 3. Честная пагинация
+        int actualPageSize = pageSize ?? 10;
+        int actualPageNumber = pageNumber ?? 1;
+        int totalItems = await query.CountAsync();
+
+        var objects = await query
             .OrderByDescending(o => o.CreatedAt)
+            .Skip((actualPageNumber - 1) * actualPageSize)
+            .Take(actualPageSize)
             .ToListAsync();
 
-        // СБОР ВСЕХ GUID (как было у тебя)
+        // 4. Сбор GUID для текущей страницы (твоя логика Regex)
         var allGuids = new HashSet<Guid>();
         var guidRegex = new Regex(@"([a-fA-F0-9]{8}[-][a-fA-F0-9]{4}[-][a-fA-F0-9]{4}[-][a-fA-F0-9]{4}[-][a-fA-F0-9]{12})");
 
-        foreach (var obj in objects)
+        foreach (var obj in objects.Where(o => !string.IsNullOrEmpty(o.Properties)))
         {
-            if (!string.IsNullOrEmpty(obj.Properties))
+            var matches = guidRegex.Matches(obj.Properties);
+            foreach (Match match in matches)
             {
-                var matches = guidRegex.Matches(obj.Properties);
-                foreach (Match match in matches)
-                {
-                    if (Guid.TryParse(match.Value, out Guid g)) allGuids.Add(g);
-                }
+                if (Guid.TryParse(match.Value, out Guid g)) allGuids.Add(g);
             }
         }
 
@@ -133,76 +141,66 @@ public class GenericObjectsController(AppDbContext context, IWebHostEnvironment 
         }
 
         ViewBag.NamesMap = namesMap;
+        ViewBag.TotalItems = totalItems;
+        ViewBag.PageNumber = actualPageNumber;
+        ViewBag.PageSize = actualPageSize;
+        ViewBag.TotalPages = (int)Math.Ceiling(totalItems / (double)actualPageSize);
+        ViewBag.CurrentSearch = searchString;
+        ViewBag.CurrentFilters = filters ?? new Dictionary<string, string>();
+
         return View(objects);
     }
 
+    // Маршрут: /Data/{entityCode}/Create
+    [HttpGet("{entityCode}/Create")]
     public async Task<IActionResult> Create(string entityCode)
     {
         if (string.IsNullOrEmpty(entityCode)) return NotFound();
-
-        // ИСПОЛЬЗУЕМ ЯВНУЮ ЗАГРУЗКУ
         await LoadDefinitionWithFields(entityCode);
-        
         ViewBag.EntityCode = entityCode;
         return View();
     }
 
-    [HttpPost]
+    [HttpPost("{entityCode}/Create")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Create(GenericObject obj, IFormCollection form)
     {
         obj.CreatedAt = DateTime.UtcNow;
-
-        // Сохраняем свойства (метод из базового контроллера, оставляем если он работает с файлами)
         await SaveDynamicProperties(obj, form, obj.EntityCode);
-
         if (ModelState.IsValid)
         {
             obj.Id = Guid.NewGuid();
             _context.Add(obj);
             await _context.SaveChangesAsync();
-            
             FinalizeDynamicFilePaths(obj, obj.EntityCode, obj.Id.ToString());
             await _context.SaveChangesAsync();
-            
             return Redirect($"/Data/{obj.EntityCode}");
         }
-
-        // ПРИ ОШИБКЕ ВАЛИДАЦИИ СНОВА ГРУЗИМ ПОЛЯ
         await LoadDefinitionWithFields(obj.EntityCode);
-        
         ViewBag.EntityCode = obj.EntityCode;
         return View(obj);
     }
     
+    // Маршрут: /Data/Edit/{id}
+    [HttpGet("Edit/{id}")]
     public async Task<IActionResult> Edit(Guid id)
     {
         var obj = await _context.GenericObjects.FindAsync(id);
         if (obj == null) return NotFound();
-
-        // !!! КЛЮЧЕВОЕ ИСПРАВЛЕНИЕ !!!
-        // Загружаем поля явно по EntityCode объекта
         await LoadDefinitionWithFields(obj.EntityCode);
-        
         ViewBag.EntityCode = obj.EntityCode;
         return View(obj);
     }
 
-    [HttpPost]
+    [HttpPost("Edit/{id}")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Edit(Guid id, GenericObject incomingObj, IFormCollection form)
     {
         if (id != incomingObj.Id) return NotFound();
-
         var dbObj = await _context.GenericObjects.FindAsync(id);
         if (dbObj == null) return NotFound();
-
-        // Накладываем изменения имени
         dbObj.Name = incomingObj.Name;
-
-        // Накладываем динамические свойства
         await SaveDynamicProperties(dbObj, form, dbObj.EntityCode);
-
         if (ModelState.IsValid)
         {
             try 
@@ -218,25 +216,21 @@ public class GenericObjectsController(AppDbContext context, IWebHostEnvironment 
             }
             return Redirect($"/Data/{dbObj.EntityCode}");
         }
-
-        // ПРИ ОШИБКЕ ВАЛИДАЦИИ СНОВА ГРУЗИМ ПОЛЯ
         await LoadDefinitionWithFields(dbObj.EntityCode);
-        
         ViewBag.EntityCode = dbObj.EntityCode;
         return View(dbObj);
     }
 
-    [HttpPost]
+    // Маршрут: /Data/Delete/{id}
+    [HttpPost("Delete/{id}")]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Delete(Guid id)
     {
         var obj = await _context.GenericObjects.FindAsync(id);
         if (obj == null) return NotFound();
-
         var entityCode = obj.EntityCode;
         _context.GenericObjects.Remove(obj);
         await _context.SaveChangesAsync();
-
         return Redirect($"/Data/{entityCode}");
     }
 }

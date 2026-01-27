@@ -22,80 +22,123 @@ namespace CRM.Controllers
             _userManager = userManager;
         }
 
-        // --- СПИСОК СОТРУДНИКОВ ---
-        public async Task<IActionResult> Index()
+        // --- СПИСОК СОТРУДНИКОВ С ПОЛНОЙ ФИЛЬТРАЦИЕЙ И ПАГИНАЦИЕЙ ---
+        public async Task<IActionResult> Index(string? searchString, int? pageNumber, int? pageSize, Dictionary<string, string> filters)
         {
-            var employees = await _context.Employees
-                .Include(e => e.StaffAppointments)
-                .ThenInclude(a => a.Position)
-                .Include(e => e.StaffAppointments)
-                .ThenInclude(a => a.Department)
-                .OrderBy(e => e.IsDismissed) 
-                .ThenBy(e => e.LastName)
+            // Загружаем динамические поля для заголовков и фильтров
+            await LoadDynamicFields("Employee");
+            
+            var query = _context.Employees
+                .Include(e => e.StaffAppointments).ThenInclude(a => a.Position)
+                .Include(e => e.StaffAppointments).ThenInclude(a => a.Department)
+                .AsQueryable();
+
+            // 1. БЫСТРЫЙ ПОИСК (LastName, FirstName, UserName, Любой из телефонов)
+            if (!string.IsNullOrWhiteSpace(searchString))
+            {
+                query = query.Where(e => 
+                    EF.Functions.ILike(e.LastName, $"%{searchString}%") || 
+                    EF.Functions.ILike(e.FirstName, $"%{searchString}%") ||
+                    EF.Functions.ILike(e.UserName, $"%{searchString}%") ||
+                    e.Phones.Any(p => EF.Functions.ILike(p, $"%{searchString}%")));
+            }
+
+            // 2. ПОЛНАЯ ФИЛЬТРАЦИЯ (Обработка словаря параметров)
+            if (filters != null && filters.Any())
+            {
+                foreach (var filter in filters)
+                {
+                    if (string.IsNullOrWhiteSpace(filter.Value)) continue;
+
+                    // Ключи приходят как f_LastName, f_dyn_SystemName и т.д.
+                    var key = filter.Key;
+
+                    if (key == "f_LastName")
+                        query = query.Where(e => EF.Functions.ILike(e.LastName, $"%{filter.Value}%"));
+                    else if (key == "f_FirstName")
+                        query = query.Where(e => EF.Functions.ILike(e.FirstName, $"%{filter.Value}%"));
+                    else if (key == "f_MiddleName")
+                        query = query.Where(e => EF.Functions.ILike(e.MiddleName, $"%{filter.Value}%"));
+                    else if (key == "f_Phone")
+                        query = query.Where(e => e.Phones.Any(p => EF.Functions.ILike(p, $"%{filter.Value}%")));
+                    else if (key == "f_Status")
+                    {
+                        if (filter.Value == "active") query = query.Where(e => !e.IsDismissed);
+                        else if (filter.Value == "dismissed") query = query.Where(e => e.IsDismissed);
+                    }
+                    else if (key.StartsWith("f_dyn_"))
+                    {
+                        // Динамические поля из конструктора
+                        var fieldName = key.Replace("f_dyn_", "");
+                        query = query.Where(e => EF.Functions.ILike(e.Properties, $"%\"{fieldName}\":%\"{filter.Value}\"%"));
+                    }
+                }
+            }
+
+            // 3. СОРТИРОВКА (Уволенные в конце)
+            query = query.OrderBy(e => e.IsDismissed).ThenBy(e => e.LastName);
+
+            // 4. ПАГИНАЦИЯ
+            int actualPageSize = pageSize ?? 10;
+            int actualPageNumber = pageNumber ?? 1;
+            int totalItems = await query.CountAsync();
+            
+            var employees = await query
+                .Skip((actualPageNumber - 1) * actualPageSize)
+                .Take(actualPageSize)
                 .ToListAsync();
+
+            // Передача метаданных во вьюху
+            ViewBag.TotalItems = totalItems;
+            ViewBag.PageNumber = actualPageNumber;
+            ViewBag.PageSize = actualPageSize;
+            ViewBag.TotalPages = (int)Math.Ceiling(totalItems / (double)actualPageSize);
+            ViewBag.CurrentSearch = searchString;
+            ViewBag.CurrentFilters = filters ?? new Dictionary<string, string>();
+
             return View(employees);
         }
 
-        // --- СОЗДАНИЕ (GET) ---
         public async Task<IActionResult> Create()
         {
             await LoadDynamicFields("Employee"); 
-            
             ViewBag.Positions = await _context.Positions.OrderBy(p => p.Name).ToListAsync();
             ViewBag.Departments = await _context.Departments.OrderBy(d => d.Name).ToListAsync();
             return View();
         }
 
-        // --- СОЗДАНИЕ (POST) ---
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Create(Employee employee, Guid[] selectedPositions, Guid[] selectedDepartments, string[] Phones, string[] Emails, IFormCollection form, string? Login, string? Password)
         {
             employee.Phones = Phones?.Where(p => !string.IsNullOrWhiteSpace(p)).ToList() ?? new List<string>();
             employee.Emails = Emails?.Where(e => !string.IsNullOrWhiteSpace(e)).ToList() ?? new List<string>();
-
-            // 1. Сохраняем во временную папку
             await SaveDynamicProperties(employee, form, "Employee");
-
-            // Убираем поля логина/пароля из валидации, так как они не часть сущности при привязке
             ModelState.Remove("Login");
             ModelState.Remove("Password");
 
             if (ModelState.IsValid)
             {
                 employee.Id = Guid.NewGuid();
-
-                // === ЛОГИКА СОЗДАНИЯ ПОЛЬЗОВАТЕЛЯ IDENTITY ===
-                bool createdViaIdentity = false;
                 if (!string.IsNullOrEmpty(Login) && !string.IsNullOrEmpty(Password))
                 {
                     employee.UserName = Login;
-                    // Если логин похож на Email, записываем и туда
                     employee.Email = Login.Contains("@") ? Login : null;
-
                     var result = await _userManager.CreateAsync(employee, Password);
-                    
                     if (!result.Succeeded)
                     {
-                        foreach (var error in result.Errors)
-                        {
-                            ModelState.AddModelError("", error.Description);
-                        }
-                        // Если ошибка создания пользователя - возвращаем форму
+                        foreach (var error in result.Errors) ModelState.AddModelError("", error.Description);
                         await LoadDynamicFields("Employee");
                         ViewBag.Positions = await _context.Positions.OrderBy(p => p.Name).ToListAsync();
                         ViewBag.Departments = await _context.Departments.OrderBy(d => d.Name).ToListAsync();
                         return View(employee);
                     }
-                    createdViaIdentity = true;
                 }
                 else
                 {
-                    // Обычное создание без доступа в систему
                     _context.Add(employee);
                     await _context.SaveChangesAsync();
                 }
-                // ==============================================
 
                 if (selectedPositions != null && selectedDepartments != null)
                 {
@@ -114,62 +157,35 @@ namespace CRM.Controllers
                         }
                     }
                 }
-
-                // 2. Сохраняем связи (StaffAppointments)
-                // Если создавали через Identity, сотрудник уже в БД, сохраняем только связи
                 await _context.SaveChangesAsync();
-
-                // 3. Перемещаем файлы из Temp в постоянную папку
                 FinalizeDynamicFilePaths(employee, "Employee", employee.Id.ToString());
-
-                // 4. Обновляем пути в БД
-                // IdentityDbContext отслеживает изменения, поэтому SaveChangesAsync обновит и свойства сотрудника
                 await _context.SaveChangesAsync();
-
                 return RedirectToAction(nameof(Index));
             }
-
             await LoadDynamicFields("Employee");
             ViewBag.Positions = await _context.Positions.OrderBy(p => p.Name).ToListAsync();
             ViewBag.Departments = await _context.Departments.OrderBy(d => d.Name).ToListAsync();
             return View(employee);
         }
 
-        // --- РЕДАКТИРОВАНИЕ (GET) ---
         public async Task<IActionResult> Edit(Guid? id)
         {
             if (id == null) return NotFound();
-
-            var employee = await _context.Employees
-                .Include(e => e.StaffAppointments)
-                .FirstOrDefaultAsync(e => e.Id == id);
-
+            var employee = await _context.Employees.Include(e => e.StaffAppointments).FirstOrDefaultAsync(e => e.Id == id);
             if (employee == null) return NotFound();
-
             await LoadDynamicFields("Employee");
             ViewBag.Departments = await _context.Departments.ToListAsync();
             ViewBag.Positions = await _context.Positions.ToListAsync();
-
-            // --- ДОБАВЛЕНО: Проверка Identity ---
-            // Проверяем, есть ли такой пользователь в Identity (по Id или UserName)
-            // Так как Employee наследует IdentityUser, поля UserName и Email уже в объекте employee
-            // Но SecurityStamp может быть null, если пользователь создан без Identity
             ViewBag.HasLogin = !string.IsNullOrEmpty(employee.UserName);
-            // ------------------------------------
-
             return View(employee);
         }
 
-        // --- РЕДАКТИРОВАНИЕ (POST) ---
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Edit(Guid id, Employee employee, Guid[] selectedPositions, Guid[] selectedDepartments, string[] Phones, string[] Emails, IFormCollection form, string? Login, string? NewPassword)
         {
             if (id != employee.Id) return NotFound();
-
             await SaveDynamicProperties(employee, form, "Employee");
-            
-            // Убираем валидацию полей, которые мы обрабатываем вручную
             ModelState.Remove("Login");
             ModelState.Remove("NewPassword");
 
@@ -178,25 +194,19 @@ namespace CRM.Controllers
                 try
                 {
                     FinalizeDynamicFilePaths(employee, "Employee", employee.Id.ToString());
-
                     var dbEmployee = await _context.Employees.FindAsync(id);
                     if (dbEmployee == null) return NotFound();
 
-                    // 1. Обновляем обычные поля
                     dbEmployee.FirstName = employee.FirstName;
                     dbEmployee.LastName = employee.LastName;
                     dbEmployee.MiddleName = employee.MiddleName;
                     dbEmployee.IsDismissed = employee.IsDismissed;
                     dbEmployee.Properties = employee.Properties;
-                    
                     dbEmployee.Phones = Phones?.Where(p => !string.IsNullOrWhiteSpace(p)).ToList() ?? new List<string>();
                     dbEmployee.Emails = Emails?.Where(e => !string.IsNullOrWhiteSpace(e)).ToList() ?? new List<string>();
 
-                    // 2. Логика Identity (Вход в систему)
-                    // Если логин передан и отличается — меняем
                     if (!string.IsNullOrEmpty(Login))
                     {
-                        // Если юзера еще не было в Identity (UserName пустой), и задан пароль — создаем/активируем
                         if (string.IsNullOrEmpty(dbEmployee.UserName) && !string.IsNullOrEmpty(NewPassword))
                         {
                             dbEmployee.UserName = Login;
@@ -205,21 +215,13 @@ namespace CRM.Controllers
                             await _userManager.UpdateNormalizedEmailAsync(dbEmployee);
                             await _userManager.AddPasswordAsync(dbEmployee, NewPassword);
                         }
-                        else 
+                        else if (dbEmployee.UserName != Login)
                         {
-                            // Просто смена логина
-                            if (dbEmployee.UserName != Login)
-                            {
-                                await _userManager.SetUserNameAsync(dbEmployee, Login);
-                                if (Login.Contains("@"))
-                                {
-                                    await _userManager.SetEmailAsync(dbEmployee, Login);
-                                }
-                            }
+                            await _userManager.SetUserNameAsync(dbEmployee, Login);
+                            if (Login.Contains("@")) await _userManager.SetEmailAsync(dbEmployee, Login);
                         }
                     }
 
-                    // 3. Обновляем должности
                     var existingApps = _context.StaffAppointments.Where(a => a.EmployeeId == id);
                     _context.StaffAppointments.RemoveRange(existingApps);
 
@@ -240,62 +242,39 @@ namespace CRM.Controllers
                             }
                         }
                     }
-
                     await _context.SaveChangesAsync();
                 }
                 catch (DbUpdateConcurrencyException)
                 {
-                    if (!EmployeeExists(employee.Id)) return NotFound();
-                    else throw;
+                    if (!EmployeeExists(employee.Id)) return NotFound(); else throw;
                 }
                 return RedirectToAction(nameof(Index));
             }
-
             await LoadDynamicFields("Employee");
             ViewBag.Positions = await _context.Positions.OrderBy(p => p.Name).ToListAsync();
             ViewBag.Departments = await _context.Departments.OrderBy(d => d.Name).ToListAsync();
             return View(employee);
         }
 
-        // --- НОВЫЙ МЕТОД: ПРИНУДИТЕЛЬНАЯ СМЕНА ПАРОЛЯ АДМИНОМ ---
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> AdminResetPassword(Guid id, string newPassword)
         {
             var user = await _userManager.FindByIdAsync(id.ToString());
             if (user == null) return NotFound("Сотрудник не найден");
-
-            // Удаляем старый пароль, если он был
-            if (await _userManager.HasPasswordAsync(user))
-            {
-                await _userManager.RemovePasswordAsync(user);
-            }
-            
-            // Ставим новый
+            if (await _userManager.HasPasswordAsync(user)) await _userManager.RemovePasswordAsync(user);
             var result = await _userManager.AddPasswordAsync(user, newPassword);
-            
-            if (result.Succeeded)
-            {
-                return Ok();
-            }
-            return BadRequest(string.Join(", ", result.Errors.Select(e => e.Description)));
+            return result.Succeeded ? Ok() : BadRequest(string.Join(", ", result.Errors.Select(e => e.Description)));
         }
 
-        private bool EmployeeExists(Guid id)
-        {
-            return _context.Employees.Any(e => e.Id == id);
-        }
+        private bool EmployeeExists(Guid id) => _context.Employees.Any(e => e.Id == id);
         
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Dismiss(Guid id)
         {
             var employee = await _context.Employees.FindAsync(id);
-            if (employee != null)
-            {
-                employee.IsDismissed = true;
-                await _context.SaveChangesAsync();
-            }
+            if (employee != null) { employee.IsDismissed = true; await _context.SaveChangesAsync(); }
             return RedirectToAction(nameof(Edit), new { id = id });
         }
 
@@ -304,11 +283,7 @@ namespace CRM.Controllers
         public async Task<IActionResult> Restore(Guid id)
         {
             var employee = await _context.Employees.FindAsync(id);
-            if (employee != null)
-            {
-                employee.IsDismissed = false;
-                await _context.SaveChangesAsync();
-            }
+            if (employee != null) { employee.IsDismissed = false; await _context.SaveChangesAsync(); }
             return RedirectToAction(nameof(Edit), new { id = id });
         }
     }

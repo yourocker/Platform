@@ -1,0 +1,64 @@
+﻿@model Core.Entities.Company.Position
+@{
+    ViewData["Title"] = "Удаление должности";
+    bool hasEmployees = ViewBag.HasEmployees ?? false;
+}
+
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-md-6 col-lg-5">
+            <div crm-card class="text-center">
+                <div class="card-body p-5">
+                    @* Иконка предупреждения из эталона *@
+                    <div class="mb-4">
+                        <i class="bi bi-exclamation-octagon text-danger display-1 opacity-25"></i>
+                    </div>
+                    
+                    <h3 class="fw-bold text-secondary mb-3">Удаление должности</h3>
+                    
+                    <div class="alert alert-warning border-0 shadow-sm mb-4 text-start small">
+                        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                        <strong>Внимание!</strong> Вы собираетесь безвозвратно удалить должность 
+                        <strong class="text-dark">@Model.Name</strong>. 
+                        Все связанные данные будут потеряны.
+                    </div>
+
+                    @* Сведения для проверки (адаптировано под должность) *@
+                    <div class="mb-4 text-start p-3 bg-light rounded border">
+                        <div class="small text-muted text-uppercase fw-bold mb-2" style="font-size: 0.7rem;">Данные записи</div>
+                        <div class="mb-1"><strong>Название:</strong> @Model.Name</div>
+                        <div class="text-muted small">ID: @Model.Id</div>
+                    </div>
+
+                    @if (hasEmployees)
+                    {
+                        <div class="alert alert-danger border-0 shadow-sm mb-4 text-start small">
+                            <i class="bi bi-x-circle-fill me-2"></i>
+                            <strong>Ошибка!</strong> Нельзя удалить эту должность, так как на ней числятся сотрудники. Сначала переведите их.
+                        </div>
+                        <a asp-action="Index" crm-button variant="outline-secondary" class="btn-lg w-100">
+                            Вернуться к списку
+                        </a>
+                    }
+                    else
+                    {
+                        <form asp-action="Delete" method="post">
+                            @Html.AntiForgeryToken()
+                            <input type="hidden" asp-for="Id" />
+                            
+                            <div class="d-grid gap-2">
+                                <button type="submit" crm-button variant="danger" icon="trash" class="btn-lg">
+                                    Подтвердить удаление
+                                </button>
+                                
+                                <a asp-action="Index" crm-button variant="outline-secondary" class="btn-lg">
+                                    Отмена
+                                </a>
+                            </div>
+                        </form>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

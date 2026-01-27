@@ -1,26 +1,27 @@
-﻿@{
-    var definition = ViewBag.Definition as Core.Entities.Platform.AppDefinition;
+﻿@using Core.Entities.Platform
+@{
+    var definition = ViewBag.Definition as AppDefinition;
     ViewData["Title"] = definition?.Name;
 }
 
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <div>
-        <h2 class="mb-0"><i class="bi bi-@definition?.Icon me-2"></i>@definition?.Name</h2>
-        <small class="text-muted">Реестр записей для сущности @definition?.EntityCode</small>
-    </div>
-    @* ФАКТ: Мы используем GenericObjects, потому что там УЖЕ есть Create.cshtml *@
-    <a asp-controller="GenericObjects" 
-       asp-action="Create" 
-       asp-route-entityCode="@definition?.EntityCode" 
-       class="btn btn-primary">
-        <i class="bi bi-plus-lg"></i> Добавить запись
-    </a>
-</div>
+<div class="container-fluid px-4">
+    @* --- УНИФИЦИРОВАННЫЙ ХЕДЕР СТРАНИЦЫ --- *@
+    <crm-page-header title="" icon="" subtitle="">
+        <a asp-controller="GenericObjects" 
+           asp-action="Create" 
+           asp-route-entityCode="@definition?.EntityCode" 
+           crm-button variant="primary" 
+           icon="plus-lg" 
+           class="shadow-sm px-4">
+            Добавить запись
+        </a>
+    </crm-page-header>
 
-<div class="card shadow-sm border-0">
-    <div class="card-body py-5 text-center text-muted">
-        <i class="bi bi-database-exclamation fs-1 mb-3 d-block"></i>
-        <h5>Записей пока нет</h5>
-        <p>Настройте поля в конструкторе и начните заполнять данные.</p>
+    @* --- КОНТЕЙНЕР РЕЕСТРА --- *@
+    <div crm-card class="overflow-hidden">
+        @* На данном этапе реестр отображает только пустое состояние.
+           Компонент crm-table-empty автоматически подтянет нужные стили.
+        *@
+        <crm-table-empty is-search="false" />
     </div>
 </div>

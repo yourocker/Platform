@@ -1,45 +1,27 @@
 ﻿@model Core.Entities.Company.Position
+@{ ViewData["Title"] = "Новая должность"; }
 
-@{
-    ViewData["Title"] = "Создание должности";
-}
+<div class="container-fluid px-4">
+    <crm-page-header title="" icon="" subtitle=""></crm-page-header>
 
-<div class="row justify-content-center">
-    <div class="col-md-8">
-        <div class="d-flex align-items-center mb-4">
-            <a asp-action="Index" class="btn btn-outline-secondary btn-sm me-3">
-                <i class="bi bi-arrow-left"></i>
-            </a>
-            <h2 class="mb-0">Новая должность</h2>
-        </div>
-
-        <form asp-action="Create" method="post">
-            <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
-
-            <div class="card shadow-sm border-0 mb-4">
-                <div class="card-header bg-white py-3">
-                    <h5 class="mb-0 text-primary">Основная информация</h5>
-                </div>
-                <div class="card-body p-4">
-                    <div class="mb-3">
-                        <label asp-for="Name" class="form-label fw-bold">Название должности</label>
-                        <input asp-for="Name" class="form-control" placeholder="Например: Врач-терапевт" required />
-                        <span asp-validation-for="Name" class="text-danger"></span>
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <form asp-action="Create" method="post">
+                <div crm-card>
+                    <div class="card-body p-4">
+                        <crm-input label="Название должности" asp-for="Name" placeholder="Например: Врач-терапевт" required="required"></crm-input>
+                        
+                        <div class="mt-4 pt-4 border-top">
+                            <partial name="_DynamicFields" model="null" />
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            @* Подключаем динамические поля (model="null", т.к. создаем новую) *@
-            <partial name="_DynamicFields" model="null" />
-
-            <div class="d-flex justify-content-end gap-2 mb-5">
-                <a asp-action="Index" class="btn btn-light px-4">Отмена</a>
-                <button type="submit" class="btn btn-primary px-5">Создать</button>
-            </div>
-        </form>
+                <div class="mt-4 pb-5 d-flex gap-2">
+                    <button type="submit" crm-button variant="primary" icon="check-lg" class="px-5 shadow">Создать</button>
+                    <a asp-action="Index" crm-button variant="outline-secondary">Отмена</a>
+                </div>
+            </form>
+        </div>
     </div>
 </div>
-
-@section Scripts {
-    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
-}

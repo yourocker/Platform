@@ -1,33 +1,30 @@
 ﻿@model Core.Entities.Platform.GenericObject
 @{ ViewData["Title"] = "Новая запись"; }
 
-<div class="row justify-content-center">
-    <div class="col-md-10"> @* Расширил контейнер до 10 (было 8), чтобы поля были шире *@
-        <h2 class="mb-4">Добавление объекта</h2>
-        
-        <form asp-action="Create" method="post" enctype="multipart/form-data">
-            <input type="hidden" name="EntityCode" value="@ViewBag.EntityCode" />
-            
-            @* --- ОСНОВНЫЕ ПОЛЯ (в едином стиле с доп. полями) --- *@
-            <div class="container-fluid px-0">
-                <div class="row mb-3">
-                    <label asp-for="Name" class="col-sm-2 col-form-label text-muted text-sm-end fw-bold">
-                        Наименование <span class="text-danger">*</span>
-                    </label>
-                    <div class="col-sm-10">
-                        <input asp-for="Name" class="form-control" placeholder="Введите название" required />
-                        <span asp-validation-for="Name" class="text-danger"></span>
+<div class="container-fluid px-4">
+    <crm-page-header title="" icon="" subtitle=""></crm-page-header>
+
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <form asp-action="Create" method="post" enctype="multipart/form-data">
+                <input type="hidden" name="EntityCode" value="@ViewBag.EntityCode" />
+                
+                <div crm-card>
+                    <div class="card-body p-4">
+                        <crm-input label="Наименование" asp-for="Name" placeholder="Введите название..." required="required"></crm-input>
+                        
+                        @* Динамические поля через partial [cite: 9] *@
+                        <div class="mt-4 pt-4 border-top">
+                            <partial name="_DynamicFields" />
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            @* --- ДОПОЛНИТЕЛЬНЫЕ ПОЛЯ --- *@
-            <partial name="_DynamicFields" />
-
-            <div class="mt-4 pt-3 border-top">
-                <button type="submit" class="btn btn-success px-4">Создать</button>
-                <a href="/Data/@ViewBag.EntityCode" class="btn btn-link text-decoration-none">Отмена</a>
-            </div>
-        </form>
+                <div class="mt-4 pb-5 d-flex gap-2">
+                    <button type="submit" crm-button variant="primary" icon="check-lg" class="px-5 shadow">Создать</button>
+                    <a href="/Data/@ViewBag.EntityCode" crm-button variant="outline-secondary">Отмена</a>
+                </div>
+            </form>
+        </div>
     </div>
 </div>

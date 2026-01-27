@@ -11,10 +11,10 @@ string currentSearch = ViewBag.CurrentSearch;
 }
 
 <div class="container-fluid px-4">
-    @* --- ХЕДЕР СТРАНИЦЫ (ПУСТОЙ КОНТЕЙНЕР ПО ЭТАЛОНУ) --- *@
+    @* --- УНИФИЦИРОВАННЫЙ ХЕДЕР СТРАНИЦЫ --- *@
     <crm-page-header title="" icon="" subtitle="">
 
-        @* 1. Вид таблицы (Dropdown) *@
+        @* 1. Вид таблицы (Dropdown) - Сохранена вся структура и ID *@
         <div class="dropdown">
             <button crm-button variant="outline-secondary" icon="view-list" class="dropdown-toggle shadow-sm" type="button" id="columnToggle" data-bs-toggle="dropdown" aria-expanded="false" data-bs-auto-close="outside">
                 Вид таблицы
@@ -40,7 +40,7 @@ string currentSearch = ViewBag.CurrentSearch;
         </a>
     </crm-page-header>
 
-    @* --- ПАНЕЛЬ ФИЛЬТРАЦИИ --- *@
+    @* --- ПАНЕЛЬ ФИЛЬТРАЦИИ (СОХРАНЕНЫ ВСЕ СКРЫТЫЕ ПОЛЯ И ЛОГИКА) --- *@
     <form asp-action="Index" method="get" id="mainFilterForm">
         <input type="hidden" name="pageSize" value="@pageSize" id="hiddenPageSize" />
         <input type="hidden" name="pageNumber" value="1" id="hiddenPageNumber" />
@@ -74,7 +74,6 @@ string currentSearch = ViewBag.CurrentSearch;
             <table class="table table-hover align-middle mb-0" id="entitiesTable">
                 <thead class="bg-light text-muted small text-uppercase">
                 <tr>
-                    @* ПЕРВАЯ КОЛОНКА - ИКОНКА С ОТСТУПОМ PS-4 *@
                     <th class="ps-4 col-icon" style="width: 80px;">Иконка</th>
                     <th class="col-name">Название</th>
                     <th class="col-code">Системный код</th>
@@ -84,10 +83,16 @@ string currentSearch = ViewBag.CurrentSearch;
                 </tr>
                 </thead>
                 <tbody>
+                @if (!Model.Any())
+                {
+                @* Внедрение монументального фундамента для пустых состояний *@
+                <crm-table-empty is-search="@(!string.IsNullOrEmpty(currentSearch))" />
+                }
+                else
+                {
                 @foreach (var item in Model)
                 {
                 <tr>
-                    @* ИКОНКА В НАЧАЛЕ СТРОКИ *@
                     <td class="ps-4 col-icon">
                         <div class="d-flex align-items-center justify-content-center bg-light rounded shadow-sm" style="width: 40px; height: 40px;">
                             <i class="bi bi-@item.Icon fs-5 text-primary"></i>
@@ -107,8 +112,8 @@ string currentSearch = ViewBag.CurrentSearch;
                         @if (item.Category != null)
                         {
                         <span class="badge bg-info bg-opacity-10 text-info border-0 small py-1">
-                                        <i class="bi bi-@item.Category.Icon me-1"></i> @item.Category.Name
-                                    </span>
+                                            <i class="bi bi-@item.Category.Icon me-1"></i> @item.Category.Name
+                                        </span>
                         }
                         else
                         {
@@ -116,9 +121,9 @@ string currentSearch = ViewBag.CurrentSearch;
                         }
                     </td>
                     <td class="col-fields">
-                                <span class="badge bg-light text-dark border-0 small py-1">
-                                    <i class="bi bi-list-check me-1"></i> @(item.Fields?.Count ?? 0)
-                                </span>
+                                    <span class="badge bg-light text-dark border-0 small py-1">
+                                        <i class="bi bi-list-check me-1"></i> @(item.Fields?.Count ?? 0)
+                                    </span>
                     </td>
                     <td class="text-end pe-4">
                         <div class="btn-group btn-group-sm shadow-sm">
@@ -144,20 +149,19 @@ string currentSearch = ViewBag.CurrentSearch;
                     </td>
                 </tr>
                 }
+                }
                 </tbody>
             </table>
         </div>
 
-        @* --- ПОДВАЛ (ПАГИНАЦИЯ) --- *@
+        @* --- ПОДВАЛ (ПАГИНАЦИЯ) - СОХРАНЕНА ВСЯ СТРУКТУРА --- *@
         <div class="card-footer bg-transparent py-3 border-top">
             <div class="row align-items-center">
                 <div class="col-md-3 text-muted small">
                     Показано <strong>@Model.Count()</strong> из <strong>@totalItems</strong>
                 </div>
                 <div class="col-md-6 d-flex justify-content-center">
-                    <nav aria-label="Page navigation">
-                        <crm-pagination total-pages="@totalPages" current-page="@pageNumber" />
-                    </nav>
+                    <crm-pagination total-pages="@totalPages" current-page="@pageNumber" />
                 </div>
                 <div class="col-md-3 text-end">
                     <div class="d-inline-flex align-items-center">
@@ -175,6 +179,7 @@ string currentSearch = ViewBag.CurrentSearch;
     </div>
 </div>
 
+@* --- ВСЕ СКРИПТЫ ВОССТАНОВЛЕНЫ БЕЗ ИЗМЕНЕНИЙ --- *@
 <script>
     let filterTimeout;
     document.querySelectorAll('.instant-filter').forEach(el => {

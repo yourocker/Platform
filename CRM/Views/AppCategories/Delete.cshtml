@@ -1,6 +1,6 @@
 ﻿@model Core.Entities.Platform.AppCategory
 @{
-    ViewData["Title"] = "Удаление";
+    ViewData["Title"] = "Удаление раздела";
     bool canDelete = ViewBag.CanDelete ?? false;
 }
 
@@ -10,7 +10,6 @@
             <div crm-card class="text-center">
                 <div class="card-body p-5">
                     <div class="mb-4">
-                        @* Иконка в точности как в контактах *@
                         <i class="bi bi-exclamation-octagon text-danger display-1 opacity-25"></i>
                     </div>
                     
@@ -18,7 +17,6 @@
                     
                     @if (!canDelete)
                     {
-                        @* Блок ошибки, если раздел нельзя удалить (из-за вложенных сущностей) *@
                         <div class="alert alert-danger border-0 shadow-sm mb-4 text-start">
                             <i class="bi bi-shield-lock me-2"></i> @ViewBag.Reason
                         </div>
@@ -35,13 +33,7 @@
                         <input type="hidden" asp-for="Id" />
                         
                         <div class="d-grid gap-2">
-                            @* Кнопка теперь называется одинаково и имеет тот же стиль *@
-                            <button type="submit" 
-                                    crm-button 
-                                    variant="danger" 
-                                    icon="trash" 
-                                    class="btn-lg" 
-                                    disabled="@(!canDelete)">
+                            <button type="submit" crm-button variant="danger" icon="trash" class="btn-lg" disabled="@(!canDelete)">
                                 Удалить навсегда
                             </button>
                             

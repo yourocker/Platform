@@ -16,10 +16,10 @@ var currentFilters = ViewBag.CurrentFilters as Dictionary<string, string> ?? new
 }
 
 <div class="container-fluid px-4">
-    @* --- УНИФИЦИРОВАННЫЙ ХЕДЕР СТРАНИЦЫ --- *@
-    <crm-page-header title="" icon="" subtitle=""> @*person-lines-fill*@
+    @* --- УНИФИЦИРОВАННЫЙ ХЕДЕР СТРАНИЦЫ (ПУСТОЙ ПО ТРЕБОВАНИЮ) --- *@
+    <crm-page-header title="" icon="" subtitle="">
 
-        @* Настройка всех доступных колонок (Dropdown) *@
+        @* 1. Настройка видимости колонок (Dropdown) *@
         <div class="dropdown">
             <button crm-button variant="outline-secondary" icon="view-list" class="dropdown-toggle shadow-sm" type="button" id="columnToggle" data-bs-toggle="dropdown" aria-expanded="false" data-bs-auto-close="outside">
                 Вид таблицы
@@ -48,12 +48,12 @@ var currentFilters = ViewBag.CurrentFilters as Dictionary<string, string> ?? new
             </ul>
         </div>
 
-        @* Кнопка управления фильтрами *@
+        @* 2. Кнопка управления фильтрами *@
         <button crm-button variant="outline-primary" icon="funnel" class="shadow-sm" type="button" data-bs-toggle="collapse" data-bs-target="#filterPanel">
             Фильтры
         </button>
 
-        @* Кнопка перехода к созданию *@
+        @* 3. Кнопка перехода к созданию *@
         <a asp-action="Create" crm-button variant="primary" icon="plus-lg" class="shadow-sm px-4">
             Создать
         </a>
@@ -61,19 +61,16 @@ var currentFilters = ViewBag.CurrentFilters as Dictionary<string, string> ?? new
 
     @* --- ФИЛЬТРЫ И ПОИСК --- *@
     <form asp-action="Index" method="get" id="mainFilterForm">
-        @* Параметры пагинации *@
         <input type="hidden" name="pageSize" value="@pageSize" id="hiddenPageSize" />
         <input type="hidden" name="pageNumber" value="1" id="hiddenPageNumber" />
 
         <div crm-card class="mb-4">
             <div class="card-body p-3">
-                @* Быстрый поиск *@
                 <div class="input-group input-group-lg border rounded-3 overflow-hidden">
                     <span class="input-group-text bg-white border-0"><i class="bi bi-search text-primary"></i></span>
                     <input type="text" name="searchString" value="@currentSearch" class="form-control border-0 shadow-none instant-filter" placeholder="Начните вводить для поиска" autocomplete="off"/>
                 </div>
 
-                @* Детальные фильтры (Спойлер) *@
                 <div class="collapse @(currentFilters.Any() ? "show" : "")" id="filterPanel">
                     <div class="pt-4 mt-3 border-top">
                         <div class="row row-cols-1 row-cols-md-3 row-cols-lg-4 g-3">
@@ -102,7 +99,7 @@ var currentFilters = ViewBag.CurrentFilters as Dictionary<string, string> ?? new
                             }
                         </div>
                         <div class="text-end mt-3">
-                            <a asp-action="Index" class="btn btn-link btn-sm text-danger">Очистить всё</a>
+                            <a asp-action="Index" class="btn btn-link btn-sm text-danger text-decoration-none">Очистить всё</a>
                         </div>
                     </div>
                 </div>
@@ -130,21 +127,26 @@ var currentFilters = ViewBag.CurrentFilters as Dictionary<string, string> ?? new
                 </tr>
                 </thead>
                 <tbody>
+                @if (!Model.Any())
+                {
+                @* Внедрение универсальной заглушки пустых состояний *@
+                <crm-table-empty is-search="@(!string.IsNullOrEmpty(currentSearch) || currentFilters.Any())" />
+                }
+                else
+                {
                 @foreach (var item in Model)
                 {
                 var propValues = new Dictionary<string, object>();
                 if (!string.IsNullOrEmpty(item.Properties))
                 {
-                try
-                {
-                propValues = JsonSerializer.Deserialize<Dictionary<string, object>>(item.Properties) ?? new Dictionary<string, object>();
-                }
+                try { propValues = JsonSerializer.Deserialize<Dictionary<string, object>>(item.Properties) ?? new Dictionary<string, object>(); }
                 catch { }
                 }
 
                 <tr>
                     <td class="ps-4 col-fullname">
-                        <div class="fw-bold"><a asp-action="Details" asp-route-id="@item.Id" class="text-decoration-none text-dark">@item.FullName</a></div></td>
+                        <div class="fw-bold"><a asp-action="Details" asp-route-id="@item.Id" class="text-decoration-none text-dark text-primary-hover">@item.FullName</a></div>
+                    </td>
                     <td class="col-lastname">@item.LastName</td>
                     <td class="col-firstname">@item.FirstName</td>
                     <td class="col-middlename">@item.MiddleName</td>
@@ -159,15 +161,9 @@ var currentFilters = ViewBag.CurrentFilters as Dictionary<string, string> ?? new
                         {
                         <span class="badge bg-light text-dark border">@element.GetArrayLength() зап.</span>
                         }
-                        else
-                        {
-                        @val.ToString()
+                        else { @val.ToString() }
                         }
-                        }
-                        else
-                        {
-                        <span class="text-muted small">—</span>
-                        }
+                        else { <span class="text-muted small">—</span> }
                     </td>
                     }
                     <td class="text-end pe-4">
@@ -187,6 +183,7 @@ var currentFilters = ViewBag.CurrentFilters as Dictionary<string, string> ?? new
                     </td>
                 </tr>
                 }
+                }
                 </tbody>
             </table>
         </div>
@@ -198,9 +195,7 @@ var currentFilters = ViewBag.CurrentFilters as Dictionary<string, string> ?? new
                     Показано <strong>@Model.Count()</strong> из <strong>@totalItems</strong> записей
                 </div>
                 <div class="col-md-6 d-flex justify-content-center">
-                    <nav aria-label="Page navigation">
-                        <crm-pagination total-pages="@totalPages" current-page="@pageNumber" />
-                    </nav>
+                    <crm-pagination total-pages="@totalPages" current-page="@pageNumber" />
                 </div>
                 <div class="col-md-3 text-end">
                     <div class="d-inline-flex align-items-center">
@@ -218,7 +213,6 @@ var currentFilters = ViewBag.CurrentFilters as Dictionary<string, string> ?? new
     </div>
 </div>
 
-@* --- СКРИПТЫ --- *@
 <script>
     let filterTimeout;
     document.querySelectorAll('.instant-filter').forEach(el => {
@@ -261,6 +255,26 @@ var currentFilters = ViewBag.CurrentFilters as Dictionary<string, string> ?? new
                 el.style.display = isVisible ? '' : 'none';
             });
         }
+    });
+
+    document.addEventListener('DOMContentLoaded', function() {
+        // Находим все строки таблицы в tbody
+        const rows = document.querySelectorAll('#contactsTable tbody tr');
+
+        rows.forEach(row => {
+            row.addEventListener('click', function(e) {
+                // Проверяем, что клик не был по кнопкам действий или ссылкам
+                if (e.target.closest('.btn-group') || e.target.closest('a') || e.target.closest('input')) {
+                    return;
+                }
+
+                // Находим ссылку на Details в этой строке (она у нас в ФИО)
+                const detailsLink = this.querySelector('a[href*="/Details/"]');
+                if (detailsLink) {
+                    window.location.href = detailsLink.href;
+                }
+            });
+        });
     });
 </script>
 
