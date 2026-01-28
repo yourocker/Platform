@@ -20,3 +20,28 @@ html {
 body {
   margin-bottom: 60px;
 }
+
+/* --- CRM Table Actions & Interactive Rows --- */
+
+/* 1. Интерактивная строка */
+.crm-clickable-row {
+  cursor: pointer;
+}
+
+/* 2. Поведение кнопок действий */
+/* По умолчанию (мобильные < 992px) кнопки видны всегда */
+.crm-hover-actions {
+  opacity: 1;
+  transition: opacity 0.2s ease-in-out;
+}
+
+/* На десктопах (lg и выше) кнопки скрыты и появляются только при наведении на строку */
+@media (min-width: 992px) {
+  .crm-hover-actions {
+    opacity: 0;
+  }
+
+  .table-hover tbody tr:hover .crm-hover-actions {
+    opacity: 1;
+  }
+}

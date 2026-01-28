@@ -1,0 +1,69 @@
+﻿@{
+    Layout = "_LayoutV2";
+
+    var title = ViewData["Title"] as string;
+    var icon = ViewData["Icon"] as string ?? "table"; 
+    
+    // Данные для пагинации
+    int totalItems = ViewBag.TotalItems != null ? (int)ViewBag.TotalItems : 0;
+    int pageNumber = ViewBag.PageNumber != null ? (int)ViewBag.PageNumber : 1;
+    int pageSize = ViewBag.PageSize != null ? (int)ViewBag.PageSize : 20;
+    int totalPages = ViewBag.TotalPages != null ? (int)ViewBag.TotalPages : 1;
+}
+
+<div class="container-fluid px-4">
+    
+    @* --- HEADER --- *@
+    <crm-page-header title="@title" icon="@icon">
+        @await RenderSectionAsync("HeaderControls", required: false)
+
+        @* Кнопка открытия фильтров *@
+        <button crm-button variant="outline-primary" icon="funnel" class="shadow-sm" type="button" 
+                data-bs-toggle="collapse" data-bs-target="#filterPanel">
+            Фильтры
+        </button>
+
+        @await RenderSectionAsync("ActionButtons", required: false)
+    </crm-page-header>
+
+    @* --- FILTER PANEL (Подключаем стандартный компонент) --- *@
+    @* Компонент сам отрисует форму, поиск и поля фильтрации *@
+    @await Html.PartialAsync("_FilterPanel")
+
+    @* --- TABLE CONTENT --- *@
+    <div crm-card class="overflow-hidden">
+        @RenderBody()
+        
+        @* --- FOOTER / PAGINATION --- *@
+        @if (totalPages > 0) 
+        {
+            <div class="card-footer bg-white py-3 border-top">
+                <div class="row align-items-center">
+                    <div class="col-md-3 text-muted small">
+                        Показано <strong>@(ViewBag.ItemCount ?? 0)</strong> из <strong>@totalItems</strong>
+                    </div>
+                    <div class="col-md-6 d-flex justify-content-center">
+                        <nav aria-label="Page navigation">
+                            <crm-pagination total-pages="@totalPages" current-page="@pageNumber" />
+                        </nav>
+                    </div>
+                    <div class="col-md-3 text-end">
+                        <div class="d-inline-flex align-items-center">
+                            <span class="text-muted small me-2">На стр:</span>
+                            @* Функция changePageSize определена в _FilterPanel *@
+                            <select class="form-select form-select-sm" style="width: auto;" onchange="changePageSize(this.value)">
+                                @foreach (var size in new[] { 10, 25, 50, 100 })
+                                {
+                                    <option value="@size" selected="@(pageSize == size)">@size</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+</div>
+
+<script src="~/js/entity-index.js" asp-append-version="true"></script>
+@await RenderSectionAsync("Scripts", required: false)

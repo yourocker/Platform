@@ -12,6 +12,7 @@ using Core.Specifications.CRM;
 using Core.Interfaces.CRM;
 using Core.DTOs.CRM;
 using Core.Services.CRM;
+using Core.UI.Grid;
 
 namespace CRM.Controllers
 {
@@ -43,7 +44,6 @@ namespace CRM.Controllers
 
         /// <summary>
         /// Извлекает динамические поля из формы (Request.Form) в словарь.
-        /// Используется, так как ModelBinder не умеет нативно биндить динамические ключи в Dictionary.
         /// </summary>
         private Dictionary<string, object> ExtractDynamicProps()
         {
@@ -53,7 +53,6 @@ namespace CRM.Controllers
                 var systemName = key.Replace("DynamicProps[", "").Replace("]", "");
                 var values = Request.Form[key].ToList();
                 
-                // Если значений несколько (checkbox array, multi-select) - сохраняем список, иначе строку
                 if (values.Count > 1) dict[systemName] = values;
                 else dict[systemName] = values.FirstOrDefault() ?? "";
             }
@@ -62,42 +61,101 @@ namespace CRM.Controllers
 
         // --- ACTIONS ---
 
-        public async Task<IActionResult> Index(string searchString, int? pageNumber, int? pageSize)
+        // GET: Contacts
+        public async Task<IActionResult> Index(
+            string searchString, 
+            int pageNumber = 1, 
+            int? pageSize = null, // <--- Изменили на nullable int, чтобы различать отсутствие параметра
+            string? sortOrder = null, // <--- НОВЫЙ ПАРАМЕТР СОРТИРОВКИ
+            string? f_LastName = null,
+            string? f_FirstName = null,
+            string? f_MiddleName = null)
         {
-            await LoadViewData();
-            int actualPageSize = pageSize ?? 10;
-            int actualPageNumber = pageNumber ?? 1;
-
-            // 1. Сбор фильтров из URL
-            var filters = Request.Query
-                .Where(q => q.Key.StartsWith("f_") && !string.IsNullOrEmpty(q.Value))
-                .ToDictionary(k => k.Key, v => v.Value.ToString());
-
-            // 2. Поиск через Спецификацию (БД)
-            var spec = new ContactSearchSpecification(searchString, filters, actualPageNumber, actualPageSize);
+            // 1. ЛОГИКА PAGE SIZE (COOKIE)
+            // Если pageSize пришел в запросе - сохраняем в куки и используем.
+            // Если не пришел - пытаемся достать из куки.
+            // Если и там нет - используем дефолт 10.
+            if (pageSize.HasValue)
+            {
+                Response.Cookies.Append("crm_pagesize", pageSize.Value.ToString(), new CookieOptions { Expires = DateTimeOffset.UtcNow.AddYears(1) });
+            }
+            else
+            {
+                if (Request.Cookies.TryGetValue("crm_pagesize", out string cookieVal) && int.TryParse(cookieVal, out int parsedVal))
+                {
+                    pageSize = parsedVal;
+                }
+                else
+                {
+                    pageSize = 10;
+                }
+            }
             
-            var query = _context.Contacts.AsNoTracking();
-            var filteredQuery = SpecificationEvaluator.GetQuery(query, spec);
-            var contactsEntities = await filteredQuery.ToListAsync();
+            // Гарантируем, что pageSize имеет значение (для дальнейшего кода)
+            int actualPageSize = pageSize.Value;
 
-            // 3. Преобразование Entity -> DTO (Logic Decoupling)
-            // Маппер также парсит JSONB поля в словарь для View
-            var contactsDtos = contactsEntities.Select(ContactMapper.ToListDto).ToList();
+            // 2. Подгружаем поля
+            await LoadViewData(); 
+            var dynamicFields = ViewBag.DynamicFields as List<AppFieldDefinition> ?? new List<AppFieldDefinition>();
 
-            // 4. Подсчет количества для пагинации
-            var countQuery = _context.Contacts.AsNoTracking().AsQueryable();
-            foreach (var criterion in spec.Criteria) countQuery = countQuery.Where(criterion);
-            int totalItems = await countQuery.CountAsync();
+            // 3. Сбор фильтров
+            var filters = new Dictionary<string, string>();
+            if (!string.IsNullOrEmpty(f_LastName)) filters.Add("LastName", f_LastName);
+            if (!string.IsNullOrEmpty(f_FirstName)) filters.Add("FirstName", f_FirstName);
+            if (!string.IsNullOrEmpty(f_MiddleName)) filters.Add("MiddleName", f_MiddleName);
+            
+            // Динамические фильтры из Query String
+            foreach (var key in Request.Query.Keys)
+            {
+                if (key.StartsWith("f_") && !new[] { "f_LastName", "f_FirstName", "f_MiddleName" }.Contains(key))
+                {
+                    var val = Request.Query[key].ToString();
+                    if (!string.IsNullOrEmpty(val))
+                    {
+                        var fieldName = key.Substring(2);
+                        filters.Add(fieldName, val);
+                    }
+                }
+            }
 
-            ViewBag.TotalItems = totalItems;
-            ViewBag.PageNumber = actualPageNumber;
-            ViewBag.PageSize = actualPageSize;
-            ViewBag.TotalPages = (int)Math.Ceiling(totalItems / (double)actualPageSize);
+            // 4. Получение данных
+            
+            // 4.1. Подсчет общего количества (БЕЗ сортировки и пагинации)
+            var countSpec = new ContactSearchSpecification(searchString, filters);
+            var totalItems = await SpecificationEvaluator.GetQuery<Contact>(_context.Contacts.AsQueryable(), countSpec).CountAsync();
+
+            // 4.2. Получение страницы данных (С СОРТИРОВКОЙ и пагинацией)
+            // Передаем sortOrder в спецификацию
+            var listSpec = new ContactSearchSpecification(searchString, filters, pageNumber, actualPageSize, sortOrder);
+            var contacts = await SpecificationEvaluator.GetQuery<Contact>(_context.Contacts.AsQueryable(), listSpec).ToListAsync();
+
+            // Маппинг в DTO
+            var contactDtos = contacts.Select(c => ContactMapper.ToListDto(c)).ToList();
+
+            // 5. --- КОНФИГУРАЦИЯ ГРИДА ---
+            var gridConfig = new GridConfig<ContactListDto>()
+                // Добавляем sortKey для сложных полей, логику которых мы прописали в Спецификации
+                .AddColumn(x => x.FullName, "ФИО", "col-fullname", GridColumnType.LinkBold, sortKey: "fullname") 
+                .AddColumn(x => x.LastName, "Фамилия", "col-lastname", visible: false, sortKey: "lastname") 
+                .AddColumn(x => x.FirstName, "Имя", "col-firstname", visible: false, sortKey: "firstname")   
+                .AddColumn(x => x.MiddleName, "Отчество", "col-middlename", visible: false, sortKey: "middlename") 
+                .AddColumn(x => x.PhoneNumbers, "Телефон", "col-phone", GridColumnType.PhoneList, sortKey: "phone") // Сортировка по 1-му номеру
+                .AddColumn(x => x.EmailAddresses, "Email", "col-email", GridColumnType.EmailList, sortKey: "email") // Сортировка по 1-му email
+                .AddDynamicFields(dynamicFields) // Сортировка включится автоматически по ключам JSON
+                .AddActions();
+
+            // Передача данных во View
+            ViewBag.GridConfig = gridConfig;
             ViewBag.CurrentSearch = searchString;
-            ViewBag.CurrentFilters = filters;
+            ViewBag.PageNumber = pageNumber;
+            ViewBag.PageSize = actualPageSize; // Передаем актуальный размер
+            ViewBag.TotalItems = totalItems;
+            ViewBag.TotalPages = (int)Math.Ceiling(totalItems / (double)actualPageSize);
+            
+            // Возвращаем фильтры для восстановления в UI
+            ViewBag.CurrentFilters = filters.ToDictionary(k => "f_" + k.Key, v => v.Value);
 
-            // Отдаем DTO, как и ожидает теперь Index.cshtml
-            return View(contactsDtos); 
+            return View(contactDtos);
         }
 
         public async Task<IActionResult> Details(Guid? id)
@@ -107,14 +165,13 @@ namespace CRM.Controllers
             var contact = await _context.Contacts
                 .Include(c => c.Phones)
                 .Include(c => c.Emails)
-                .AsNoTracking() // Для чтения изменений не нужно
+                .AsNoTracking()
                 .FirstOrDefaultAsync(m => m.Id == id);
                 
             if (contact == null) return NotFound();
             
             await LoadViewData();
             
-            // Преобразуем в DTO для деталей
             var dto = ContactMapper.ToDetailsDto(contact);
             return View(dto);
         }
@@ -123,7 +180,6 @@ namespace CRM.Controllers
         public async Task<IActionResult> Create()
         {
             await LoadViewData();
-            // Отдаем пустую DTO, инициализированную дефолтными значениями
             return View(new ContactCreateDto());
         }
 
@@ -134,21 +190,12 @@ namespace CRM.Controllers
         {
             if (ModelState.IsValid)
             {
-                // 1. Создаем заготовку сущности
                 var contact = ContactMapper.ToEntity(dto);
-                
-                // 2. Извлекаем динамические данные напрямую из Request
                 var dynamicProps = ExtractDynamicProps();
-
-                // 3. Делегируем всю логику сохранения сервису
                 await _contactService.CreateContactAsync(contact, dto.PhoneNumbers, dto.EmailAddresses, dynamicProps);
-                
                 return RedirectToAction(nameof(Index));
             }
-            
-            // Если ошибка валидации:
             await LoadViewData();
-            // Восстанавливаем введенные динамические данные, чтобы пользователь не вводил их заново
             dto.DynamicValues = ExtractDynamicProps();
             return View(dto);
         }
@@ -167,8 +214,6 @@ namespace CRM.Controllers
             if (contact == null) return NotFound();
             
             await LoadViewData();
-            
-            // Преобразуем существующую запись в DTO редактирования
             var dto = ContactMapper.ToEditDto(contact);
             return View(dto);
         }
@@ -184,13 +229,9 @@ namespace CRM.Controllers
             {
                 try
                 {
-                    // 1. Подготовка данных
                     var contact = new Contact(); 
-                    ContactMapper.UpdateEntity(contact, dto); // Переносим базовые поля
-                    
-                    var dynamicProps = ExtractDynamicProps(); // Достаем JSON поля
-
-                    // 2. Обновление через сервис
+                    ContactMapper.UpdateEntity(contact, dto); 
+                    var dynamicProps = ExtractDynamicProps(); 
                     await _contactService.UpdateContactAsync(id, contact, dto.PhoneNumbers, dto.EmailAddresses, dynamicProps);
                 }
                 catch (KeyNotFoundException)
@@ -205,22 +246,17 @@ namespace CRM.Controllers
                 return RedirectToAction(nameof(Index));
             }
             
-            // Ошибка валидации
             await LoadViewData();
-            dto.DynamicValues = ExtractDynamicProps(); // Сохраняем введенное
+            dto.DynamicValues = ExtractDynamicProps(); 
             return View(dto);
         }
 
         public async Task<IActionResult> Delete(Guid? id)
         {
             if (id == null) return NotFound();
-            
             var contact = await _context.Contacts.AsNoTracking().FirstOrDefaultAsync(m => m.Id == id);
-            
             if (contact == null) return NotFound();
-            
             var dto = ContactMapper.ToDetailsDto(contact);
-            
             return View(dto); 
         }
 

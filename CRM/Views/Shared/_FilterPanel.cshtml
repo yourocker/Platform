@@ -27,12 +27,6 @@
             <div class="collapse @(currentFilters.Any() ? "show" : "")" id="filterPanel">
                 <div class="pt-4 mt-3 border-top">
                     <div class="row row-cols-1 row-cols-md-3 row-cols-lg-4 g-3">
-                        
-                        @* Место для специфичных полей сущности (если они переданы через RenderBody/Sections, но в Partial это сложно.
-                           Поэтому пока делаем универсальный вывод динамических полей + стандартные поля ФИО/Телефон, если они нужны везде).
-                           
-                           ДЛЯ УНИВЕРСАЛЬНОСТИ: Сюда можно добавить проверку: если это Контакты/Сотрудники - выводим ФИО.
-                        *@
 
                         @if (ViewData.ContainsKey("ShowStandardFilters") && (bool)ViewData["ShowStandardFilters"] == true)
                         {
