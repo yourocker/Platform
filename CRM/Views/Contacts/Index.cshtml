@@ -1,221 +1,59 @@
 ﻿@using Core.DTOs.CRM
 @using Core.Entities.Platform
-@using System.Text.Json
+@using Core.UI.Grid
 @model IEnumerable<ContactListDto>
 @{
-ViewData["Title"] = "Контакты";
-var dynamicFields = ViewBag.DynamicFields as List<AppFieldDefinition> ?? new List<AppFieldDefinition>();
-
-// Настройка для _FilterPanel: показать стандартные поля (ФИО, Телефон, Email)
-ViewData["ShowStandardFilters"] = true;
-
-// Метаданные пагинации
-int totalItems = ViewBag.TotalItems ?? 0;
-int pageNumber = ViewBag.PageNumber ?? 1;
-int pageSize = ViewBag.PageSize ?? 10;
-int totalPages = ViewBag.TotalPages ?? 1;
-string currentSearch = ViewBag.CurrentSearch;
+    Layout = "_EntityIndex";
+    ViewData["Title"] = "Контакты";
+    ViewData["Icon"] = "person-lines-fill";
+    
+    // Включаем стандартную панель (Фамилия, Имя, Телефон, Email) в _FilterPanel
+    ViewData["ShowStandardFilters"] = true; 
+    
+    // Получаем конфиг таблицы из контроллера
+    var gridConfig = ViewBag.GridConfig as GridConfig<ContactListDto>;
+    ViewBag.ItemCount = Model?.Count() ?? 0;
 }
 
-<div class="container-fluid px-4">
-    <crm-page-header title="" icon="" subtitle="">
-        @* 1. Вид таблицы (Оставляем здесь, так как колонки специфичны для контактов) *@
-        <div class="dropdown">
-            <button crm-button variant="outline-secondary" icon="view-list" class="dropdown-toggle shadow-sm" type="button" id="columnToggle" data-bs-toggle="dropdown" aria-expanded="false" data-bs-auto-close="outside">
-                Вид таблицы
-            </button>
-            <ul class="dropdown-menu shadow border-0" aria-labelledby="columnToggle" id="columnSelector" style="max-height: 500px; overflow-y: auto; min-width: 250px;">
-                <li><h6 class="dropdown-header">Системные поля</h6></li>
-                <li><div class="dropdown-item"><div class="form-check"><input class="form-check-input col-chk" type="checkbox" value="col-fullname" checked> <label class="form-check-label">ФИО (Полное)</label></div></div></li>
-                <li><div class="dropdown-item"><div class="form-check"><input class="form-check-input col-chk" type="checkbox" value="col-lastname" checked> <label class="form-check-label">Фамилия</label></div></div></li>
-                <li><div class="dropdown-item"><div class="form-check"><input class="form-check-input col-chk" type="checkbox" value="col-firstname" checked> <label class="form-check-label">Имя</label></div></div></li>
-                <li><div class="dropdown-item"><div class="form-check"><input class="form-check-input col-chk" type="checkbox" value="col-middlename" checked> <label class="form-check-label">Отчество</label></div></div></li>
-                <li><div class="dropdown-item"><div class="form-check"><input class="form-check-input col-chk" type="checkbox" value="col-phone" checked> <label class="form-check-label">Телефон</label></div></div></li>
-                <li><div class="dropdown-item"><div class="form-check"><input class="form-check-input col-chk" type="checkbox" value="col-email" checked> <label class="form-check-label">Email</label></div></div></li>
-                <li><hr class="dropdown-divider"></li>
-                <li><h6 class="dropdown-header">Дополнительные поля</h6></li>
-                @foreach (var field in dynamicFields)
-                {
-                <li>
-                    <div class="dropdown-item">
-                        <div class="form-check">
-                            <input class="form-check-input col-chk" type="checkbox" value="col-dyn-@field.SystemName" checked>
-                            <label class="form-check-label">@field.Label</label>
-                        </div>
-                    </div>
-                </li>
-                }
-            </ul>
-        </div>
-
-        @* 2. Кнопка управления фильтрами (ID совпадает с тем, что внутри _FilterPanel) *@
-        <button crm-button variant="outline-primary" icon="funnel" class="shadow-sm" type="button" data-bs-toggle="collapse" data-bs-target="#filterPanel">
-            Фильтры
+@section HeaderControls {
+    @* Меню выбора колонок генерируется автоматически на основе GridConfig *@
+    <div class="dropdown">
+        <button crm-button variant="outline-secondary" icon="view-list" class="dropdown-toggle shadow-sm" type="button" data-bs-toggle="dropdown" aria-expanded="false" data-bs-auto-close="outside">
+            Вид
         </button>
-
-        @* 3. Создать *@
-        <a asp-action="Create" crm-button variant="primary" icon="plus-lg" class="shadow-sm px-4">
-            Создать
-        </a>
-    </crm-page-header>
-
-    @* --- ПОДКЛЮЧЕНИЕ УНИВЕРСАЛЬНОЙ ПАНЕЛИ ФИЛЬТРОВ --- *@
-    <partial name="_FilterPanel" />
-    @* ------------------------------------------------- *@
-
-    @* --- ТАБЛИЦА --- *@
-    <div crm-card class="overflow-hidden">
-        <div class="table-responsive">
-            <table class="table table-hover align-middle mb-0" id="contactsTable">
-                <thead class="bg-light text-muted small text-uppercase">
-                <tr>
-                    <th class="ps-4 col-fullname">ФИО</th>
-                    <th class="col-lastname">Фамилия</th>
-                    <th class="col-firstname">Имя</th>
-                    <th class="col-middlename">Отчество</th>
-                    <th class="col-phone">Телефон</th>
-                    <th class="col-email">Email</th>
-                    @foreach (var field in dynamicFields)
-                    {
-                    <th class="col-dyn-@field.SystemName">@field.Label</th>
-                    }
-                    <th class="text-end pe-4">Действия</th>
-                </tr>
-                </thead>
-                <tbody>
-                @if (!Model.Any())
+        <ul class="dropdown-menu shadow border-0" style="max-height: 500px; overflow-y: auto; min-width: 250px;">
+            <li><h6 class="dropdown-header">Колонки</h6></li>
+            @if (gridConfig != null)
+            {
+                // Генерируем чекбоксы для всех колонок, кроме кнопок действий
+                foreach (var col in gridConfig.Columns.Where(c => c.Type != GridColumnType.Actions))
                 {
-                // Проверяем наличие активного поиска для отображения заглушки
-                var currentFilters = ViewBag.CurrentFilters as Dictionary<string, string> ?? new Dictionary<string, string>();
-                <crm-table-empty is-search="@(!string.IsNullOrEmpty(currentSearch) || currentFilters.Any())" />
-                }
-                else
-                {
-                @foreach (var item in Model)
-                {
-                var propValues = item.DynamicValues ?? new Dictionary<string, object>();
-
-                <tr>
-                    <td class="ps-4 col-fullname">
-                        <div class="fw-bold"><a asp-action="Details" asp-route-id="@item.Id" class="text-decoration-none text-dark text-primary-hover">@item.FullName</a></div>
-                    </td>
-                    <td class="col-lastname">@item.LastName</td>
-                    <td class="col-firstname">@item.FirstName</td>
-                    <td class="col-middlename">@item.MiddleName</td>
-
-                    <td class="col-phone">@string.Join(", ", item.PhoneNumbers)</td>
-                    <td class="col-email">@string.Join(", ", item.EmailAddresses)</td>
-
-                    @foreach (var field in dynamicFields)
-                    {
-                    <td class="col-dyn-@field.SystemName">
-                        @if (propValues.TryGetValue(field.SystemName, out var val) && val != null)
-                        {
-                        if (val is JsonElement element && element.ValueKind == JsonValueKind.Array)
-                        {
-                        <span class="badge bg-light text-dark border">@element.GetArrayLength() зап.</span>
-                        }
-                        else { @val.ToString() }
-                        }
-                        else { <span class="text-muted small">—</span> }
-                    </td>
-                    }
-                    <td class="text-end pe-4">
-                        <div class="btn-group btn-group-sm shadow-sm">
-                            <a asp-action="Edit" asp-route-id="@item.Id"
-                               crm-button variant="white" icon="pencil-fill" icon-class="text-primary"
-                               class="border" title="Редактировать"></a>
-
-                            <a asp-action="Details" asp-route-id="@item.Id"
-                               crm-button variant="white" icon="eye-fill" icon-class="text-info"
-                               class="border" title="Просмотр"></a>
-
-                            <a asp-action="Delete" asp-route-id="@item.Id"
-                               crm-button variant="white" icon="trash-fill" icon-class="text-danger"
-                               class="border" title="Удалить"></a>
+                    <li>
+                        <div class="dropdown-item">
+                            <div class="form-check">
+                                @* Класс col-chk используется JS-скриптом entity-index.js для управления видимостью *@
+                                <input class="form-check-input col-chk" type="checkbox" value="@col.SystemName" @(col.VisibleByDefault ? "checked" : "")> 
+                                <label class="form-check-label">@col.Title</label>
+                            </div>
                         </div>
-                    </td>
-                </tr>
+                    </li>
                 }
-                }
-                </tbody>
-            </table>
-        </div>
-
-        @* --- ПАГИНАЦИЯ --- *@
-        <div class="card-footer bg-transparent py-3 border-top">
-            <div class="row align-items-center">
-                <div class="col-md-3 text-muted small">
-                    Показано <strong>@Model.Count()</strong> из <strong>@totalItems</strong> записей
-                </div>
-                <div class="col-md-6 d-flex justify-content-center">
-                    <crm-pagination total-pages="@totalPages" current-page="@pageNumber" />
-                </div>
-                <div class="col-md-3 text-end">
-                    <div class="d-inline-flex align-items-center">
-                        <span class="text-muted small me-2">На странице:</span>
-                        <select class="form-select form-select-sm" style="width: auto;" onchange="changePageSize(this.value)">
-                            @foreach (var size in new[] { 10, 25, 50, 100 })
-                            {
-                            <option value="@size" selected="@(pageSize == size)">@size</option>
-                            }
-                        </select>
-                    </div>
-                </div>
-            </div>
-        </div>
+            }
+        </ul>
     </div>
-</div>
+}
 
-<script>
-    // Скрипт для колонок и кликов по строкам (специфичен для этой таблицы)
-    document.addEventListener('DOMContentLoaded', function() {
-        const STORAGE_KEY = 'crm_contact_table_columns';
-        const checkboxes = document.querySelectorAll('.col-chk');
+@section ActionButtons {
+    <a asp-action="Create" crm-button variant="primary" icon="plus-lg" class="shadow-sm px-4">Создать</a>
+}
 
-        let savedCols = JSON.parse(localStorage.getItem(STORAGE_KEY));
-        if (savedCols) {
-            checkboxes.forEach(chk => {
-                chk.checked = savedCols.includes(chk.value);
-                toggleColumn(chk.value, chk.checked);
-            });
-        }
-
-        checkboxes.forEach(chk => {
-            chk.addEventListener('change', function() {
-                toggleColumn(this.value, this.checked);
-                const activeCols = Array.from(checkboxes).filter(i => i.checked).map(i => i.value);
-                localStorage.setItem(STORAGE_KEY, JSON.stringify(activeCols));
-            });
-        });
-
-        function toggleColumn(className, isVisible) {
-            document.querySelectorAll('.' + className).forEach(el => {
-                el.style.display = isVisible ? '' : 'none';
-            });
-        }
-    });
-
-    document.addEventListener('DOMContentLoaded', function() {
-        const rows = document.querySelectorAll('#contactsTable tbody tr');
-        rows.forEach(row => {
-            row.addEventListener('click', function(e) {
-                if (e.target.closest('.btn-group') || e.target.closest('a') || e.target.closest('input')) {
-                    return;
-                }
-                const detailsLink = this.querySelector('a[href*="/Details/"]');
-                if (detailsLink) {
-                    window.location.href = detailsLink.href;
-                }
-            });
-        });
-    });
-</script>
-
-<style>
-    .page-link { border: none; background: transparent; padding: 0.5rem 0.75rem; color: #6c757d; font-weight: 500; }
-    .page-item.active .page-link { background-color: #0d6efd !important; border-radius: 6px; color: white; }
-    .table-hover tbody tr:hover { background-color: rgba(13, 110, 253, 0.03); cursor: pointer; }
-    .dropdown-item:active { background-color: #f8f9fa; color: inherit; }
-    .form-check-input:checked { background-color: #0d6efd; border-color: #0d6efd; }
-</style>
+@if (gridConfig != null && Model != null)
+{
+    <crm-grid config="@gridConfig" data="@Model" />
+}
+else
+{
+    <div class="p-4 text-center text-muted">
+        Нет данных или конфигурации для отображения.
+    </div>
+}
