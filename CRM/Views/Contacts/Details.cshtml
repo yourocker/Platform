@@ -1,4 +1,4 @@
-﻿@model Core.Entities.CRM.Contact
+﻿@model Core.DTOs.CRM.ContactDetailsDto
 @{
     ViewData["Title"] = Model.FullName;
 }
@@ -6,12 +6,6 @@
 <div class="container-fluid px-4">
     @* --- УНИФИЦИРОВАННЫЙ ХЕДЕР СТРАНИЦЫ (БЕЗ ДУБЛИРОВАНИЯ) --- *@
     <crm-page-header title="" icon="" subtitle="">
-        <a asp-action="Index" crm-button variant="outline-secondary" icon="arrow-left">
-            К списку
-        </a>
-        <a asp-action="Edit" asp-route-id="@Model.Id" crm-button variant="primary" icon="pencil-square">
-            Изменить
-        </a>
     </crm-page-header>
 
     <div class="row">
@@ -34,21 +28,21 @@
                         </div>
                     </div>
 
-                    <hr class="my-4 text-muted opacity-25">
-
                     @* Блок 2: Контакты *@
-                    <div class="row g-4">
+                    <div class="row g-4 mt-2">
                         <div class="col-md-6">
                             <label class="form-label small fw-bold text-muted text-uppercase d-block mb-2">Телефоны</label>
-                            @if (Model.Phones != null && Model.Phones.Any())
+                            @if (Model.PhoneNumbers.Any())
                             {
-                                @foreach (var phone in Model.Phones)
-                                {
-                                    <div class="d-flex align-items-center mb-2">
-                                        <i class="bi bi-telephone me-2 text-primary"></i>
-                                        <span>@phone.Number</span>
-                                    </div>
-                                }
+                                <div class="d-flex flex-column gap-2">
+                                    @foreach (var phone in Model.PhoneNumbers)
+                                    {
+                                        <div class="d-flex align-items-center bg-light rounded px-3 py-2">
+                                            <i class="bi bi-telephone text-primary me-3 opacity-75"></i>
+                                            <span class="fw-medium">@phone</span>
+                                        </div>
+                                    }
+                                </div>
                             }
                             else
                             {
@@ -56,16 +50,18 @@
                             }
                         </div>
                         <div class="col-md-6">
-                            <label class="form-label small fw-bold text-muted text-uppercase d-block mb-2">Email адреса</label>
-                            @if (Model.Emails != null && Model.Emails.Any())
+                            <label class="form-label small fw-bold text-muted text-uppercase d-block mb-2">Email</label>
+                            @if (Model.EmailAddresses.Any())
                             {
-                                @foreach (var email in Model.Emails)
-                                {
-                                    <div class="d-flex align-items-center mb-2">
-                                        <i class="bi bi-envelope me-2 text-primary"></i>
-                                        <a href="mailto:@email.Email" class="text-decoration-none text-dark text-primary-hover">@email.Email</a>
-                                    </div>
-                                }
+                                <div class="d-flex flex-column gap-2">
+                                    @foreach (var email in Model.EmailAddresses)
+                                    {
+                                        <div class="d-flex align-items-center bg-light rounded px-3 py-2">
+                                            <i class="bi bi-envelope text-primary me-3 opacity-75"></i>
+                                            <a href="mailto:@email" class="text-decoration-none text-dark fw-medium">@email</a>
+                                        </div>
+                                    }
+                                </div>
                             }
                             else
                             {
@@ -74,20 +70,39 @@
                         </div>
                     </div>
 
-                    @* Блок 3: Динамические поля (В том же контейнере через разделитель) *@
-                    @* Мы не используем здесь заголовок, так как partial сам выводит метки полей *@
+                    @* Блок 3: Динамические поля *@
                     <div class="mt-4 pt-4 border-top">
                         <partial name="_DynamicFields" model="Model" />
                     </div>
                 </div>
             </div>
 
-            @* Удаление вынесено под основную карточку *@
-            <div class="mt-3 d-flex justify-content-between align-items-center px-2">
+            @* --- БЛОК КНОПОК УПРАВЛЕНИЯ (ПЕРЕНЕСЕНО СЮДА) --- *@
+            <div class="mt-4 d-flex gap-2">
+                <a asp-action="Edit" asp-route-id="@Model.Id" crm-button variant="primary" icon="pencil-square" class="px-5 py-2 fs-6 shadow">
+                    Изменить
+                </a>
+                <a asp-action="Index" crm-button variant="outline-secondary" icon="arrow-left" class="px-4 py-2 fs-6 shadow-none">
+                    К списку
+                </a>
+            </div>
+
+            @* Удаление вынесено под кнопки *@
+            <div class="mt-3 d-flex justify-content-between align-items-center px-2 pb-5">
                 <div class="text-muted small">ID записи: @Model.Id</div>
                 <a asp-action="Delete" asp-route-id="@Model.Id" class="text-danger small text-decoration-none opacity-75">
-                    <i class="bi bi-trash me-1"></i> Удалить контакт
+                    <i class="bi bi-trash me-1"></i> Удалить запись
                 </a>
+            </div>
+        </div>
+
+        @* Правая колонка: История/Активности (заглушка) *@
+        <div class="col-lg-4">
+            <div crm-card class="h-100 bg-light border-0">
+                <div class="card-body p-4 text-center text-muted">
+                    <i class="bi bi-clock-history display-4 opacity-25 mb-3"></i>
+                    <p class="small">История взаимодействий будет здесь</p>
+                </div>
             </div>
         </div>
     </div>

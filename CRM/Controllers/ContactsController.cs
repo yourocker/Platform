@@ -7,18 +7,26 @@ using Microsoft.EntityFrameworkCore;
 using Core.Data;
 using Core.Entities.CRM;
 using Core.Entities.Platform;
-using System.Text.Json;
+using Core.Specifications;
+using Core.Specifications.CRM;
+using Core.Interfaces.CRM;
+using Core.DTOs.CRM;
+using Core.Services.CRM;
 
 namespace CRM.Controllers
 {
     public class ContactsController : Controller
     {
         private readonly AppDbContext _context;
+        private readonly IContactService _contactService;
 
-        public ContactsController(AppDbContext context)
+        public ContactsController(AppDbContext context, IContactService contactService)
         {
             _context = context;
+            _contactService = contactService;
         }
+
+        // --- ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ---
 
         private async Task LoadViewData()
         {
@@ -28,174 +36,15 @@ namespace CRM.Controllers
 
             if (appDef != null)
             {
+                // Сортируем поля для корректного отображения в форме
                 ViewBag.DynamicFields = appDef.Fields.OrderBy(f => f.SortOrder).ToList();
             }
         }
 
-        public async Task<IActionResult> Index(string searchString, int? pageNumber, int? pageSize)
-        {
-            await LoadViewData();
-
-            // 1. Инициализация параметров пагинации
-            int actualPageSize = pageSize ?? 10;
-            int actualPageNumber = pageNumber ?? 1;
-            
-            var query = _context.Contacts
-                .Include(c => c.Phones)
-                .Include(c => c.Emails)
-                .AsQueryable();
-
-            // 2. ГЛОБАЛЬНЫЙ ПОИСК
-            if (!string.IsNullOrEmpty(searchString))
-            {
-                var s = searchString.Trim();
-                // (string)(object)c.Properties — это критически важный каст для корректного SQL Properties::text
-                query = query.Where(c => 
-                    EF.Functions.ILike(c.FullName, $"%{s}%") ||
-                    c.Phones.Any(p => EF.Functions.ILike(p.Number, $"%{s}%")) ||
-                    c.Emails.Any(e => EF.Functions.ILike(e.Email, $"%{s}%")) ||
-                    (c.Properties != null && EF.Functions.ILike((string)(object)c.Properties, $"%{s}%"))
-                );
-            }
-
-            // 3. ДЕТАЛЬНАЯ ФИЛЬТРАЦИЯ
-            var filters = Request.Query.Where(q => q.Key.StartsWith("f_") && !string.IsNullOrEmpty(q.Value));
-            foreach (var filter in filters)
-            {
-                var fieldName = filter.Key.Substring(2);
-                var val = filter.Value.ToString().Trim();
-
-                query = fieldName switch
-                {
-                    "LastName" => query.Where(c => EF.Functions.ILike(c.LastName, $"%{val}%")),
-                    "FirstName" => query.Where(c => EF.Functions.ILike(c.FirstName, $"%{val}%")),
-                    "MiddleName" => query.Where(c => EF.Functions.ILike(c.MiddleName, $"%{val}%")),
-                    "FullName" => query.Where(c => EF.Functions.ILike(c.FullName, $"%{val}%")),
-                    // Для кастомных полей: поиск подстроки "Ключ":"Значение" внутри JSON-текста
-                    _ => query.Where(c => c.Properties != null && EF.Functions.ILike((string)(object)c.Properties, $"%\"{fieldName}\":%\"{val}\"%"))
-                };
-            }
-
-            // 4. ПОДСЧЕТ И ПОЛУЧЕНИЕ ДАННЫХ
-            int totalItems = await query.CountAsync();
-            
-            var contacts = await query
-                .OrderBy(c => c.FullName)
-                .Skip((actualPageNumber - 1) * actualPageSize)
-                .Take(actualPageSize)
-                .ToListAsync();
-
-            // Передача метаданных во View
-            ViewBag.TotalItems = totalItems;
-            ViewBag.PageNumber = actualPageNumber;
-            ViewBag.PageSize = actualPageSize;
-            ViewBag.TotalPages = (int)Math.Ceiling(totalItems / (double)actualPageSize);
-            ViewBag.CurrentSearch = searchString;
-            ViewBag.CurrentFilters = filters.ToDictionary(x => x.Key, x => x.Value.ToString());
-
-            return View(contacts);
-        }
-
-        public async Task<IActionResult> Details(Guid? id)
-        {
-            if (id == null) return NotFound();
-            var contact = await _context.Contacts.Include(c => c.Phones).Include(c => c.Emails).FirstOrDefaultAsync(m => m.Id == id);
-            if (contact == null) return NotFound();
-            await LoadViewData();
-            return View(contact);
-        }
-
-        public async Task<IActionResult> Create()
-        {
-            var contact = new Contact { Id = Guid.NewGuid(), EntityCode = "Contact" };
-            await LoadViewData();
-            return View(contact);
-        }
-
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create(Contact contact, string[] PhoneNumbers, string[] EmailAddresses)
-        {
-            var dynamicData = ExtractDynamicProps();
-            if (dynamicData.Any()) contact.Properties = JsonSerializer.Serialize(dynamicData);
-
-            contact.CreatedAt = DateTime.UtcNow;
-            contact.RecalculateFullName();
-            contact.Name = contact.FullName;
-
-            if (PhoneNumbers != null)
-                contact.Phones = PhoneNumbers.Where(p => !string.IsNullOrEmpty(p)).Select(p => new ContactPhone { ContactId = contact.Id, Number = p }).ToList();
-
-            if (EmailAddresses != null)
-                contact.Emails = EmailAddresses.Where(e => !string.IsNullOrEmpty(e)).Select(e => new ContactEmail { ContactId = contact.Id, Email = e }).ToList();
-
-            ModelState.Remove(nameof(contact.EntityCode));
-            ModelState.Remove(nameof(contact.Name));
-            ModelState.Remove(nameof(contact.FullName));
-
-            if (ModelState.IsValid)
-            {
-                _context.Add(contact);
-                await _context.SaveChangesAsync();
-                return RedirectToAction(nameof(Index));
-            }
-            await LoadViewData();
-            return View(contact);
-        }
-
-        public async Task<IActionResult> Edit(Guid? id)
-        {
-            if (id == null) return NotFound();
-            var contact = await _context.Contacts.Include(c => c.Phones).Include(c => c.Emails).FirstOrDefaultAsync(x => x.Id == id);
-            if (contact == null) return NotFound();
-            await LoadViewData();
-            return View(contact);
-        }
-
-        [HttpPost]
-        [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(Guid id, Contact contact, string[] PhoneNumbers, string[] EmailAddresses)
-        {
-            if (id != contact.Id) return NotFound();
-
-            var dynamicData = ExtractDynamicProps();
-            contact.Properties = dynamicData.Any() ? JsonSerializer.Serialize(dynamicData) : null;
-
-            ModelState.Remove(nameof(contact.EntityCode));
-            ModelState.Remove(nameof(contact.Name));
-            ModelState.Remove(nameof(contact.FullName));
-
-            if (ModelState.IsValid)
-            {
-                try
-                {
-                    var original = await _context.Contacts.Include(c => c.Phones).Include(c => c.Emails).FirstOrDefaultAsync(c => c.Id == id);
-                    if (original == null) return NotFound();
-
-                    original.LastName = contact.LastName;
-                    original.FirstName = contact.FirstName;
-                    original.MiddleName = contact.MiddleName;
-                    original.Properties = contact.Properties;
-                    original.RecalculateFullName();
-                    original.Name = original.FullName;
-
-                    _context.ContactPhones.RemoveRange(original.Phones);
-                    if (PhoneNumbers != null)
-                        original.Phones = PhoneNumbers.Where(p => !string.IsNullOrEmpty(p)).Select(p => new ContactPhone { ContactId = id, Number = p }).ToList();
-
-                    _context.ContactEmails.RemoveRange(original.Emails);
-                    if (EmailAddresses != null)
-                        original.Emails = EmailAddresses.Where(e => !string.IsNullOrEmpty(e)).Select(e => new ContactEmail { ContactId = id, Email = e }).ToList();
-
-                    await _context.SaveChangesAsync();
-                    return RedirectToAction(nameof(Index));
-                }
-                catch (DbUpdateConcurrencyException) { if (!ContactExists(contact.Id)) return NotFound(); throw; }
-            }
-            await LoadViewData();
-            return View(contact);
-        }
-
+        /// <summary>
+        /// Извлекает динамические поля из формы (Request.Form) в словарь.
+        /// Используется, так как ModelBinder не умеет нативно биндить динамические ключи в Dictionary.
+        /// </summary>
         private Dictionary<string, object> ExtractDynamicProps()
         {
             var dict = new Dictionary<string, object>();
@@ -203,25 +52,183 @@ namespace CRM.Controllers
             {
                 var systemName = key.Replace("DynamicProps[", "").Replace("]", "");
                 var values = Request.Form[key].ToList();
+                
+                // Если значений несколько (checkbox array, multi-select) - сохраняем список, иначе строку
                 if (values.Count > 1) dict[systemName] = values;
                 else dict[systemName] = values.FirstOrDefault() ?? "";
             }
             return dict;
         }
 
+        // --- ACTIONS ---
+
+        public async Task<IActionResult> Index(string searchString, int? pageNumber, int? pageSize)
+        {
+            await LoadViewData();
+            int actualPageSize = pageSize ?? 10;
+            int actualPageNumber = pageNumber ?? 1;
+
+            // 1. Сбор фильтров из URL
+            var filters = Request.Query
+                .Where(q => q.Key.StartsWith("f_") && !string.IsNullOrEmpty(q.Value))
+                .ToDictionary(k => k.Key, v => v.Value.ToString());
+
+            // 2. Поиск через Спецификацию (БД)
+            var spec = new ContactSearchSpecification(searchString, filters, actualPageNumber, actualPageSize);
+            
+            var query = _context.Contacts.AsNoTracking();
+            var filteredQuery = SpecificationEvaluator.GetQuery(query, spec);
+            var contactsEntities = await filteredQuery.ToListAsync();
+
+            // 3. Преобразование Entity -> DTO (Logic Decoupling)
+            // Маппер также парсит JSONB поля в словарь для View
+            var contactsDtos = contactsEntities.Select(ContactMapper.ToListDto).ToList();
+
+            // 4. Подсчет количества для пагинации
+            var countQuery = _context.Contacts.AsNoTracking().AsQueryable();
+            foreach (var criterion in spec.Criteria) countQuery = countQuery.Where(criterion);
+            int totalItems = await countQuery.CountAsync();
+
+            ViewBag.TotalItems = totalItems;
+            ViewBag.PageNumber = actualPageNumber;
+            ViewBag.PageSize = actualPageSize;
+            ViewBag.TotalPages = (int)Math.Ceiling(totalItems / (double)actualPageSize);
+            ViewBag.CurrentSearch = searchString;
+            ViewBag.CurrentFilters = filters;
+
+            // Отдаем DTO, как и ожидает теперь Index.cshtml
+            return View(contactsDtos); 
+        }
+
+        public async Task<IActionResult> Details(Guid? id)
+        {
+            if (id == null) return NotFound();
+            
+            var contact = await _context.Contacts
+                .Include(c => c.Phones)
+                .Include(c => c.Emails)
+                .AsNoTracking() // Для чтения изменений не нужно
+                .FirstOrDefaultAsync(m => m.Id == id);
+                
+            if (contact == null) return NotFound();
+            
+            await LoadViewData();
+            
+            // Преобразуем в DTO для деталей
+            var dto = ContactMapper.ToDetailsDto(contact);
+            return View(dto);
+        }
+
+        // GET: Create
+        public async Task<IActionResult> Create()
+        {
+            await LoadViewData();
+            // Отдаем пустую DTO, инициализированную дефолтными значениями
+            return View(new ContactCreateDto());
+        }
+
+        // POST: Create
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Create(ContactCreateDto dto)
+        {
+            if (ModelState.IsValid)
+            {
+                // 1. Создаем заготовку сущности
+                var contact = ContactMapper.ToEntity(dto);
+                
+                // 2. Извлекаем динамические данные напрямую из Request
+                var dynamicProps = ExtractDynamicProps();
+
+                // 3. Делегируем всю логику сохранения сервису
+                await _contactService.CreateContactAsync(contact, dto.PhoneNumbers, dto.EmailAddresses, dynamicProps);
+                
+                return RedirectToAction(nameof(Index));
+            }
+            
+            // Если ошибка валидации:
+            await LoadViewData();
+            // Восстанавливаем введенные динамические данные, чтобы пользователь не вводил их заново
+            dto.DynamicValues = ExtractDynamicProps();
+            return View(dto);
+        }
+
+        // GET: Edit
+        public async Task<IActionResult> Edit(Guid? id)
+        {
+            if (id == null) return NotFound();
+            
+            var contact = await _context.Contacts
+                .Include(c => c.Phones)
+                .Include(c => c.Emails)
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x => x.Id == id);
+            
+            if (contact == null) return NotFound();
+            
+            await LoadViewData();
+            
+            // Преобразуем существующую запись в DTO редактирования
+            var dto = ContactMapper.ToEditDto(contact);
+            return View(dto);
+        }
+
+        // POST: Edit
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Edit(Guid id, ContactEditDto dto)
+        {
+            if (id != dto.Id) return NotFound();
+
+            if (ModelState.IsValid)
+            {
+                try
+                {
+                    // 1. Подготовка данных
+                    var contact = new Contact(); 
+                    ContactMapper.UpdateEntity(contact, dto); // Переносим базовые поля
+                    
+                    var dynamicProps = ExtractDynamicProps(); // Достаем JSON поля
+
+                    // 2. Обновление через сервис
+                    await _contactService.UpdateContactAsync(id, contact, dto.PhoneNumbers, dto.EmailAddresses, dynamicProps);
+                }
+                catch (KeyNotFoundException)
+                {
+                    return NotFound();
+                }
+                catch (DbUpdateConcurrencyException)
+                {
+                    if (!ContactExists(dto.Id)) return NotFound();
+                    throw;
+                }
+                return RedirectToAction(nameof(Index));
+            }
+            
+            // Ошибка валидации
+            await LoadViewData();
+            dto.DynamicValues = ExtractDynamicProps(); // Сохраняем введенное
+            return View(dto);
+        }
+
         public async Task<IActionResult> Delete(Guid? id)
         {
             if (id == null) return NotFound();
-            var contact = await _context.Contacts.FirstOrDefaultAsync(m => m.Id == id);
-            return contact == null ? NotFound() : View(contact);
+            
+            var contact = await _context.Contacts.AsNoTracking().FirstOrDefaultAsync(m => m.Id == id);
+            
+            if (contact == null) return NotFound();
+            
+            var dto = ContactMapper.ToDetailsDto(contact);
+            
+            return View(dto); 
         }
 
         [HttpPost, ActionName("Delete")]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteConfirmed(Guid id)
         {
-            var contact = await _context.Contacts.FindAsync(id);
-            if (contact != null) { _context.Contacts.Remove(contact); await _context.SaveChangesAsync(); }
+            await _contactService.DeleteContactAsync(id);
             return RedirectToAction(nameof(Index));
         }
 

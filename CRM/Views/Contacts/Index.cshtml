@@ -1,25 +1,25 @@
-﻿@using Core.Entities.CRM
+﻿@using Core.DTOs.CRM
 @using Core.Entities.Platform
 @using System.Text.Json
-@model IEnumerable<Contact>
+@model IEnumerable<ContactListDto>
 @{
 ViewData["Title"] = "Контакты";
 var dynamicFields = ViewBag.DynamicFields as List<AppFieldDefinition> ?? new List<AppFieldDefinition>();
 
+// Настройка для _FilterPanel: показать стандартные поля (ФИО, Телефон, Email)
+ViewData["ShowStandardFilters"] = true;
+
 // Метаданные пагинации
-int totalItems = ViewBag.TotalItems;
-int pageNumber = ViewBag.PageNumber;
-int pageSize = ViewBag.PageSize;
-int totalPages = ViewBag.TotalPages;
+int totalItems = ViewBag.TotalItems ?? 0;
+int pageNumber = ViewBag.PageNumber ?? 1;
+int pageSize = ViewBag.PageSize ?? 10;
+int totalPages = ViewBag.TotalPages ?? 1;
 string currentSearch = ViewBag.CurrentSearch;
-var currentFilters = ViewBag.CurrentFilters as Dictionary<string, string> ?? new Dictionary<string, string>();
 }
 
 <div class="container-fluid px-4">
-    @* --- УНИФИЦИРОВАННЫЙ ХЕДЕР СТРАНИЦЫ (ПУСТОЙ ПО ТРЕБОВАНИЮ) --- *@
     <crm-page-header title="" icon="" subtitle="">
-
-        @* 1. Настройка видимости колонок (Dropdown) *@
+        @* 1. Вид таблицы (Оставляем здесь, так как колонки специфичны для контактов) *@
         <div class="dropdown">
             <button crm-button variant="outline-secondary" icon="view-list" class="dropdown-toggle shadow-sm" type="button" id="columnToggle" data-bs-toggle="dropdown" aria-expanded="false" data-bs-auto-close="outside">
                 Вид таблицы
@@ -33,7 +33,7 @@ var currentFilters = ViewBag.CurrentFilters as Dictionary<string, string> ?? new
                 <li><div class="dropdown-item"><div class="form-check"><input class="form-check-input col-chk" type="checkbox" value="col-phone" checked> <label class="form-check-label">Телефон</label></div></div></li>
                 <li><div class="dropdown-item"><div class="form-check"><input class="form-check-input col-chk" type="checkbox" value="col-email" checked> <label class="form-check-label">Email</label></div></div></li>
                 <li><hr class="dropdown-divider"></li>
-                <li><h6 class="dropdown-header">Дополнительные поля (Конструктор)</h6></li>
+                <li><h6 class="dropdown-header">Дополнительные поля</h6></li>
                 @foreach (var field in dynamicFields)
                 {
                 <li>
@@ -48,64 +48,20 @@ var currentFilters = ViewBag.CurrentFilters as Dictionary<string, string> ?? new
             </ul>
         </div>
 
-        @* 2. Кнопка управления фильтрами *@
+        @* 2. Кнопка управления фильтрами (ID совпадает с тем, что внутри _FilterPanel) *@
         <button crm-button variant="outline-primary" icon="funnel" class="shadow-sm" type="button" data-bs-toggle="collapse" data-bs-target="#filterPanel">
             Фильтры
         </button>
 
-        @* 3. Кнопка перехода к созданию *@
+        @* 3. Создать *@
         <a asp-action="Create" crm-button variant="primary" icon="plus-lg" class="shadow-sm px-4">
             Создать
         </a>
     </crm-page-header>
 
-    @* --- ФИЛЬТРЫ И ПОИСК --- *@
-    <form asp-action="Index" method="get" id="mainFilterForm">
-        <input type="hidden" name="pageSize" value="@pageSize" id="hiddenPageSize" />
-        <input type="hidden" name="pageNumber" value="1" id="hiddenPageNumber" />
-
-        <div crm-card class="mb-4">
-            <div class="card-body p-3">
-                <div class="input-group input-group-lg border rounded-3 overflow-hidden">
-                    <span class="input-group-text bg-white border-0"><i class="bi bi-search text-primary"></i></span>
-                    <input type="text" name="searchString" value="@currentSearch" class="form-control border-0 shadow-none instant-filter" placeholder="Начните вводить для поиска" autocomplete="off"/>
-                </div>
-
-                <div class="collapse @(currentFilters.Any() ? "show" : "")" id="filterPanel">
-                    <div class="pt-4 mt-3 border-top">
-                        <div class="row row-cols-1 row-cols-md-3 row-cols-lg-4 g-3">
-                            <div class="col">
-                                <crm-input label="Фамилия" name="f_LastName"
-                                           value="@(currentFilters.GetValueOrDefault("f_LastName"))"
-                                           class="instant-filter" />
-                            </div>
-                            <div class="col">
-                                <crm-input label="Имя" name="f_FirstName"
-                                           value="@(currentFilters.GetValueOrDefault("f_FirstName"))"
-                                           class="instant-filter" />
-                            </div>
-                            <div class="col">
-                                <crm-input label="Отчество" name="f_MiddleName"
-                                           value="@(currentFilters.GetValueOrDefault("f_MiddleName"))"
-                                           class="instant-filter" />
-                            </div>
-                            @foreach (var field in dynamicFields)
-                            {
-                            <div class="col">
-                                <crm-input label="@field.Label" name="f_@field.SystemName"
-                                           value="@(currentFilters.GetValueOrDefault("f_" + field.SystemName))"
-                                           class="instant-filter" />
-                            </div>
-                            }
-                        </div>
-                        <div class="text-end mt-3">
-                            <a asp-action="Index" class="btn btn-link btn-sm text-danger text-decoration-none">Очистить всё</a>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </form>
+    @* --- ПОДКЛЮЧЕНИЕ УНИВЕРСАЛЬНОЙ ПАНЕЛИ ФИЛЬТРОВ --- *@
+    <partial name="_FilterPanel" />
+    @* ------------------------------------------------- *@
 
     @* --- ТАБЛИЦА --- *@
     <div crm-card class="overflow-hidden">
@@ -129,19 +85,15 @@ var currentFilters = ViewBag.CurrentFilters as Dictionary<string, string> ?? new
                 <tbody>
                 @if (!Model.Any())
                 {
-                @* Внедрение универсальной заглушки пустых состояний *@
+                // Проверяем наличие активного поиска для отображения заглушки
+                var currentFilters = ViewBag.CurrentFilters as Dictionary<string, string> ?? new Dictionary<string, string>();
                 <crm-table-empty is-search="@(!string.IsNullOrEmpty(currentSearch) || currentFilters.Any())" />
                 }
                 else
                 {
                 @foreach (var item in Model)
                 {
-                var propValues = new Dictionary<string, object>();
-                if (!string.IsNullOrEmpty(item.Properties))
-                {
-                try { propValues = JsonSerializer.Deserialize<Dictionary<string, object>>(item.Properties) ?? new Dictionary<string, object>(); }
-                catch { }
-                }
+                var propValues = item.DynamicValues ?? new Dictionary<string, object>();
 
                 <tr>
                     <td class="ps-4 col-fullname">
@@ -150,8 +102,10 @@ var currentFilters = ViewBag.CurrentFilters as Dictionary<string, string> ?? new
                     <td class="col-lastname">@item.LastName</td>
                     <td class="col-firstname">@item.FirstName</td>
                     <td class="col-middlename">@item.MiddleName</td>
-                    <td class="col-phone">@string.Join(", ", item.Phones.Select(p => p.Number))</td>
-                    <td class="col-email">@string.Join(", ", item.Emails.Select(e => e.Email))</td>
+
+                    <td class="col-phone">@string.Join(", ", item.PhoneNumbers)</td>
+                    <td class="col-email">@string.Join(", ", item.EmailAddresses)</td>
+
                     @foreach (var field in dynamicFields)
                     {
                     <td class="col-dyn-@field.SystemName">
@@ -214,22 +168,7 @@ var currentFilters = ViewBag.CurrentFilters as Dictionary<string, string> ?? new
 </div>
 
 <script>
-    let filterTimeout;
-    document.querySelectorAll('.instant-filter').forEach(el => {
-        el.addEventListener('input', function() {
-            clearTimeout(filterTimeout);
-            filterTimeout = setTimeout(() => {
-                document.getElementById('hiddenPageNumber').value = 1;
-                document.getElementById('mainFilterForm').submit();
-            }, 700);
-        });
-    });
-
-    function changePageSize(val) {
-        document.getElementById('hiddenPageSize').value = val;
-        document.getElementById('mainFilterForm').submit();
-    }
-
+    // Скрипт для колонок и кликов по строкам (специфичен для этой таблицы)
     document.addEventListener('DOMContentLoaded', function() {
         const STORAGE_KEY = 'crm_contact_table_columns';
         const checkboxes = document.querySelectorAll('.col-chk');
@@ -258,17 +197,12 @@ var currentFilters = ViewBag.CurrentFilters as Dictionary<string, string> ?? new
     });
 
     document.addEventListener('DOMContentLoaded', function() {
-        // Находим все строки таблицы в tbody
         const rows = document.querySelectorAll('#contactsTable tbody tr');
-
         rows.forEach(row => {
             row.addEventListener('click', function(e) {
-                // Проверяем, что клик не был по кнопкам действий или ссылкам
                 if (e.target.closest('.btn-group') || e.target.closest('a') || e.target.closest('input')) {
                     return;
                 }
-
-                // Находим ссылку на Details в этой строке (она у нас в ФИО)
                 const detailsLink = this.querySelector('a[href*="/Details/"]');
                 if (detailsLink) {
                     window.location.href = detailsLink.href;

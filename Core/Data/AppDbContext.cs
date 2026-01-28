@@ -11,6 +11,7 @@ using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Core.Entities.System;
 using Core.Data.Interceptors;
 using Core.Entities.CRM;
+using Core.Data.Extensions;
 
 namespace Core.Data
 {
@@ -84,6 +85,17 @@ namespace Core.Data
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
+            
+            var methodInfo = typeof(NpgsqlJsonExtensions)
+                .GetMethod(nameof(NpgsqlJsonExtensions.JsonExtractPathText), new[] { typeof(string), typeof(string) });
+
+            if (methodInfo != null)
+            {
+                modelBuilder
+                    .HasDbFunction(methodInfo)
+                    .HasName("jsonb_extract_path_text") // Имя функции в Postgres
+                    .IsBuiltIn(true);
+            }
             
             // 1. Настройка Контактов (Явная изоляция от GenericObjects)
             modelBuilder.Entity<Contact>(entity =>
