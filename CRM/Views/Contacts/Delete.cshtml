@@ -1,4 +1,4 @@
-﻿@model Core.Entities.CRM.Contact
+﻿@model Core.DTOs.CRM.ContactDetailsDto
 @{
     ViewData["Title"] = "Удаление контакта";
 }
@@ -26,9 +26,9 @@
                     <div class="mb-4 text-start p-3 bg-light rounded border">
                         <div class="small text-muted text-uppercase fw-bold mb-2" style="font-size: 0.7rem;">Данные записи</div>
                         <div class="mb-1"><strong>ФИО:</strong> @Model.FullName</div>
-                        @if (Model.Phones.Any())
+                        @if (Model.PhoneNumbers.Any())
                         {
-                            <div class="mb-1"><strong>Телефон:</strong> @Model.Phones.First().Number</div>
+                            <div class="mb-1"><strong>Телефон:</strong> @Model.PhoneNumbers.First()</div>
                         }
                         <div class="text-muted small">ID: @Model.Id</div>
                     </div>

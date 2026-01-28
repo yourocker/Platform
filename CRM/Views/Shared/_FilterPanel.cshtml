@@ -1,0 +1,86 @@
+﻿@using Core.Entities.Platform
+@using Microsoft.AspNetCore.Http.Extensions
+@{
+    // Получаем данные из ViewBag родительской страницы
+    string currentSearch = ViewBag.CurrentSearch as string ?? "";
+    var currentFilters = ViewBag.CurrentFilters as Dictionary<string, string> ?? new Dictionary<string, string>();
+    var dynamicFields = ViewBag.DynamicFields as List<AppFieldDefinition> ?? new List<AppFieldDefinition>();
+    
+    // Параметры пагинации, чтобы не терять их при фильтрации
+    int pageSize = ViewBag.PageSize ?? 10;
+}
+
+<form method="get" id="mainFilterForm">
+    @* Сохраняем размер страницы *@
+    <input type="hidden" name="pageSize" value="@pageSize" id="hiddenPageSize" />
+    <input type="hidden" name="pageNumber" value="1" id="hiddenPageNumber" />
+
+    <div crm-card class="mb-4">
+        <div class="card-body p-3">
+            @* 1. Глобальный поиск *@
+            <div class="input-group input-group-lg border rounded-3 overflow-hidden">
+                <span class="input-group-text bg-white border-0"><i class="bi bi-search text-primary"></i></span>
+                <input type="text" name="searchString" value="@currentSearch" class="form-control border-0 shadow-none instant-filter" placeholder="Поиск..." autocomplete="off"/>
+            </div>
+
+            @* 2. Панель детальных фильтров *@
+            <div class="collapse @(currentFilters.Any() ? "show" : "")" id="filterPanel">
+                <div class="pt-4 mt-3 border-top">
+                    <div class="row row-cols-1 row-cols-md-3 row-cols-lg-4 g-3">
+                        
+                        @* Место для специфичных полей сущности (если они переданы через RenderBody/Sections, но в Partial это сложно.
+                           Поэтому пока делаем универсальный вывод динамических полей + стандартные поля ФИО/Телефон, если они нужны везде).
+                           
+                           ДЛЯ УНИВЕРСАЛЬНОСТИ: Сюда можно добавить проверку: если это Контакты/Сотрудники - выводим ФИО.
+                        *@
+
+                        @if (ViewData.ContainsKey("ShowStandardFilters") && (bool)ViewData["ShowStandardFilters"] == true)
+                        {
+                            <div class="col"><crm-input label="Фамилия" name="f_LastName" value="@(currentFilters.GetValueOrDefault("f_LastName"))" /></div>
+                            <div class="col"><crm-input label="Имя" name="f_FirstName" value="@(currentFilters.GetValueOrDefault("f_FirstName"))" /></div>
+                            <div class="col"><crm-input label="Телефон" name="f_Phone" value="@(currentFilters.GetValueOrDefault("f_Phone"))" /></div>
+                            <div class="col"><crm-input label="Email" name="f_Email" value="@(currentFilters.GetValueOrDefault("f_Email"))" /></div>
+                        }
+
+                        @* Динамические поля (работают везде) *@
+                        @foreach (var field in dynamicFields)
+                        {
+                            <div class="col">
+                                <crm-input label="@field.Label" name="f_@field.SystemName"
+                                           value="@(currentFilters.GetValueOrDefault("f_" + field.SystemName))" />
+                            </div>
+                        }
+                    </div>
+
+                    @* 3. Кнопки управления *@
+                    <div class="text-end mt-3">
+                        @* Кнопка очистки (ведет на тот же Action без параметров) *@
+                        <a href="@Context.Request.Path" class="btn btn-link btn-sm text-danger text-decoration-none me-2">Очистить всё</a>
+                        <button type="submit" class="btn btn-primary btn-sm px-4">Применить</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+<script>
+    // Глобальный скрипт для поведения фильтров
+    // 1. Автопоиск ТОЛЬКО для верхней строки
+    let filterTimeout;
+    document.querySelectorAll('.instant-filter').forEach(el => {
+        el.addEventListener('input', function() {
+            clearTimeout(filterTimeout);
+            filterTimeout = setTimeout(() => {
+                document.getElementById('hiddenPageNumber').value = 1;
+                document.getElementById('mainFilterForm').submit();
+            }, 700);
+        });
+    });
+
+    // 2. Смена размера страницы
+    window.changePageSize = function(val) {
+        document.getElementById('hiddenPageSize').value = val;
+        document.getElementById('mainFilterForm').submit();
+    }
+</script>

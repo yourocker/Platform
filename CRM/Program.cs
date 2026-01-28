@@ -5,6 +5,8 @@ using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using Microsoft.AspNetCore.Authorization;   
 using Microsoft.AspNetCore.Mvc.Authorization;
+using Core.Interfaces.CRM;
+using Core.Services.CRM;
 
 #pragma warning disable CS0618
 // Поддержка работы с jsonb в PostgreSQL
@@ -54,6 +56,8 @@ builder.Services.ConfigureApplicationCookie(options =>
 });
 
 builder.Services.AddHttpContextAccessor();
+
+builder.Services.AddScoped<IContactService, ContactService>();
 
 builder.Services.AddScoped<Core.Services.ICrmStyleService, Core.Services.CrmStyleService>();
 
