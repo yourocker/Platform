@@ -12,7 +12,12 @@
 
     @* --- УНИФИЦИРОВАННЫЙ ХЕДЕР --- *@
     <crm-page-header title="Поля сущности: @Model.Name" icon="@Model.Icon" subtitle="Настройка динамических атрибутов и связей объекта @Model.EntityCode">
-        <a asp-action="Index" crm-button variant="outline-secondary" icon="arrow-left">Назад к списку</a>
+        <a asp-action="Index" crm-button variant="outline-secondary" icon="arrow-left" class="me-2">Назад к списку</a>
+        
+        <a href="@Url.Action("Index", "FormDesigner", new { entityId = Model.Id })" crm-button variant="outline-primary" icon="ui-checks-grid" class="me-2">
+            Конструктор форм
+        </a>
+
         <button type="button" crm-button variant="primary" icon="plus-circle" class="shadow-sm px-4" data-bs-toggle="modal" data-bs-target="#addFieldModal">
             Добавить поле
         </button>
