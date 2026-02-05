@@ -1,0 +1,107 @@
+﻿@model CRM.ViewModels.FormDesignerViewModel
+@{
+    ViewData["Title"] = $"Конструктор формы: {Model.EntityName}";
+    Layout = "~/Views/Shared/_LayoutV2.cshtml";
+}
+
+<link rel="stylesheet" href="~/css/form-designer.css" />
+
+<div class="d-flex justify-content-between align-items-center p-3 bg-white border-bottom">
+    <div class="d-flex align-items-center gap-3">
+        <a href="@Url.Action("Edit", "AppDefinitions", new { id = Model.EntityId })" class="btn btn-outline-secondary btn-sm">
+            <i class="bi bi-arrow-left"></i> Назад
+        </a>
+        <h5 class="mb-0">Конструктор: @Model.EntityName</h5>
+        
+        <select class="form-select form-select-sm" style="width: 200px;" onchange="location.href='@Url.Action("Index")?entityId=@Model.EntityId&formId=' + this.value">
+            <option value="" disabled selected="@(Model.CurrentForm == null)">-- Новая форма --</option>
+            @foreach (var form in Model.ExistingForms)
+            {
+                <option value="@form.Id" selected="@(Model.CurrentForm?.Id == form.Id)">@form.Name</option>
+            }
+        </select>
+    </div>
+
+    <div class="d-flex gap-2">
+        <button class="btn btn-primary" id="btn-save-layout">
+            <i class="bi bi-save"></i> Сохранить макет
+        </button>
+    </div>
+</div>
+
+<div class="designer-container">
+    
+    <div class="designer-palette">
+        <div class="palette-section">
+            <small class="text-uppercase text-muted fw-bold" style="font-size: 11px;">Структура</small>
+            <div class="mt-2" id="palette-structure">
+                <div class="palette-item" data-type="tab-control">
+                    <i class="bi bi-folder2-open"></i> Вкладки
+                </div>
+                <div class="palette-item" data-type="group">
+                    <i class="bi bi-card-heading"></i> Группа / Секция
+                </div>
+                <div class="palette-item" data-type="row">
+                    <i class="bi bi-layout-three-columns"></i> Колонки (Сетка)
+                </div>
+                <div class="palette-item" data-type="text">
+                    <i class="bi bi-fonts"></i> Текст / Инструкция
+                </div>
+            </div>
+        </div>
+
+        <div class="palette-section flex-grow-1">
+            <small class="text-uppercase text-muted fw-bold" style="font-size: 11px;">Поля сущности</small>
+            <div class="mt-2" id="palette-fields">
+                @foreach (var field in Model.AvailableFields)
+                {
+                    <div class="palette-item" 
+                         data-type="@(field.IsCollection ? "related-list" : "field")" 
+                         data-field-name="@field.Name"
+                         data-is-system="@field.IsSystem">
+                        
+                        @if (field.IsCollection)
+                        {
+                            <i class="bi bi-list-ul text-primary"></i> 
+                        }
+                        else
+                        {
+                            <i class="bi bi-input-cursor-text"></i>
+                        }
+                        
+                        <span class="ms-2">@field.Label</span>
+                        
+                        <small class="text-muted ms-auto" style="font-size: 10px;">
+                            @(field.IsSystem ? "Sys" : "Dyn")
+                        </small>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    <div class="designer-canvas-wrapper">
+        <div class="designer-canvas" id="canvas-root">
+            <div class="text-center text-muted p-5">
+                <i class="bi bi-arrow-left-square fs-1"></i>
+                <p class="mt-2">Перетащите элементы из палитры сюда</p>
+                <div class="drop-zone mt-3">Root Drop Zone</div>
+            </div>
+        </div>
+    </div>
+
+    <div class="designer-properties">
+        <div class="properties-header">
+            Свойства
+        </div>
+        <div class="properties-content" id="properties-panel">
+            <p class="text-muted text-center mt-3">Выберите элемент на холсте,<br>чтобы настроить его.</p>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@latest/Sortable.min.js"></script>
+    
+    <script src="~/js/form-designer.js"></script> 
+}
