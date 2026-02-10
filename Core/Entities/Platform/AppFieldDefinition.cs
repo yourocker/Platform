@@ -19,13 +19,11 @@ public class AppFieldDefinition
 {
     public Guid Id { get; set; }
 
-    // ИСПРАВЛЕНО: Guid вместо int (так как AppDefinition использует Guid)
     public Guid AppDefinitionId { get; set; }
     public AppDefinition AppDefinition { get; set; } = null!;
 
     [Required]
     [MaxLength(100)]
-    // ИСПРАВЛЕНО: Вернули название Label, которое используется в контроллерах
     public string Label { get; set; } = string.Empty;
 
     [Required]
@@ -36,10 +34,28 @@ public class AppFieldDefinition
 
     public bool IsRequired { get; set; }
 
-    // ИСПРАВЛЕНО: Вернули SortOrder, который используется в сортировке
     public int SortOrder { get; set; }
 
-    // --- Новые поля оставили ---
+    // --- Параметры согласно ТЗ v5.0 ---
+
+    /// <summary>
+    /// Флаг системного поля (например, Name). Запрещено удалять.
+    /// </summary>
+    public bool IsSystem { get; set; } = false;
+
+    /// <summary>
+    /// Мягкое удаление.
+    /// </summary>
+    public bool IsDeleted { get; set; } = false;
+
+    /// <summary>
+    /// Описание поля для администратора/пользователя.
+    /// </summary>
+    [MaxLength(500)]
+    public string? Description { get; set; }
+
+    // --- Существующие поля ---
+    
     public bool IsArray { get; set; } = false;
     
     [MaxLength(50)]
@@ -61,4 +77,5 @@ public static class FieldDataTypeExtensions
         FieldDataType.File => "Файл",
         _ => type.ToString()
     };
+    
 }

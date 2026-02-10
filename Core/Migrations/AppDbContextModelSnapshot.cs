@@ -640,10 +640,20 @@ namespace Core.Migrations
                     b.Property<int>("DataType")
                         .HasColumnType("integer");
 
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
                     b.Property<bool>("IsArray")
                         .HasColumnType("boolean");
 
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
                     b.Property<bool>("IsRequired")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsSystem")
                         .HasColumnType("boolean");
 
                     b.Property<string>("Label")
@@ -669,6 +679,32 @@ namespace Core.Migrations
                         .IsUnique();
 
                     b.ToTable("AppFieldDefinitions");
+                });
+
+            modelBuilder.Entity("Core.Entities.Platform.Form.AppFormDefinition", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("AppDefinitionId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Layout")
+                        .IsRequired()
+                        .HasColumnType("jsonb");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AppDefinitionId", "Type", "IsDefault");
+
+                    b.ToTable("AppFormDefinitions");
                 });
 
             modelBuilder.Entity("Core.Entities.Platform.GenericObject", b =>
@@ -1406,6 +1442,17 @@ namespace Core.Migrations
                 {
                     b.HasOne("Core.Entities.Platform.AppDefinition", "AppDefinition")
                         .WithMany("Fields")
+                        .HasForeignKey("AppDefinitionId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("AppDefinition");
+                });
+
+            modelBuilder.Entity("Core.Entities.Platform.Form.AppFormDefinition", b =>
+                {
+                    b.HasOne("Core.Entities.Platform.AppDefinition", "AppDefinition")
+                        .WithMany()
                         .HasForeignKey("AppDefinitionId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
