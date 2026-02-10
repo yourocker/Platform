@@ -2,7 +2,6 @@
 using System;
 using System.Collections.Generic;
 using Core.Data;
-using Core.FormEngine.Schema;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
@@ -940,46 +939,6 @@ namespace Core.Migrations
                     b.ToTable("Visits");
                 });
 
-            modelBuilder.Entity("Core.FormEngine.Domain.AppFormDefinition", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("AppDefinitionId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("FormCode")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("character varying(50)");
-
-                    b.Property<bool>("IsDefault")
-                        .HasColumnType("boolean");
-
-                    b.Property<FormLayoutSchema>("Layout")
-                        .IsRequired()
-                        .HasColumnType("jsonb");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<int>("Type")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("AppDefinitionId", "FormCode")
-                        .IsUnique();
-
-                    b.ToTable("AppFormDefinitions");
-                });
-
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole<System.Guid>", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1497,17 +1456,6 @@ namespace Core.Migrations
                         .IsRequired();
 
                     b.Navigation("Patient");
-                });
-
-            modelBuilder.Entity("Core.FormEngine.Domain.AppFormDefinition", b =>
-                {
-                    b.HasOne("Core.Entities.Platform.AppDefinition", "AppDefinition")
-                        .WithMany()
-                        .HasForeignKey("AppDefinitionId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("AppDefinition");
                 });
 
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>
