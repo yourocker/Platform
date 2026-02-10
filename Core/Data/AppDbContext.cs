@@ -12,7 +12,6 @@ using Core.Entities.System;
 using Core.Data.Interceptors;
 using Core.Entities.CRM;
 using Core.Data.Extensions;
-using Core.FormEngine.Domain;
 
 namespace Core.Data
 {
@@ -76,9 +75,6 @@ namespace Core.Data
         public DbSet<CrmResourceBooking> CrmResourceBookings { get; set; }
         public DbSet<CrmDealItem> CrmDealItems { get; set; }
         public DbSet<CrmEvent> CrmEvents { get; set; }
-        
-        // --- Конструктор форм ---
-        public DbSet<AppFormDefinition> AppFormDefinitions { get; set; }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
@@ -286,13 +282,6 @@ namespace Core.Data
                 entity.ToTable("CrmEvents");
                 entity.HasIndex(e => new { e.TargetId, e.TargetEntityCode }); // Для быстрого поиска истории карточки
                 entity.HasIndex(e => e.CreatedAt);
-            });
-            
-            // 17. Конструктор форм
-            modelBuilder.Entity<AppFormDefinition>(entity =>
-            {
-                entity.HasIndex(e => new { e.AppDefinitionId, e.FormCode }).IsUnique();
-                entity.Property(e => e.Layout).HasColumnType("jsonb");
             });
         }
     }

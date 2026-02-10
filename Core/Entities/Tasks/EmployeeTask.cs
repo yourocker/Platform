@@ -26,8 +26,8 @@ namespace Core.Entities.Tasks
         /// <summary>
         /// Дата и время постановки задачи
         /// </summary>
-        public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
-
+        public new DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+        
         /// <summary>
         /// Срок выполнения (дедлайн)
         /// </summary>

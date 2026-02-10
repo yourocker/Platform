@@ -38,6 +38,8 @@
 
     <ItemGroup>
       <Folder Include="Entities\OldData\" />
+      <Folder Include="FormEngine\Domain\" />
+      <Folder Include="FormEngine\Schema\" />
     </ItemGroup>
 
 </Project>
