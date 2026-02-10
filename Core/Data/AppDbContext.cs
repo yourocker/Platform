@@ -12,6 +12,7 @@ using Core.Entities.System;
 using Core.Data.Interceptors;
 using Core.Entities.CRM;
 using Core.Data.Extensions;
+using Core.Entities.Platform.Form;
 
 namespace Core.Data
 {
@@ -27,6 +28,9 @@ namespace Core.Data
         public DbSet<AppDefinition> AppDefinitions { get; set; }
         public DbSet<AppFieldDefinition> AppFieldDefinitions { get; set; }
         public DbSet<AppCategory> AppCategories { get; set; }
+        
+        // ---Таблица форм---
+        public DbSet<AppFormDefinition> AppFormDefinitions { get; set; }
 
         // --- CRM (Изолированные таблицы для высокой нагрузки) ---
         public DbSet<Contact> Contacts { get; set; }
@@ -282,6 +286,13 @@ namespace Core.Data
                 entity.ToTable("CrmEvents");
                 entity.HasIndex(e => new { e.TargetId, e.TargetEntityCode }); // Для быстрого поиска истории карточки
                 entity.HasIndex(e => e.CreatedAt);
+            });
+            
+            // 17. Настройка форм
+            modelBuilder.Entity<AppFormDefinition>(entity =>
+            {
+                entity.HasIndex(f => new { f.AppDefinitionId, f.Type, f.IsDefault }); // Ускорение поиска дефолтной формы
+                entity.Property(e => e.Layout).HasColumnType("jsonb");
             });
         }
     }

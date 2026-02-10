@@ -7,6 +7,8 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc.Authorization;
 using Core.Interfaces.CRM;
 using Core.Services.CRM;
+using Core.Interfaces;
+using Core.Services;
 
 #pragma warning disable CS0618
 // Поддержка работы с jsonb в PostgreSQL
@@ -23,6 +25,9 @@ builder.Services.AddControllersWithViews(options =>
         .Build();
     options.Filters.Add(new AuthorizeFilter(policy));
 });
+
+// 1.1. Сервисы платформы
+builder.Services.AddScoped<ITransliterationService, TransliterationService>();
 
 // 2. Настройка базы данных
 var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
