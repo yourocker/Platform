@@ -1,0 +1,193 @@
+﻿@using Core.Entities.Platform.Form
+@using Core.Entities.Platform
+@model CRM.ViewModels.FormConfig.FormBuilderViewModel
+
+<div class="modal fade" id="builderModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-fullscreen">
+        <div class="modal-content bg-light">
+
+            <div class="modal-header border-bottom bg-white py-2 shadow-sm" style="z-index: 1050;">
+                <div class="d-flex align-items-center">
+                    <h5 class="modal-title me-3 mb-0">
+                        <i class="bi bi-ui-checks-grid text-primary me-2"></i>
+                        @Model.AppDefinitionName
+                    </h5>
+                    <span class="badge bg-light text-dark border me-3">@Model.EntityCode</span>
+                    <div id="saveStatus" class="small text-muted fade"></div>
+                </div>
+
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">Закрыть</button>
+                    <button type="button" class="btn btn-primary btn-sm" onclick="formBuilder.saveCurrentLayout()">
+                        <i class="bi bi-save"></i> Сохранить макет
+                    </button>
+                </div>
+            </div>
+
+            <div class="modal-body p-0 d-flex flex-column overflow-hidden">
+
+                <div class="bg-white border-bottom px-3 pt-2">
+                    <ul class="nav nav-tabs border-bottom-0" id="builderTabs" role="tablist">
+                        <li class="nav-item">
+                            <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-fields-manager" type="button" onclick="fieldManager.loadFields()">
+                                <i class="bi bi-list-columns me-1"></i> Поля сущности
+                            </button>
+                        </li>
+                        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-designer" onclick="layoutDesigner.switchMode('Create')" type="button">Создание (Create)</button></li>
+                        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-designer" onclick="layoutDesigner.switchMode('Edit')" type="button">Редактирование (Edit)</button></li>
+                        <li class="nav-item"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-designer" onclick="layoutDesigner.switchMode('View')" type="button">Просмотр (View)</button></li>
+                    </ul>
+                </div>
+
+                <div class="tab-content flex-grow-1 overflow-hidden position-relative bg-light">
+
+                    <div class="tab-pane fade show active h-100 overflow-auto p-4" id="tab-fields-manager">
+                        <div class="container bg-white p-4 shadow-sm rounded" style="max-width: 1000px;">
+                            <div class="d-flex justify-content-between align-items-center mb-3">
+                                <h5 class="m-0">Управление полями</h5>
+                                <div>
+                                    <div class="form-check form-check-inline">
+                                        <input class="form-check-input" type="checkbox" id="showDeletedCheck" onchange="fieldManager.loadFields()">
+                                        <label class="form-check-label small" for="showDeletedCheck">Показать удаленные</label>
+                                    </div>
+                                    <button class="btn btn-success btn-sm" onclick="fieldManager.openCreateModal()">
+                                        <i class="bi bi-plus-lg"></i> Создать поле
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="table-responsive">
+                                <table class="table table-hover align-middle">
+                                    <thead class="table-light">
+                                    <tr>
+                                        <th>Название</th>
+                                        <th>Системное имя</th>
+                                        <th>Тип</th>
+                                        <th>Настройки</th>
+                                        <th class="text-end">Действия</th>
+                                    </tr>
+                                    </thead>
+                                    <tbody id="fieldsTableBody">
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="tab-pane fade h-100" id="tab-designer">
+                        <div class="d-flex h-100">
+                            <div class="bg-white border-end d-flex flex-column" style="width: 280px; min-width: 280px;">
+                                <div class="p-3 border-bottom bg-light">
+                                    <small class="text-uppercase text-muted fw-bold">Инструменты</small>
+                                </div>
+                                <div class="p-2 overflow-auto flex-grow-1">
+                                    <div class="mb-3">
+                                        <small class="text-muted d-block mb-2 ps-2">Разметка</small>
+                                        <div class="d-grid gap-2">
+                                            <div class="palette-item" draggable="true" data-type="row">
+                                                <i class="bi bi-layout-three-columns"></i> Строка (Row)
+                                            </div>
+                                            <div class="palette-item" draggable="true" data-type="group">
+                                                <i class="bi bi-card-heading"></i> Группа
+                                            </div>
+                                            <div class="palette-item" draggable="true" data-type="tab-control">
+                                                <i class="bi bi-folder2-open"></i> Вкладки
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div>
+                                        <small class="text-muted d-block mb-2 ps-2">Поля сущности</small>
+                                        <div id="paletteFieldsList" class="d-flex flex-column gap-2">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="flex-grow-1 bg-light p-4 overflow-auto d-flex justify-content-center">
+                                <div id="formCanvas" class="bg-white shadow-sm border p-4" style="width: 100%; max-width: 1000px; min-height: 800px;">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="nodeSettingsModal" tabindex="-1" style="z-index: 1060;">
+    <div class="modal-dialog modal-sm modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header py-2">
+                <h6 class="modal-title">Настройка элемента</h6>
+                <button type="button" class="btn-close btn-sm" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="nodeSettingsForm">
+                    <input type="hidden" id="propNodeId" />
+
+                    <div class="mb-2">
+                        <label class="form-label small">Заголовок</label>
+                        <input type="text" class="form-control form-control-sm" id="propLabel" />
+                    </div>
+
+                    <div id="fieldProps" style="display:none;">
+                        <div class="form-check mb-1">
+                            <input class="form-check-input" type="checkbox" id="propRequired">
+                            <label class="form-check-label small" for="propRequired">Обязательность (Required)</label>
+                        </div>
+                        <div class="form-check mb-2 border-bottom pb-2">
+                            <input class="form-check-input" type="checkbox" id="propReadOnly">
+                            <label class="form-check-label small" for="propReadOnly">Только чтение (ReadOnly)</label>
+                        </div>
+                        
+                        <label class="form-label small fw-bold text-muted">Связанные сущности (EntityLink)</label>
+                        <div class="form-check mb-1">
+                            <input class="form-check-input" type="checkbox" id="propAllowCreate">
+                            <label class="form-check-label small" for="propAllowCreate">Разрешить создание (+)</label>
+                        </div>
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="propAllowLink">
+                            <label class="form-check-label small" for="propAllowLink">Разрешить переход (Ссылка)</label>
+                        </div>
+                    </div>
+
+                    <div id="groupProps" style="display:none;">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="propCollapsed">
+                            <label class="form-check-label small" for="propCollapsed">Свернута по умолчанию</label>
+                        </div>
+                    </div>
+                    <div id="columnProps" style="display:none;">
+                        <label class="form-label small">Ширина (1-12)</label>
+                        <input type="number" min="1" max="12" class="form-control form-control-sm" id="propWidth" />
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer py-1">
+                <button type="button" class="btn btn-primary btn-sm w-100" onclick="layoutDesigner.applySettings()">Применить</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<script>
+    window.formConfigData = {
+        appId: '@Model.AppDefinitionId',
+        layouts: {
+            Create: @Html.Raw(Model.FormLayouts.GetValueOrDefault(FormType.Create) ?? "{\"nodes\":[]}"),
+            Edit: @Html.Raw(Model.FormLayouts.GetValueOrDefault(FormType.Edit) ?? "{\"nodes\":[]}"),
+            View: @Html.Raw(Model.FormLayouts.GetValueOrDefault(FormType.View) ?? "{\"nodes\":[]}")
+        },
+        formIds: {
+            Create: '@Model.FormIds.GetValueOrDefault(FormType.Create)',
+            Edit: '@Model.FormIds.GetValueOrDefault(FormType.Edit)',
+            View: '@Model.FormIds.GetValueOrDefault(FormType.View)'
+        }
+    };
+</script>
+
+<script type="module" src="~/js/form-builder/index.js"></script>

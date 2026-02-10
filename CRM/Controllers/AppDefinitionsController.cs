@@ -221,4 +221,41 @@ public class AppDefinitionsController(AppDbContext context) : Controller
 
         return RedirectToAction(nameof(Fields), new { id = appId });
     }
+    
+    // GET: AppDefinitions/FormBuilder/{id}
+    [HttpGet]
+    public async Task<IActionResult> FormBuilder(Guid id)
+    {
+        var appDef = await _context.AppDefinitions
+            .AsNoTracking()
+            .FirstOrDefaultAsync(m => m.Id == id);
+
+        if (appDef == null) return NotFound();
+
+        // 1. Загружаем все существующие конфигурации форм для этой сущности
+        var existingForms = await _context.AppFormDefinitions
+            .Where(f => f.AppDefinitionId == id)
+            .ToListAsync();
+
+        // 2. Готовим ViewModel
+        var viewModel = new CRM.ViewModels.FormConfig.FormBuilderViewModel
+        {
+            AppDefinitionId = appDef.Id,
+            AppDefinitionName = appDef.Name,
+            EntityCode = appDef.EntityCode
+        };
+
+        // 3. Заполняем словарь для каждого типа формы (Create, Edit, View)
+        foreach (var type in Enum.GetValues<Core.Entities.Platform.Form.FormType>())
+        {
+            var existingForm = existingForms.FirstOrDefault(f => f.Type == type && f.IsDefault); // Пока работаем с IsDefault=true
+            
+            // Если формы нет в БД, отдаем пустой валидный Layout
+            viewModel.FormLayouts[type] = existingForm?.Layout ?? "{\"nodes\": []}";
+            viewModel.FormIds[type] = existingForm?.Id;
+        }
+
+        // Возвращаем PartialView, так как это будет содержимое модального окна
+        return PartialView("FormBuilderModal", viewModel);
+    }
 }
