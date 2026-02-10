@@ -7,6 +7,7 @@ namespace Core.FormEngine.Domain
 {
     /// <summary>
     /// Сущность хранения макетов форм.
+    /// Это какой-то пиздец, ребята
     /// </summary>
     [Table("AppFormDefinitions")]
     public class AppFormDefinition
