@@ -34,12 +34,6 @@ namespace CRM.ViewModels
         /// Текущая редактируемая форма (если null - создаем новую)
         /// </summary>
         public AppFormDefinition? CurrentForm { get; set; }
-
-        /// <summary>
-        /// Готовый JSON макета для инициализации JS-редактора.
-        /// Если null - редактор будет пуст.
-        /// </summary>
-        public string? LayoutJson { get; set; }
     }
 
     /// <summary>

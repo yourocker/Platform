@@ -29,11 +29,6 @@ namespace Core.FormEngine.Domain
         [Required]
         [MaxLength(50)]
         public string FormCode { get; set; }
-        
-        /// <summary>
-        /// Тип формы (Создание, Редактирование, Просмотр)
-        /// </summary>
-        public FormType Type { get; set; } = FormType.Edit; // Значение по умолчанию
 
         public bool IsDefault { get; set; }
 

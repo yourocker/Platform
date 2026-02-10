@@ -1,17 +1,21 @@
 ﻿using Core.Data;
 using Core.Entities.Platform;
 using Core.FormEngine.Domain;
-using Core.FormEngine.Schema;
+using Core.FormEngine.Schema; 
 using CRM.ViewModels;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
-using System.ComponentModel.DataAnnotations;
 using System.Reflection;
-using System.Text.Json;
+using System.ComponentModel.DataAnnotations;
 using Core.Entities.CRM;
+using System.Text.Json; 
 
 namespace CRM.Controllers
 {
+    /// <summary>
+    /// Контроллер визуального конструктора форм.
+    /// Отвечает за рендеринг редактора и API сохранения структуры.
+    /// </summary>
     public class FormDesignerController : Controller
     {
         private readonly AppDbContext _context;
@@ -21,6 +25,9 @@ namespace CRM.Controllers
             _context = context;
         }
 
+        /// <summary>
+        /// Основная страница конструктора.
+        /// </summary>
         [HttpGet]
         public async Task<IActionResult> Index(Guid entityId, Guid? formId = null)
         {
@@ -28,127 +35,11 @@ namespace CRM.Controllers
                 .Include(x => x.Fields)
                 .FirstOrDefaultAsync(x => x.Id == entityId);
 
-            if (entityDef == null) return NotFound();
+            if (entityDef == null)
+                return NotFound($"Entity with ID {entityId} not found");
 
-            // 1. Палитра полей (Системные + Динамические)
-            var designerFields = BuildDesignerFields(entityDef);
-
-            // 2. Список существующих форм
-            var existingForms = await _context.AppFormDefinitions
-                .Where(x => x.AppDefinitionId == entityId)
-                .OrderBy(x => x.Type).ThenBy(x => x.Name)
-                .ToListAsync();
-
-            AppFormDefinition? currentForm = null;
-            string? layoutJson = null;
-
-            if (formId.HasValue)
-            {
-                currentForm = existingForms.FirstOrDefault(x => x.Id == formId.Value);
-                if (currentForm != null && currentForm.Layout != null)
-                {
-                    // ВАЖНО: Сериализуем Layout обратно в строку для JS
-                    // Используем CamelCase, чтобы в JS было { type: "group" }, а не { Type: "group" }
-                    var options = new JsonSerializerOptions { PropertyNamingPolicy = JsonNamingPolicy.CamelCase };
-                    layoutJson = JsonSerializer.Serialize(currentForm.Layout, options);
-                }
-            }
-
-            var viewModel = new FormDesignerViewModel
-            {
-                EntityId = entityDef.Id,
-                EntityName = entityDef.Name,
-                AvailableFields = designerFields,
-                ExistingForms = existingForms,
-                CurrentForm = currentForm,
-                LayoutJson = layoutJson // Вот здесь данные пойдут на фронт
-            };
-
-            return View(viewModel);
-        }
-
-        [HttpPost]
-        public async Task<IActionResult> SaveConfig([FromBody] SaveFormRequest request)
-        {
-            if (request == null || string.IsNullOrEmpty(request.LayoutJson))
-                return BadRequest("Пустой запрос");
-
-            FormLayoutSchema? schema;
-            try
-            {
-                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
-                schema = JsonSerializer.Deserialize<FormLayoutSchema>(request.LayoutJson, options);
-            }
-            catch (Exception ex)
-            {
-                return BadRequest($"JSON Error: {ex.Message}");
-            }
-
-            if (schema == null) return BadRequest("Invalid Schema");
-
-            AppFormDefinition? formDef;
-
-            if (request.FormId.HasValue)
-            {
-                // UPDATE
-                formDef = await _context.AppFormDefinitions.FirstOrDefaultAsync(x => x.Id == request.FormId.Value);
-                if (formDef == null) return NotFound("Form not found");
-
-                formDef.Layout = schema;
-                formDef.UpdatedAt = DateTime.UtcNow;
-                
-                // Если передали имя и тип - обновляем
-                if (!string.IsNullOrEmpty(request.Title)) formDef.Name = request.Title;
-                if (request.Type.HasValue) formDef.Type = request.Type.Value;
-
-                _context.Update(formDef);
-                await _context.SaveChangesAsync();
-
-                return Ok(new { message = "Форма обновлена" });
-            }
-            else
-            {
-                // CREATE
-                if (string.IsNullOrEmpty(request.Title)) return BadRequest("Укажите название формы");
-
-                formDef = new AppFormDefinition
-                {
-                    Id = Guid.NewGuid(),
-                    AppDefinitionId = request.EntityId,
-                    Name = request.Title,
-                    Type = request.Type ?? FormType.Edit, // Дефолт
-                    FormCode = $"form_{Guid.NewGuid():N}[0..8]",
-                    Layout = schema,
-                    UpdatedAt = DateTime.UtcNow,
-                    IsDefault = false
-                };
-
-                _context.AppFormDefinitions.Add(formDef);
-                await _context.SaveChangesAsync();
-
-                var redirectUrl = Url.Action("Index", new { entityId = request.EntityId, formId = formDef.Id });
-                return Ok(new { message = "Форма создана", redirectUrl });
-            }
-        }
-
-        [HttpPost]
-        public async Task<IActionResult> Delete(Guid id)
-        {
-            var form = await _context.AppFormDefinitions.FindAsync(id);
-            if (form == null) return NotFound();
-
-            var entityId = form.AppDefinitionId;
-            _context.AppFormDefinitions.Remove(form);
-            await _context.SaveChangesAsync();
-
-            return RedirectToAction("Index", new { entityId });
-        }
-
-        // --- Хелперы ---
-
-        private List<DesignerFieldDto> BuildDesignerFields(AppDefinition entityDef)
-        {
-            var fields = entityDef.Fields.Select(f => new DesignerFieldDto
+            // 1. Собираем Динамические поля (из БД)
+            var designerFields = entityDef.Fields.Select(f => new DesignerFieldDto
             {
                 Name = f.SystemName,
                 Label = f.Label,
@@ -157,12 +48,106 @@ namespace CRM.Controllers
                 IsCollection = f.IsArray
             }).ToList();
 
+            // 2. Собираем Системные поля (из C# класса)
             if (entityDef.IsSystem && !string.IsNullOrEmpty(entityDef.EntityCode))
             {
-                var sysFields = GetSystemProperties(entityDef.EntityCode);
-                fields.InsertRange(0, sysFields);
+                var systemFields = GetSystemProperties(entityDef.EntityCode);
+                designerFields.InsertRange(0, systemFields);
             }
-            return fields;
+
+            var existingForms = await _context.AppFormDefinitions
+                .Where(x => x.AppDefinitionId == entityId)
+                .OrderBy(x => x.Name)
+                .ToListAsync();
+
+            AppFormDefinition? currentForm = null;
+            if (formId.HasValue)
+            {
+                currentForm = existingForms.FirstOrDefault(x => x.Id == formId.Value);
+            }
+
+            var viewModel = new FormDesignerViewModel
+            {
+                EntityId = entityDef.Id,
+                EntityName = entityDef.Name,
+                AvailableFields = designerFields,
+                ExistingForms = existingForms,
+                CurrentForm = currentForm
+            };
+
+            return View(viewModel);
+        }
+
+        /// <summary>
+        /// API для сохранения структуры формы (JSON) в базу данных.
+        /// </summary>
+        [HttpPost]
+        public async Task<IActionResult> SaveConfig([FromBody] SaveFormRequest request)
+        {
+            if (request == null || string.IsNullOrEmpty(request.LayoutJson))
+                return BadRequest("Пустой запрос");
+
+            // 1. Пробуем десериализовать JSON, чтобы убедиться в валидности структуры
+            FormLayoutSchema? schema;
+            try
+            {
+                var options = new JsonSerializerOptions { PropertyNameCaseInsensitive = true };
+                schema = JsonSerializer.Deserialize<FormLayoutSchema>(request.LayoutJson, options);
+            }
+            catch (Exception ex)
+            {
+                return BadRequest($"Ошибка валидации JSON: {ex.Message}");
+            }
+
+            if (schema == null) return BadRequest("Некорректный JSON схемы");
+
+            AppFormDefinition? formDef;
+
+            // 2. Логика Обновления или Создания
+            if (request.FormId.HasValue)
+            {
+                // --- ОБНОВЛЕНИЕ ---
+                formDef = await _context.AppFormDefinitions
+                    .FirstOrDefaultAsync(x => x.Id == request.FormId.Value);
+
+                if (formDef == null) return NotFound("Форма не найдена");
+
+                // Обновляем только структуру
+                formDef.Layout = schema;
+                formDef.UpdatedAt = DateTime.UtcNow;
+                
+                _context.Update(formDef);
+                await _context.SaveChangesAsync();
+                
+                return Ok(new { message = "Форма обновлена" });
+            }
+            else
+            {
+                // --- СОЗДАНИЕ НОВОЙ ---
+                
+                // Генерируем уникальный код и имя
+                // В будущем здесь можно добавить проверку на уникальность или брать имя из UI
+                var newFormCode = $"custom_{Guid.NewGuid().ToString("N").Substring(0, 8)}";
+                var newName = $"Новая форма {DateTime.Now:dd.MM HH:mm}";
+
+                formDef = new AppFormDefinition
+                {
+                    Id = Guid.NewGuid(),
+                    AppDefinitionId = request.EntityId,
+                    Name = newName,
+                    FormCode = newFormCode,
+                    IsDefault = false, // По умолчанию не главная
+                    Layout = schema,
+                    UpdatedAt = DateTime.UtcNow
+                };
+
+                _context.AppFormDefinitions.Add(formDef);
+                await _context.SaveChangesAsync();
+
+                // Возвращаем URL для редиректа, чтобы JS перегрузил страницу на новую форму
+                var redirectUrl = Url.Action("Index", new { entityId = request.EntityId, formId = formDef.Id });
+                return Ok(new { message = "Форма создана", redirectUrl = redirectUrl });
+            }
         }
 
         private List<DesignerFieldDto> GetSystemProperties(string entityCode)
@@ -170,6 +155,7 @@ namespace CRM.Controllers
             Type? type = entityCode switch
             {
                 "Contact" => typeof(Contact),
+                // Добавим другие типы по мере необходимости
                 _ => null
             };
 
@@ -208,18 +194,18 @@ namespace CRM.Controllers
                     IsCollection = isCollection
                 });
             }
+
             return result;
         }
     }
 
+    /// <summary>
+    /// DTO для получения данных от JS-конструктора
+    /// </summary>
     public class SaveFormRequest
     {
         public Guid EntityId { get; set; }
         public Guid? FormId { get; set; }
         public string LayoutJson { get; set; }
-        
-        // Новые поля
-        public string? Title { get; set; }
-        public FormType? Type { get; set; }
     }
 }
