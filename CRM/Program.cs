@@ -94,12 +94,14 @@ using (var scope = app.Services.CreateScope())
     try
     {
         var context = services.GetRequiredService<AppDbContext>();
+        var userManager = services.GetRequiredService<UserManager<Employee>>();
+        var configuration = services.GetRequiredService<IConfiguration>(); // Получаем конфиг
         
         // Сначала накатываем миграции
         await context.Database.MigrateAsync();
         
-        // ЗАТЕМ запускаем твой инициализатор для создания CRM и Контактов
-        await DbInitializer.Initialize(context);
+        // ЗАТЕМ запускаем твой инициализатор для создания CRM, Контактов и Пользователя
+        await DbInitializer.Initialize(context, userManager, configuration);
         
         Console.WriteLine(">>> CRM: База данных готова и метаданные инициализированы.");
     }

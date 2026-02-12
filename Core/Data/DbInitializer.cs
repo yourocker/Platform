@@ -1,12 +1,15 @@
 ﻿using Core.Entities.Platform;
-using Core.Entities.CRM; // Добавлено для работы с воронками
+using Core.Entities.CRM;
+using Core.Entities.Company;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 
 namespace Core.Data
 {
     public static class DbInitializer
     {
-        public static async Task Initialize(AppDbContext context)
+        public static async Task Initialize(AppDbContext context, UserManager<Employee> userManager, IConfiguration configuration)
         {
             // --- ШАГ 1: Категории меню ---
             var catCRM = await EnsureCategoriesAsync(context);
@@ -17,8 +20,43 @@ namespace Core.Data
             // --- ШАГ 3: Специфические поля для CRM ---
             await EnsureCrmFieldsAsync(context);
 
-            // --- ШАГ 4: Базовые воронки и этапы (ФУНДАМЕНТ ПРОЦЕССОВ) ---
+            // --- ШАГ 4: Базовые воронки и этапы ---
             await EnsureDefaultPipelinesAsync(context);
+
+            // --- ШАГ 5: Создание администратора из конфигурации ---
+            await EnsureAdminAsync(userManager, configuration);
+        }
+
+        private static async Task EnsureAdminAsync(UserManager<Employee> userManager, IConfiguration configuration)
+        {
+            var adminLogin = configuration["SeedData:AdminUser"] ?? "admin";
+            var adminPassword = configuration["SeedData:AdminPassword"] ?? "Admin123!";
+            var adminEmail = configuration["SeedData:AdminEmail"] ?? "admin@linkcrm.local";
+
+            var adminUser = await userManager.FindByNameAsync(adminLogin);
+
+            if (adminUser == null)
+            {
+                var admin = new Employee
+                {
+                    Id = Guid.NewGuid(),
+                    UserName = adminLogin,
+                    Email = adminEmail,
+                    EmailConfirmed = true,
+                    FirstName = "System",
+                    LastName = "Admin",
+                    TimezoneId = "Russian Standard Time",
+                    Status = Employee.UserStatus.Offline
+                };
+
+                var result = await userManager.CreateAsync(admin, adminPassword);
+                
+                if (!result.Succeeded)
+                {
+                    var errors = string.Join(", ", result.Errors.Select(e => e.Description));
+                    throw new Exception($"Ошибка создания админа: {errors}");
+                }
+            }
         }
 
         private static async Task<AppCategory?> EnsureCategoriesAsync(AppDbContext context)
@@ -110,7 +148,6 @@ namespace Core.Data
 
         private static async Task EnsureDefaultPipelinesAsync(AppDbContext context)
         {
-            // 1. Дефолтная воронка для ЛИДОВ
             if (!await context.CrmPipelines.AnyAsync(p => p.TargetEntityCode == "Lead"))
             {
                 var leadPipeline = new CrmPipeline
@@ -131,7 +168,6 @@ namespace Core.Data
                 });
             }
 
-            // 2. Дефолтная воронка для СДЕЛОК
             if (!await context.CrmPipelines.AnyAsync(p => p.TargetEntityCode == "Deal"))
             {
                 var dealPipeline = new CrmPipeline
