@@ -1,5 +1,4 @@
 ﻿import { FormApiClient } from './api.js';
-import { layoutDesigner } from './designer.js';
 
 export const fieldManager = {
     appId: null,
@@ -7,114 +6,69 @@ export const fieldManager = {
 
     init(appId) {
         this.appId = appId;
+        this.bindEvents();
+    },
+
+    bindEvents() {
+        const form = document.getElementById('createFieldForm');
+        if (form) {
+            form.onsubmit = async (e) => {
+                e.preventDefault();
+                const formData = new FormData(form);
+                const data = {
+                    appDefinitionId: this.appId,
+                    label: formData.get('label'),
+                    dataType: parseInt(formData.get('dataType')),
+                    isRequired: form.querySelector('[name="isRequired"]').checked,
+                    isArray: form.querySelector('[name="isArray"]').checked
+                };
+                try {
+                    await FormApiClient.createField(data);
+                    bootstrap.Modal.getInstance(document.getElementById('addFieldModal')).hide();
+                    form.reset();
+                    await this.loadFields();
+                    window.layoutDesigner.render();
+                } catch (err) { alert(err.message); }
+            };
+        }
     },
 
     async loadFields() {
-        const showDeletedCheck = document.getElementById('showDeletedCheck');
-        if (!showDeletedCheck) return;
-
-        const showDeleted = showDeletedCheck.checked;
-        const tbody = document.getElementById('fieldsTableBody');
-        tbody.innerHTML = '<tr><td colspan="5" class="text-center">Загрузка...</td></tr>';
-
         try {
-            this.fields = await FormApiClient.getFields(this.appId, showDeleted);
-            this.renderTable(this.fields);
-
-            // Уведомляем дизайнер, что поля обновились
-            layoutDesigner.refreshPalette(this.fields);
-        } catch (e) {
-            tbody.innerHTML = `<tr><td colspan="5" class="text-danger">Ошибка: ${e.message}</td></tr>`;
-        }
+            this.fields = await FormApiClient.getFields(this.appId);
+            this.renderPalette();
+        } catch (e) { console.error("Ошибка API:", e); }
     },
 
-    renderTable(fields) {
-        const tbody = document.getElementById('fieldsTableBody');
-        tbody.innerHTML = '';
+    renderPalette() {
+        const sysList = document.getElementById('systemFieldsList');
+        const userList = document.getElementById('userFieldsList');
+        if (!sysList || !userList) return;
 
-        if (fields.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="5" class="text-center text-muted">Нет полей</td></tr>';
-            return;
-        }
+        sysList.innerHTML = '';
+        userList.innerHTML = '';
 
-        fields.forEach(f => {
-            const tr = document.createElement('tr');
-            if (f.isDeleted) tr.classList.add('table-danger', 'text-muted');
+        this.fields.sort((a, b) => a.label.localeCompare(b.label)).forEach(f => {
+            const isPlaced = !!document.querySelector(`[data-field-id="${f.id}"]`);
+            const el = document.createElement('div');
+            el.className = `palette-field ${isPlaced ? 'is-placed' : ''}`;
+            el.dataset.id = f.id;
+            el.dataset.type = 'field';
+            el.innerHTML = `<i class="bi bi-grip-vertical me-2 opacity-50"></i>${f.label}`;
 
-            let actionBtn = '';
-            if (f.isDeleted) {
-                actionBtn = `<button class="btn btn-sm btn-outline-success" onclick="fieldManager.restore('${f.id}')" title="Восстановить"><i class="bi bi-arrow-counterclockwise"></i></button>`;
-            } else if (f.isSystem) {
-                actionBtn = `<span class="text-muted small"><i class="bi bi-lock"></i> Системное</span>`;
-            } else {
-                actionBtn = `<button class="btn btn-sm btn-outline-danger" onclick="fieldManager.delete('${f.id}')" title="Удалить"><i class="bi bi-trash"></i></button>`;
-            }
-
-            tr.innerHTML = `
-                <td>${f.label}</td>
-                <td><code>${f.systemName}</code></td>
-                <td>${f.dataType} ${f.isArray ? '<span class="badge bg-secondary">Arr</span>' : ''}</td>
-                <td>${f.isRequired ? '<i class="bi bi-check-lg text-success"></i>' : ''}</td>
-                <td class="text-end">${actionBtn}</td>
-            `;
-            tbody.appendChild(tr);
+            (f.isSystem ? sysList : userList).appendChild(el);
         });
     },
 
-    async delete(id) {
-        if (!confirm('Удалить поле?')) return;
-        try {
-            await FormApiClient.deleteField(id);
-            this.loadFields();
-        } catch (e) { alert(e.message); }
-    },
-
-    async restore(id) {
-        try {
-            await FormApiClient.restoreField(id);
-            this.loadFields();
-        } catch (e) { alert(e.message); }
-    },
-
-    openCreateModal() {
-        const modalEl = document.getElementById('addFieldModal');
-        const modal = new bootstrap.Modal(modalEl);
+    openCreateFieldModal() {
+        const modal = new bootstrap.Modal(document.getElementById('addFieldModal'));
         modal.show();
+    },
 
-        const form = modalEl.querySelector('form');
-        // Клонируем для удаления старых event listeners
-        const newForm = form.cloneNode(true);
-        form.parentNode.replaceChild(newForm, form);
-
-        newForm.addEventListener('submit', async (e) => {
-            e.preventDefault();
-
-            const formData = new FormData(newForm);
-            const dto = {
-                appDefinitionId: this.appId,
-                label: formData.get('label'),
-                systemName: formData.get('systemName'),
-                dataType: parseInt(formData.get('dataType')),
-                isRequired: formData.get('isRequired') === 'true',
-                isArray: formData.get('isArray') === 'true'
-            };
-
-            const btn = newForm.querySelector('button[type="submit"]');
-            const originalText = btn.innerHTML;
-            btn.disabled = true;
-            btn.innerHTML = 'Сохранение...';
-
-            try {
-                await FormApiClient.createField(dto);
-                modal.hide();
-                newForm.reset();
-                this.loadFields();
-            } catch (err) {
-                alert('Ошибка: ' + err.message);
-            } finally {
-                btn.disabled = false;
-                btn.innerHTML = originalText;
-            }
+    filterPalette(query) {
+        const q = query.toLowerCase();
+        document.querySelectorAll('.palette-field').forEach(el => {
+            el.style.display = el.innerText.toLowerCase().includes(q) ? 'flex' : 'none';
         });
     }
 };

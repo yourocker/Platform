@@ -45,6 +45,16 @@ public class FieldNode : LayoutNode
     public Guid FieldId { get; set; }
     public bool IsReadOnly { get; set; }
     public bool IsRequiredOverride { get; set; }
+
+    /// <summary>
+    /// Разрешить создание связанного объекта (кнопка +).
+    /// </summary>
+    public bool CanCreate { get; set; }
+
+    /// <summary>
+    /// Разрешить переход к просмотру связанного объекта (ссылка).
+    /// </summary>
+    public bool CanView { get; set; }
 }
 
 /// <summary>

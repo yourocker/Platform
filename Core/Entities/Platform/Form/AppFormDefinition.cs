@@ -22,6 +22,13 @@ public class AppFormDefinition
     public Guid AppDefinitionId { get; set; }
     public AppDefinition AppDefinition { get; set; } = null!;
 
+    /// <summary>
+    /// Название формы (например, "Основная", "Для менеджеров").
+    /// </summary>
+    [Required]
+    [MaxLength(100)]
+    public string Name { get; set; } = "Основная форма";
+
     public FormType Type { get; set; }
 
     /// <summary>
