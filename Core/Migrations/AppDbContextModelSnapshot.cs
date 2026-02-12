@@ -697,12 +697,20 @@ namespace Core.Migrations
                         .IsRequired()
                         .HasColumnType("jsonb");
 
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
                     b.Property<int>("Type")
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
 
                     b.HasIndex("AppDefinitionId", "Type", "IsDefault");
+
+                    b.HasIndex("AppDefinitionId", "Type", "Name")
+                        .IsUnique();
 
                     b.ToTable("AppFormDefinitions");
                 });

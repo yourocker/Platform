@@ -291,7 +291,12 @@ namespace Core.Data
             // 17. Настройка форм
             modelBuilder.Entity<AppFormDefinition>(entity =>
             {
-                entity.HasIndex(f => new { f.AppDefinitionId, f.Type, f.IsDefault }); // Ускорение поиска дефолтной формы
+                // Индекс для быстрого поиска стандартной формы
+                entity.HasIndex(f => new { f.AppDefinitionId, f.Type, f.IsDefault }); 
+                
+                // Уникальный индекс: Нельзя создать две формы с одинаковым именем для одной сущности и типа задачи
+                entity.HasIndex(f => new { f.AppDefinitionId, f.Type, f.Name }).IsUnique();
+
                 entity.Property(e => e.Layout).HasColumnType("jsonb");
             });
         }

@@ -1,129 +1,41 @@
-﻿body {
-    padding-top: 50px; /* Отступ под фиксированную шапку */
-    height: 100vh;
-    overflow: hidden;
-}
+﻿/* Фикс накладывания модалок */
+#addFieldModal, #nodeSettingsModal { z-index: 1080 !important; }
+.modal-backdrop + .modal-backdrop { z-index: 1075 !important; }
 
-/* === Sidebar === */
-.builder-sidebar {
-    width: 300px;
-    min-width: 300px;
-    height: calc(100vh - 50px);
-    display: flex;
-    flex-direction: column;
-}
-
-.palette-item, .palette-field {
-    background: #f8f9fa;
-    border: 1px solid #dee2e6;
-    padding: 10px;
-    border-radius: 4px;
-    cursor: grab;
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    transition: all 0.2s;
-}
-
-.palette-item:hover, .palette-field:hover {
-    background: #e9ecef;
-    border-color: #adb5bd;
-    transform: translateX(2px);
-}
-
-/* === Canvas === */
+/* Канвас */
 .builder-canvas-wrapper {
-    height: calc(100vh - 50px);
-    overflow-y: auto;
-    background-image: radial-gradient(#dee2e6 1px, transparent 1px);
-    background-size: 20px 20px;
-}
-
-.canvas-paper {
-    width: 100%;
-    max-width: 900px; /* Ширина стандартной формы */
-    min-height: 800px;
-    border: 1px solid #dee2e6;
-    border-radius: 4px;
-}
-
-/* === Canvas Elements === */
-.canvas-element {
-    position: relative;
-    margin-bottom: 1rem;
-    border: 1px solid transparent;
-    border-radius: 4px;
-}
-
-.canvas-element:hover {
-    border-color: #0d6efd; /* Подсветка при наведении */
-}
-
-/* Поле на канвасе */
-.field-node {
-    padding: 10px;
-    background: #fff;
-    border: 1px solid #e2e3e5;
-}
-
-.element-header {
-    display: flex;
-    justify-content: space-between;
-    margin-bottom: 5px;
-    font-size: 0.9rem;
-    color: #495057;
-}
-
-.action-btn {
-    cursor: pointer;
-    opacity: 0;
-    margin-left: 8px;
-}
-
-.canvas-element:hover .action-btn {
-    opacity: 1;
-}
-
-/* Зоны сброса (Drop Zones) */
-.drop-zone {
-    min-height: 60px;
-    background-color: #fcfcfc;
-    border-radius: 4px;
-    padding: 10px;
-    transition: background-color 0.2s;
-}
-
-/* Активная зона при перетаскивании */
-.drop-zone.drag-over {
-    background-color: #e7f1ff; /* Голубой фон */
-    border: 2px dashed #0d6efd;
-}
-
-.column-node {
-    border: 1px dashed #dee2e6;
-    margin: 2px;
-}
-
-/* Призрачный элемент при переносе */
-.gu-mirror {
-    position: fixed !important;
-    margin: 0 !important;
-    z-index: 9999 !important;
+    background-image: radial-gradient(var(--primary-color) 0.5px, transparent 0.5px);
+    background-size: 24px 24px;
     opacity: 0.8;
 }
 
-#addFieldModal {
-    z-index: 1070 !important; /* Bootstrap modal по умолчанию 1055 */
-}
-/* Подложка второго окна тоже должна быть выше */
-.modal-backdrop:nth-of-type(2) {
-    z-index: 1065 !important;
+/* Поля в палитре */
+.palette-field {
+    border: 1px solid #e0e0e0;
+    padding: 8px 12px;
+    border-radius: 6px;
+    background: #fff;
+    cursor: grab;
+    font-size: 13px;
+    transition: all 0.15s ease;
 }
 
-/* === Улучшение визуала таблицы полей === */
-#tab-fields-manager .table {
-    font-size: 0.9rem;
+.palette-field:hover {
+    border-color: var(--primary-color);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
 }
-#tab-fields-manager .btn-sm {
-    padding: 0.1rem 0.4rem;
+
+/* Состояние "уже на форме" */
+.palette-field.is-placed {
+    background-color: #f8f9fa !important;
+    color: #adb5bd !important;
+    border: 1px dashed #dee2e6 !important;
+    pointer-events: none;
+    opacity: 0.7;
+}
+
+/* Элементы разметки */
+.markup-item:hover {
+    border-color: var(--accent) !important;
+    background-color: #fffaf0 !important;
 }
