@@ -1,191 +1,253 @@
-﻿@using Core.Entities.Platform
+@using Core.Entities.Platform
+@using Core.Entities.Platform.Form
 @using System.Text.Json
 @using Microsoft.AspNetCore.Html
-@* ГЛАВНОЕ ИЗМЕНЕНИЕ: Модель теперь DTO интерфейс *@
 @model Core.DTOs.Interfaces.IDynamicValues
 
 @{
     var fields = ViewBag.DynamicFields as List<AppFieldDefinition>;
+    var fieldsById = fields?.ToDictionary(f => f.Id) ?? new Dictionary<Guid, AppFieldDefinition>();
     var lookupData = ViewBag.LookupData as Dictionary<string, List<SelectListItem>> ?? new Dictionary<string, List<SelectListItem>>();
-    
-    // ЛОГИКА АДАПТАЦИИ:
-    // Берем словарь из DTO. Если он null - создаем пустой.
+    var formLayout = ViewBag.FormLayout as FormLayoutSchema;
+
     var values = Model?.DynamicValues ?? new Dictionary<string, object>();
 
     var action = ViewContext.RouteData.Values["action"]?.ToString();
     bool isEditMode = action == "Create" || action == "Edit";
+    var recordId = Model?.GetType().GetProperty("Id")?.GetValue(Model)?.ToString() ?? "";
+
+    var hasValidLayout = formLayout?.Nodes != null && formLayout.Nodes.Any();
+
+    void RenderFieldBlock(AppFieldDefinition field, bool isReadOnly, bool isRequiredOverride, bool canCreate, bool canView)
+    {
+        var formKey = $"DynamicProps[{field.SystemName}]";
+        var hasError = ViewData.ModelState.ContainsKey(formKey) && ViewData.ModelState[formKey].Errors.Any();
+
+        values.TryGetValue(field.SystemName, out var rawValue);
+
+        var currentValues = new List<string>();
+
+        if (rawValue is JsonElement element)
+        {
+            if (element.ValueKind == JsonValueKind.Array)
+                currentValues = element.EnumerateArray().Select(x => x.ToString()).ToList();
+            else
+                currentValues.Add(element.ToString());
+        }
+        else if (rawValue is List<object> listObj)
+        {
+            currentValues = listObj.Select(x => x?.ToString() ?? "").ToList();
+        }
+        else if (rawValue is string[] arrStr)
+        {
+            currentValues = arrStr.ToList();
+        }
+        else if (rawValue != null)
+        {
+            currentValues.Add(rawValue.ToString() ?? string.Empty);
+        }
+
+        if (!currentValues.Any()) currentValues.Add("");
+
+        var showAsReadOnly = !isEditMode || isReadOnly;
+        var isRequired = isRequiredOverride || field.IsRequired;
+
+        <div class="row mb-3 align-items-start">
+            <label class="col-sm-3 col-lg-2 col-form-label text-muted text-sm-end fw-bold">
+                @field.Label
+                @if (isRequired && isEditMode && !isReadOnly)
+                {
+                    <span class="text-danger">*</span>
+                }
+            </label>
+
+            <div class="col-sm-9 col-lg-10">
+                <div id="container_@field.SystemName" class="dynamic-field-container">
+                    @foreach (var val in currentValues)
+                    {
+                        var wrapperId = "wrapper_" + Guid.NewGuid().ToString("N");
+
+                        <div class="input-group mb-2 dynamic-field-item flex-column" id="@wrapperId">
+                            @if (field.DataType == FieldDataType.File && !string.IsNullOrWhiteSpace(val) && !val.Contains("/uploads/temp/"))
+                            {
+                                <div class="mb-1 d-flex align-items-center">
+                                    <a href="@val" target="_blank" class="text-decoration-none small">
+                                        <i class="bi bi-paperclip"></i> Текущий файл: @System.IO.Path.GetFileName(val)
+                                    </a>
+                                    @if (isEditMode && !showAsReadOnly && !string.IsNullOrEmpty(recordId))
+                                    {
+                                        <button type="button" class="btn btn-link text-danger p-0 ms-2" title="Удалить файл"
+                                                onclick="deleteExistingFile('@recordId', '@ViewBag.EntityCode', '@field.SystemName', '@val', '@wrapperId')">
+                                            <i class="bi bi-x-circle-fill"></i>
+                                        </button>
+                                    }
+                                </div>
+                            }
+
+                            <div class="d-flex w-100">
+                                @if (!showAsReadOnly)
+                                {
+                                    @renderField(field, val, hasError, lookupData, isRequired)
+
+                                    @if (field.DataType == FieldDataType.EntityLink && canCreate && !string.IsNullOrEmpty(field.TargetEntityCode))
+                                    {
+                                        <a href="/Data/@field.TargetEntityCode/Create" class="btn btn-outline-secondary ms-2" title="Создать связанный объект">
+                                            <i class="bi bi-plus-lg"></i>
+                                        </a>
+                                    }
+
+                                    @if (field.IsArray)
+                                    {
+                                        <button type="button" class="btn btn-outline-danger" onclick="this.closest('.dynamic-field-item').remove()">
+                                            <i class="bi bi-x"></i>
+                                        </button>
+                                    }
+                                }
+                                else
+                                {
+                                    @if (field.DataType == FieldDataType.EntityLink)
+                                    {
+                                        var displayName = val;
+                                        if (lookupData.ContainsKey(field.SystemName))
+                                        {
+                                            var found = lookupData[field.SystemName].FirstOrDefault(x => x.Value == val);
+                                            if (found != null) displayName = found.Text;
+                                        }
+
+                                        if (!string.IsNullOrEmpty(val))
+                                        {
+                                            if (canView && !string.IsNullOrEmpty(field.TargetEntityCode))
+                                            {
+                                                var href = $"/Data/Details/{val}";
+                                                <a href="@href" class="btn btn-outline-primary btn-sm">
+                                                    <i class="bi bi-link-45deg"></i> @displayName
+                                                </a>
+                                            }
+                                            else
+                                            {
+                                                <div class="form-control-plaintext">@displayName</div>
+                                            }
+                                        }
+                                        else { <span class="text-muted small">Не указано</span> }
+                                    }
+                                    else if (field.DataType == FieldDataType.Boolean)
+                                    {
+                                        var isTrue = (val ?? "").ToLower() == "true";
+                                        <div class="form-control-plaintext">
+                                            <i class="bi @(isTrue ? "bi-check-circle-fill text-success" : "bi-circle text-muted")"></i>
+                                            @(isTrue ? "Да" : "Нет")
+                                        </div>
+                                    }
+                                    else if (field.DataType == FieldDataType.File)
+                                    {
+                                        if (!string.IsNullOrEmpty(val))
+                                        {
+                                            <a href="@val" target="_blank" class="btn btn-sm btn-light border">
+                                                <i class="bi bi-file-earmark"></i> Скачать
+                                            </a>
+                                        }
+                                        else { <div class="text-muted">Нет файла</div> }
+                                    }
+                                    else
+                                    {
+                                        <div class="form-control-plaintext">@(string.IsNullOrEmpty(val) ? "—" : val)</div>
+                                    }
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+
+                @if (hasError && isEditMode)
+                {
+                    <div class="text-danger small mt-1">
+                        @foreach (var error in ViewData.ModelState[formKey].Errors)
+                        {
+                            <div><i class="bi bi-exclamation-circle"></i> @error.ErrorMessage</div>
+                        }
+                    </div>
+                }
+
+                @if (field.IsArray && isEditMode && !isReadOnly)
+                {
+                    <button type="button" class="btn btn-sm btn-outline-secondary mt-1"
+                            onclick="addDynamicField('@field.SystemName', '@field.DataType')">
+                        <i class="bi bi-plus-lg"></i> Добавить еще
+                    </button>
+                }
+            </div>
+        </div>
+    }
+
+    void RenderNodes(IEnumerable<LayoutNode> nodes)
+    {
+        foreach (var node in nodes)
+        {
+            switch (node)
+            {
+                case FieldNode fieldNode when fieldsById.TryGetValue(fieldNode.FieldId, out var field):
+                    RenderFieldBlock(field, fieldNode.IsReadOnly, fieldNode.IsRequiredOverride, fieldNode.CanCreate, fieldNode.CanView);
+                    break;
+                case GroupNode groupNode:
+                    <div class="card mb-3">
+                        <div class="card-header fw-semibold">@(groupNode.Title ?? groupNode.CustomLabel ?? "Группа")</div>
+                        <div class="card-body">
+                            @{ RenderNodes(groupNode.Children); }
+                        </div>
+                    </div>
+                    break;
+                case TabControlNode tabControlNode:
+                    <div class="mb-3">
+                        @foreach (var tab in tabControlNode.Tabs)
+                        {
+                            <div class="card mb-3">
+                                <div class="card-header fw-semibold">@(tab.Title ?? tab.CustomLabel ?? "Вкладка")</div>
+                                <div class="card-body">
+                                    @{ RenderNodes(tab.Children); }
+                                </div>
+                            </div>
+                        }
+                    </div>
+                    break;
+                case RowNode rowNode:
+                    <div class="row">
+                        @foreach (var column in rowNode.Columns)
+                        {
+                            <div class="col-md-@Math.Clamp(column.Width, 1, 12)">
+                                @{ RenderNodes(column.Children); }
+                            </div>
+                        }
+                    </div>
+                    break;
+                case ColumnNode columnNode:
+                    <div class="col-md-@Math.Clamp(columnNode.Width, 1, 12)">
+                        @{ RenderNodes(columnNode.Children); }
+                    </div>
+                    break;
+            }
+        }
+    }
 }
 
-@* Стили для Select2 *@
 <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" />
 
 @if (fields != null && fields.Any())
 {
     <div class="container-fluid px-0">
-        @foreach (var field in fields.OrderBy(f => f.SortOrder))
+        @if (hasValidLayout)
         {
-            var formKey = $"DynamicProps[{field.SystemName}]";
-            // Валидация
-            var hasError = ViewData.ModelState.ContainsKey(formKey) && ViewData.ModelState[formKey].Errors.Any();
-            
-            // Получаем значение из словаря
-            values.TryGetValue(field.SystemName, out var rawValue);
-            
-            // Преобразуем значение в список строк (для поддержки массивов)
-            var currentValues = new List<string>();
-            
-            if (rawValue is JsonElement element)
+            RenderNodes(formLayout!.Nodes);
+        }
+        else
+        {
+            foreach (var field in fields.OrderBy(f => f.SortOrder))
             {
-                // Если пришло из JSON (старый формат или через API)
-                if (element.ValueKind == JsonValueKind.Array)
-                    currentValues = element.EnumerateArray().Select(x => x.ToString()).ToList();
-                else
-                    currentValues.Add(element.ToString());
+                RenderFieldBlock(field, false, false, true, true);
             }
-            else if (rawValue is List<object> listObj)
-            {
-                // Если пришло как List<object> (из маппера)
-                currentValues = listObj.Select(x => x?.ToString() ?? "").ToList();
-            }
-            else if (rawValue is string[] arrStr)
-            {
-                 // Если пришло как массив строк
-                 currentValues = arrStr.ToList();
-            }
-            else if (rawValue != null)
-            {
-                // Одиночное значение
-                currentValues.Add(rawValue.ToString());
-            }
-
-            // Если список пуст, добавляем пустую строку, чтобы рендерился хотя бы один контрол
-            if (!currentValues.Any()) currentValues.Add("");
-
-            <div class="row mb-3 align-items-start">
-                <label class="col-sm-3 col-lg-2 col-form-label text-muted text-sm-end fw-bold">
-                    @field.Label
-                    @if (field.IsRequired && isEditMode) { <span class="text-danger">*</span> }
-                </label>
-
-                <div class="col-sm-9 col-lg-10">
-                    <div id="container_@field.SystemName" class="dynamic-field-container">
-                        @foreach (var val in currentValues)
-                        {
-                            var wrapperId = "wrapper_" + Guid.NewGuid().ToString("N");
-                            
-                            // Получаем ID записи для удаления файлов (если есть свойство Id)
-                            // Используем рефлексию аккуратно, так как Model теперь интерфейс
-                            var recordId = Model?.GetType().GetProperty("Id")?.GetValue(Model)?.ToString() ?? "";
-
-                            <div class="input-group mb-2 dynamic-field-item flex-column" id="@wrapperId">
-                                
-                                @* Ссылка на существующий файл *@
-                                @if (field.DataType == FieldDataType.File && !string.IsNullOrWhiteSpace(val) && !val.Contains("/uploads/temp/"))
-                                {
-                                    <div class="mb-1 d-flex align-items-center">
-                                        <a href="@val" target="_blank" class="text-decoration-none small">
-                                            <i class="bi bi-paperclip"></i> Текущий файл: @System.IO.Path.GetFileName(val)
-                                        </a>
-                                        @if (isEditMode && !string.IsNullOrEmpty(recordId))
-                                        {
-                                            <button type="button" class="btn btn-link text-danger p-0 ms-2" title="Удалить файл"
-                                                    onclick="deleteExistingFile('@recordId', '@ViewBag.EntityCode', '@field.SystemName', '@val', '@wrapperId')">
-                                                <i class="bi bi-x-circle-fill"></i>
-                                            </button>
-                                        }
-                                    </div>
-                                }
-                                
-                                <div class="d-flex w-100">
-                                    @if (isEditMode)
-                                    {
-                                        @* РЕНДЕР ИНПУТА *@
-                                        @renderField(field, val, hasError, lookupData)
-                                        
-                                        @* КНОПКА УДАЛЕНИЯ (для массивов) *@
-                                        @if (field.IsArray)
-                                        {
-                                            <button type="button" class="btn btn-outline-danger" onclick="this.closest('.dynamic-field-item').remove()">
-                                                <i class="bi bi-x"></i>
-                                            </button>
-                                        }
-                                    }
-                                    else
-                                    {
-                                        @* РЕЖИМ ПРОСМОТРА *@
-                                        @if (field.DataType == FieldDataType.EntityLink)
-                                        {
-                                            var displayName = val;
-                                            if (lookupData.ContainsKey(field.SystemName))
-                                            {
-                                                var found = lookupData[field.SystemName].FirstOrDefault(x => x.Value == val);
-                                                if (found != null) displayName = found.Text;
-                                            }
-
-                                            if (!string.IsNullOrEmpty(val))
-                                            {
-                                                // Проверка: ссылка только если есть TargetEntityCode
-                                                var href = !string.IsNullOrEmpty(field.TargetEntityCode) ? $"/Data/{field.TargetEntityCode}/Details/{val}" : "#";
-                                                <a href="@href" class="btn btn-outline-primary btn-sm">
-                                                    <i class="bi bi-link-45deg"></i> @displayName
-                                                </a>
-                                            }
-                                            else { <span class="text-muted small">Не указано</span> }
-                                        }
-                                        else if (field.DataType == FieldDataType.Boolean)
-                                        {
-                                             var isTrue = (val ?? "").ToLower() == "true";
-                                             <div class="form-control-plaintext">
-                                                 <i class="bi @(isTrue ? "bi-check-circle-fill text-success" : "bi-circle text-muted")"></i> 
-                                                 @(isTrue ? "Да" : "Нет")
-                                             </div>
-                                        }
-                                        else if (field.DataType == FieldDataType.File)
-                                        {
-                                            if (!string.IsNullOrEmpty(val))
-                                            {
-                                                 <a href="@val" target="_blank" class="btn btn-sm btn-light border">
-                                                    <i class="bi bi-file-earmark"></i> Скачать
-                                                </a>
-                                            }
-                                            else { <div class="text-muted">Нет файла</div> }
-                                        }
-                                        else
-                                        {
-                                            <div class="form-control-plaintext">@(string.IsNullOrEmpty(val) ? "—" : val)</div>
-                                        }
-                                    }
-                                </div>
-                            </div>
-                        }
-                    </div>
-
-                    @* ОШИБКИ *@
-                    @if (hasError && isEditMode)
-                    {
-                        <div class="text-danger small mt-1">
-                            @foreach (var error in ViewData.ModelState[formKey].Errors)
-                            {
-                                <div><i class="bi bi-exclamation-circle"></i> @error.ErrorMessage</div>
-                            }
-                        </div>
-                    }
-
-                    @* КНОПКА ДОБАВИТЬ *@
-                    @if (field.IsArray && isEditMode)
-                    {
-                        <button type="button" class="btn btn-sm btn-outline-secondary mt-1" 
-                                onclick="addDynamicField('@field.SystemName', '@field.DataType')">
-                            <i class="bi bi-plus-lg"></i> Добавить еще
-                        </button>
-                    }
-                </div>
-            </div>
         }
     </div>
 
-    @* --- СКРЫТЫЕ ШАБЛОНЫ (НЕ ИЗМЕНЯЛИСЬ) --- *@
     <div id="field_templates" style="display:none;">
         <div data-type="String"><input type="text" class="form-control" /></div>
         <div data-type="Number"><input type="number" step="any" class="form-control" /></div>
@@ -206,7 +268,6 @@
         <div data-type="Text"><textarea class="form-control" rows="3"></textarea></div>
     </div>
 
-    @* --- JS СКРИПТЫ (НЕ ИЗМЕНЯЛИСЬ ПО СУТИ) --- *@
     <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
     <script>
         function initSelect2(element) {
@@ -229,17 +290,16 @@
             const container = document.getElementById('container_' + systemName);
             const template = document.querySelector(`#field_templates [data-type="${dataType}"]`) 
                           || document.querySelector(`#field_templates [data-type="String"]`);
-            
+
             const wrapper = document.createElement('div');
             wrapper.className = 'input-group mb-2 dynamic-field-item';
-            
+
             const content = template.cloneNode(true);
             const input = content.querySelector('input') || content.querySelector('textarea') || content.querySelector('select');
-            
+
             if (input) {
-                input.name = `DynamicProps[${systemName}]`; 
-                // Очистка значения для нового поля
-                input.value = ""; 
+                input.name = `DynamicProps[${systemName}]`;
+                input.value = "";
             }
 
             if (dataType === 'Boolean') {
@@ -254,16 +314,16 @@
                     input.value = "";
                 }
             }
-            
+
             const btn = document.createElement('button');
             btn.type = 'button';
             btn.className = 'btn btn-outline-danger';
             btn.innerHTML = '<i class="bi bi-x"></i>';
             btn.onclick = function() { this.closest('.dynamic-field-item').remove(); };
-            
+
             wrapper.appendChild(content.classList.contains('form-check') || content.tagName === 'DIV' ? content : (content.firstElementChild || content));
             wrapper.appendChild(btn);
-            
+
             container.appendChild(wrapper);
 
             if (dataType === 'EntityLink' && input) {
@@ -273,17 +333,15 @@
 
         function deleteExistingFile(id, entityCode, propName, path, wrapperId) {
             if (!confirm('Удалить этот файл?')) return;
-            
+
             const formData = new FormData();
             formData.append('id', id);
             formData.append('entityCode', entityCode);
             formData.append('propertyName', propName);
             formData.append('filePath', path);
-            
+
             const token = document.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
 
-            // Исправленный URL (предполагаем, что GenericObjectsController обрабатывает удаление файлов)
-            // Если у тебя другой контроллер, замени здесь путь
             fetch('/GenericObjects/DeleteFileProperty', {
                 method: 'POST',
                 body: formData,
@@ -305,13 +363,12 @@
 }
 
 @functions {
-    IHtmlContent renderField(AppFieldDefinition field, string value, bool hasError, Dictionary<string, List<SelectListItem>> lookupData)
+    IHtmlContent renderField(AppFieldDefinition field, string value, bool hasError, Dictionary<string, List<SelectListItem>> lookupData, bool isRequired)
     {
         var fieldName = $"DynamicProps[{field.SystemName}]";
-        // Required не ставим для массивов, чтобы не ломать отправку при добавлении пустого
-        var required = (field.IsRequired && !field.IsArray) ? "required" : ""; 
+        var required = (isRequired && !field.IsArray) ? "required" : "";
         var errorClass = hasError ? "is-invalid" : "";
-        
+
         switch (field.DataType)
         {
             case FieldDataType.EntityLink:
@@ -347,13 +404,14 @@
                     </div>");
             case FieldDataType.Text:
                 return new HtmlString($"<textarea name=\"{fieldName}\" class=\"form-control {errorClass}\" rows=\"3\" {required}>{value}</textarea>");
-            default: 
+            default:
                 return new HtmlString($"<input type=\"text\" name=\"{fieldName}\" value=\"{value}\" class=\"form-control {errorClass}\" {required} />");
         }
     }
 
-    string valForInput(string val) => val?.Replace(",", ".");
-    string valForDate(string val, bool isDateTime = false) {
+    string? valForInput(string val) => val?.Replace(",", ".");
+    string valForDate(string val, bool isDateTime = false)
+    {
         if (DateTime.TryParse(val, out DateTime dt)) return dt.ToString(isDateTime ? "yyyy-MM-ddTHH:mm" : "yyyy-MM-dd");
         return "";
     }
