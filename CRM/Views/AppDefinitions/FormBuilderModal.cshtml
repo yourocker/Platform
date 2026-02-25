@@ -75,8 +75,11 @@
                         <span class="fw-bold small text-uppercase">Элементы разметки</span>
                     </div>
                     <div class="p-3" id="markupPalette">
-                        <div class="markup-item p-2 border rounded mb-2 bg-white d-flex align-items-center gap-2" data-type="tabs" style="cursor: grab;">
+                        <div class="markup-item p-2 border rounded mb-2 bg-white d-flex align-items-center gap-2" data-type="tabControl" style="cursor: grab;">
                             <i class="bi bi-folder2-open text-info"></i> Вкладки
+                        </div>
+                        <div class="markup-item p-2 border rounded mb-2 bg-white d-flex align-items-center gap-2" data-type="tab" style="cursor: grab;">
+                            <i class="bi bi-file-earmark-text text-primary"></i> Вкладка
                         </div>
                         <div class="markup-item p-2 border rounded mb-2 bg-white d-flex align-items-center gap-2" data-type="group" style="cursor: grab;">
                             <i class="bi bi-collection text-warning"></i> Группа
@@ -84,6 +87,15 @@
                         <div class="markup-item p-2 border rounded mb-2 bg-white d-flex align-items-center gap-2" data-type="row" style="cursor: grab;">
                             <i class="bi bi-columns-gap text-success"></i> Сетка (колонки)
                         </div>
+                        <div class="markup-item p-2 border rounded mb-2 bg-white d-flex align-items-center gap-2" data-type="column" style="cursor: grab;">
+                            <i class="bi bi-layout-sidebar-inset text-secondary"></i> Колонка
+                        </div>
+                    </div>
+                    <div class="p-3 border-top bg-light">
+                        <span class="fw-bold small text-uppercase">Настройка узла</span>
+                    </div>
+                    <div class="p-3 flex-grow-1 overflow-auto" id="nodeSettingsPanel">
+                        <div class="text-muted small">Выберите элемент на холсте для настройки.</div>
                     </div>
                 </div>
             </div>
