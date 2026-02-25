@@ -11,6 +11,8 @@ using Newtonsoft.Json;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Mvc.Rendering;
+using Core.Entities.Platform.Form;
+using System.Text.Json;
 
 namespace CRM.Controllers;
 
@@ -18,7 +20,7 @@ namespace CRM.Controllers;
 [Route("Data")]
 public class GenericObjectsController(AppDbContext context, IWebHostEnvironment hostingEnvironment) : BasePlatformController(context, hostingEnvironment)
 {
-    private async Task LoadDefinitionWithFields(string entityCode)
+    private async Task LoadDefinitionWithFields(string entityCode, FormType? formType = null)
     {
         var definition = await _context.AppDefinitions
             .Include(d => d.Fields)
@@ -52,6 +54,34 @@ public class GenericObjectsController(AppDbContext context, IWebHostEnvironment 
                 lookupData[field.SystemName] = items;
             }
             ViewBag.LookupData = lookupData;
+
+            if (formType.HasValue)
+            {
+                ViewBag.FormLayout = await LoadDefaultFormLayout(definition.Id, formType.Value);
+            }
+        }
+    }
+
+    private async Task<FormLayoutSchema?> LoadDefaultFormLayout(Guid appDefinitionId, FormType formType)
+    {
+        var formDefinition = await _context.AppFormDefinitions
+            .AsNoTracking()
+                        .Where(f => f.AppDefinitionId == appDefinitionId && f.Type == formType && f.IsDefault)
+            .OrderBy(f => f.Name)
+            .FirstOrDefaultAsync();
+
+        if (formDefinition == null || string.IsNullOrWhiteSpace(formDefinition.Layout))
+            return null;
+
+        try
+        {
+            return JsonSerializer.Deserialize<FormLayoutSchema>(
+                formDefinition.Layout,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        }
+        catch
+        {
+            return null;
         }
     }
 
@@ -156,7 +186,7 @@ public class GenericObjectsController(AppDbContext context, IWebHostEnvironment 
     public async Task<IActionResult> Create(string entityCode)
     {
         if (string.IsNullOrEmpty(entityCode)) return NotFound();
-        await LoadDefinitionWithFields(entityCode);
+        await LoadDefinitionWithFields(entityCode, FormType.Create);
         ViewBag.EntityCode = entityCode;
         return View();
     }
@@ -176,7 +206,7 @@ public class GenericObjectsController(AppDbContext context, IWebHostEnvironment 
             await _context.SaveChangesAsync();
             return Redirect($"/Data/{obj.EntityCode}");
         }
-        await LoadDefinitionWithFields(obj.EntityCode);
+        await LoadDefinitionWithFields(obj.EntityCode, FormType.Create);
         ViewBag.EntityCode = obj.EntityCode;
         return View(obj);
     }
@@ -187,7 +217,7 @@ public class GenericObjectsController(AppDbContext context, IWebHostEnvironment 
     {
         var obj = await _context.GenericObjects.FindAsync(id);
         if (obj == null) return NotFound();
-        await LoadDefinitionWithFields(obj.EntityCode);
+        await LoadDefinitionWithFields(obj.EntityCode, FormType.Edit);
         ViewBag.EntityCode = obj.EntityCode;
         return View(obj);
     }
@@ -216,9 +246,20 @@ public class GenericObjectsController(AppDbContext context, IWebHostEnvironment 
             }
             return Redirect($"/Data/{dbObj.EntityCode}");
         }
-        await LoadDefinitionWithFields(dbObj.EntityCode);
+        await LoadDefinitionWithFields(dbObj.EntityCode, FormType.Edit);
         ViewBag.EntityCode = dbObj.EntityCode;
         return View(dbObj);
+    }
+
+    [HttpGet("Details/{id}")]
+    public async Task<IActionResult> Details(Guid id)
+    {
+        var obj = await _context.GenericObjects.FindAsync(id);
+        if (obj == null) return NotFound();
+
+        await LoadDefinitionWithFields(obj.EntityCode, FormType.View);
+        ViewBag.EntityCode = obj.EntityCode;
+        return View(obj);
     }
 
     // Маршрут: /Data/Delete/{id}
