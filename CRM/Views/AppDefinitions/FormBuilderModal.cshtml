@@ -1,5 +1,6 @@
 ﻿@using Core.Entities.Platform.Form
 @using CRM.ViewModels.FormConfig
+@using System.Text.Json
 @model FormBuilderViewModel
 
 <div class="modal fade" id="builderModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
@@ -19,7 +20,7 @@
                         <select id="formSelector" class="form-select form-select-sm border-primary-subtle" style="width: 220px;" onchange="formBuilder.switchForm(this.value)">
                             @foreach (var form in Model.FormIds)
                             {
-                                <option value="@form.Key">@form.Key (Текущий)</option>
+                                <option value="@(form.Value?.ToString() ?? string.Empty)" data-mode="@form.Key">@form.Key</option>
                             }
                         </select>
                         <div class="btn-group btn-group-sm">
@@ -148,19 +149,25 @@
     // Ждем загрузки DOM и инициализируем конструктор
     $(document).ready(function() {
         const appId = '@Model.AppDefinitionId';
-        
-        // Берем ID первой доступной формы (обычно Create) или пустую строку
-        const initialFormId = '@(Model.FormIds.Values.FirstOrDefault() ?? Guid.Empty)';
-        
-        // Берем JSON макета для этой формы
-        const initialLayoutJson = `@Html.Raw(Model.FormLayouts.Values.FirstOrDefault() ?? "{\"nodes\":[]}")`;
+        const formsByMode = @Html.Raw(JsonSerializer.Serialize(
+            Enum.GetValues<FormType>().ToDictionary(
+                mode => mode.ToString(),
+                mode => new
+                {
+                    formId = Model.FormIds.TryGetValue(mode, out var id) ? id : null,
+                    layoutJson = Model.FormLayouts.TryGetValue(mode, out var layout)
+                        ? layout
+                        : "{\"nodes\":[]}"
+                }
+            )));
+        const initialMode = 'Create';
 
         // Запуск
         if (window.formBuilder) {
-            window.formBuilder.init(appId, initialFormId, initialLayoutJson);
+            window.formBuilder.init(appId, formsByMode, initialMode);
         } else {
             // Если модуль еще не загрузился (редкий случай), пробуем через мгновение
-            setTimeout(() => window.formBuilder.init(appId, initialFormId, initialLayoutJson), 100);
+            setTimeout(() => window.formBuilder.init(appId, formsByMode, initialMode), 100);
         }
     });
 </script>
