@@ -15,7 +15,7 @@
         <a asp-action="Index" crm-button variant="outline-secondary" icon="arrow-left" class="me-2">Назад к списку</a>
         
         <button type="button" onclick="openFormBuilder('@Model.Id')" crm-button variant="outline-primary" icon="ui-checks-grid" class="me-2">
-            Конструктор форм (v5.0)
+            Конструктор форм
         </button>
 
         <button type="button" crm-button variant="primary" icon="plus-circle" class="shadow-sm px-4" data-bs-toggle="modal" data-bs-target="#addFieldModal">
@@ -183,6 +183,8 @@
 </script>
 
 <div id="formBuilderModalContainer"></div>
+
+<link rel="stylesheet" href="~/css/form-builder.css" />
 
 <script>
     function openFormBuilder(appId) {
