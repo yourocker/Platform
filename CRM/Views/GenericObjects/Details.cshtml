@@ -1,0 +1,29 @@
+@model Core.Entities.Platform.GenericObject
+@{ ViewData["Title"] = "Просмотр: " + Model.Name; }
+
+<div class="container-fluid px-4">
+    <crm-page-header title="" icon="" subtitle=""></crm-page-header>
+
+    <div class="row justify-content-center">
+        <div class="col-lg-8">
+            <div crm-card>
+                <div class="card-header bg-transparent border-0 pt-4 px-4">
+                    <h5 class="fw-bold mb-0">Просмотр объекта</h5>
+                    <div class="text-muted small">Тип: @ViewBag.DefinitionName</div>
+                </div>
+                <div class="card-body p-4">
+                    <crm-input label="Наименование" asp-for="Name" readonly="readonly"></crm-input>
+
+                    <div class="mt-4 pt-4 border-top">
+                        <partial name="_DynamicFields" model="Model" />
+                    </div>
+                </div>
+            </div>
+
+            <div class="mt-4 pb-5 d-flex gap-2">
+                <a href="/Data/Edit/@Model.Id" crm-button variant="primary" icon="pencil-square" class="px-5 shadow">Редактировать</a>
+                <a href="/Data/@Model.EntityCode" crm-button variant="outline-secondary">Назад к списку</a>
+            </div>
+        </div>
+    </div>
+</div>
