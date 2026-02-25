@@ -223,6 +223,7 @@ public class AppDefinitionsController(AppDbContext context) : Controller
     }
     
     // GET: AppDefinitions/FormBuilder/{id}
+    // Единственная точка входа конструктора форм: возвращаем modal-версию.
     [HttpGet]
     public async Task<IActionResult> FormBuilder(Guid id)
     {
@@ -255,7 +256,7 @@ public class AppDefinitionsController(AppDbContext context) : Controller
             viewModel.FormIds[type] = existingForm?.Id;
         }
 
-        // Возвращаем PartialView, так как это будет содержимое модального окна
+        // Возвращаем только modal-версию конструктора (single source of truth)
         return PartialView("FormBuilderModal", viewModel);
     }
 }
