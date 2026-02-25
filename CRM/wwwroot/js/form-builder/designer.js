@@ -70,11 +70,47 @@ export const layoutDesigner = {
 
     async save() {
         try {
-            await FormApiClient.saveLayout({
+            const response = await FormApiClient.saveLayout({
                 formId: this.formId,
                 layoutJson: JSON.stringify(this.layout)
             });
-            alert("Макет сохранен успешно");
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(errorText || 'Ошибка сохранения макета');
+            }
+
+            const result = await response.json();
+
+            if (result.warning) {
+                const shouldForceSave = confirm(`${result.message}\n\nСохранить форму принудительно?`);
+                if (!shouldForceSave) return;
+
+                const forceResponse = await FormApiClient.saveLayout({
+                    formId: this.formId,
+                    layoutJson: JSON.stringify(this.layout),
+                    forceSave: true
+                });
+
+                if (!forceResponse.ok) {
+                    const forceErrorText = await forceResponse.text();
+                    throw new Error(forceErrorText || 'Ошибка принудительного сохранения макета');
+                }
+
+                const forceResult = await forceResponse.json();
+                if (!forceResult.success) {
+                    throw new Error(forceResult.message || 'Ошибка принудительного сохранения макета');
+                }
+
+                alert(forceResult.message || 'Макет сохранен успешно');
+                return;
+            }
+
+            if (!result.success) {
+                throw new Error(result.message || 'Ошибка сохранения макета');
+            }
+
+            alert(result.message || "Макет сохранен успешно");
         } catch (e) { alert(e.message); }
     }
 };
