@@ -137,6 +137,9 @@ namespace CRM.Controllers
 
             foreach (var def in definitions)
             {
+                if (string.Equals(def.SystemName, "Name", StringComparison.OrdinalIgnoreCase))
+                    continue;
+
                 var formKey = $"DynamicProps[{def.SystemName}]";
 
                 if (def.DataType == FieldDataType.File)

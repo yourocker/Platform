@@ -156,9 +156,23 @@ public class FormConfigController : ControllerBase
     [HttpPost]
     public async Task<IActionResult> SaveLayout([FromBody] SaveLayoutRequest request)
     {
-        var form = await _context.AppFormDefinitions.Include(f => f.AppDefinition).ThenInclude(a => a.Fields)
-            .FirstOrDefaultAsync(f => f.Id == request.FormId);
-        if (form == null) return NotFound();
+        AppFormDefinition? form = null;
+        Core.Entities.Platform.AppDefinition? appDef = null;
+
+        if (request.FormId.HasValue && request.FormId.Value != Guid.Empty)
+        {
+            form = await _context.AppFormDefinitions.Include(f => f.AppDefinition).ThenInclude(a => a.Fields)
+                .FirstOrDefaultAsync(f => f.Id == request.FormId.Value);
+            if (form == null) return NotFound();
+            appDef = form.AppDefinition;
+        }
+        else
+        {
+            if (request.AppDefinitionId == Guid.Empty) return BadRequest("Не передан AppDefinitionId.");
+            appDef = await _context.AppDefinitions.Include(a => a.Fields)
+                .FirstOrDefaultAsync(a => a.Id == request.AppDefinitionId);
+            if (appDef == null) return NotFound();
+        }
 
         try 
         {
@@ -168,20 +182,44 @@ public class FormConfigController : ControllerBase
             // Валидация на пропущенные обязательные поля
             if (!request.ForceSave)
             {
-                var requiredFieldIds = form.AppDefinition.Fields.Where(f => f.IsRequired && !f.IsDeleted).Select(f => f.Id).ToList();
+                var requiredFieldIds = appDef!.Fields.Where(f => f.IsRequired && !f.IsDeleted).Select(f => f.Id).ToList();
                 var layoutFieldIds = ExtractFieldIds(layoutSchema.Nodes);
                 var missingIds = requiredFieldIds.Except(layoutFieldIds).ToList();
 
                 if (missingIds.Any())
                 {
-                    var names = string.Join(", ", form.AppDefinition.Fields.Where(f => missingIds.Contains(f.Id)).Select(f => f.Label));
+                    var names = string.Join(", ", appDef!.Fields.Where(f => missingIds.Contains(f.Id)).Select(f => f.Label));
                     return Ok(new { success = false, warning = true, message = $"На форме отсутствуют обязательные поля: {names}" });
+                }
+            }
+
+            if (form == null)
+            {
+                var existing = await _context.AppFormDefinitions
+                    .FirstOrDefaultAsync(f => f.AppDefinitionId == appDef!.Id && f.Type == request.FormType && f.IsDefault);
+
+                form = existing;
+                if (form == null)
+                {
+                    bool isFirst = !await _context.AppFormDefinitions
+                        .AnyAsync(f => f.AppDefinitionId == appDef!.Id && f.Type == request.FormType);
+
+                    form = new AppFormDefinition
+                    {
+                        Id = Guid.NewGuid(),
+                        AppDefinitionId = appDef!.Id,
+                        Name = "Основная форма",
+                        Type = request.FormType,
+                        IsDefault = isFirst,
+                        Layout = "{ \"nodes\": [] }"
+                    };
+                    _context.AppFormDefinitions.Add(form);
                 }
             }
 
             form.Layout = request.LayoutJson;
             await _context.SaveChangesAsync();
-            return Ok(new { success = true });
+            return Ok(new { success = true, formId = form.Id });
         }
         catch (JsonException ex) { return BadRequest($"Ошибка JSON: {ex.Message}"); }
     }

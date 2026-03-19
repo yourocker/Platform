@@ -68,7 +68,7 @@ const formBuilder = {
             radio.checked = true;
         }
 
-        layoutDesigner.init(modeForm.formId, parsedLayout);
+        layoutDesigner.init(modeForm.formId, parsedLayout, this.appId, mode);
     },
 
     switchForm(formId) {

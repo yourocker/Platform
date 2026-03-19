@@ -32,11 +32,11 @@
         return response;
     },
 
-    async saveLayout({ formId, layoutJson, forceSave = false }) {
+    async saveLayout({ formId, layoutJson, forceSave = false, appDefinitionId, formType }) {
         return await fetch(`${this.baseUrl}/SaveLayout`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ formId, layoutJson, forceSave })
+            body: JSON.stringify({ formId, appDefinitionId, formType, layoutJson, forceSave })
         });
     }
 };

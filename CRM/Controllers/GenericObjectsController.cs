@@ -30,6 +30,7 @@ public class GenericObjectsController(AppDbContext context, IWebHostEnvironment 
         {
             ViewBag.DynamicFields = definition.Fields.OrderBy(f => f.SortOrder).ToList();
             ViewBag.DefinitionName = definition.Name;
+            ViewBag.HasNameInLayout = false;
 
             var lookupData = new Dictionary<string, List<SelectListItem>>();
             
@@ -57,9 +58,30 @@ public class GenericObjectsController(AppDbContext context, IWebHostEnvironment 
 
             if (formType.HasValue)
             {
-                ViewBag.FormLayout = await LoadDefaultFormLayout(definition.Id, formType.Value);
+                var layout = await LoadDefaultFormLayout(definition.Id, formType.Value);
+                ViewBag.FormLayout = layout;
+
+                var nameFieldId = definition.Fields.FirstOrDefault(f => f.SystemName == "Name")?.Id;
+                if (layout != null && nameFieldId.HasValue)
+                {
+                    ViewBag.HasNameInLayout = LayoutContainsField(layout.Nodes, nameFieldId.Value);
+                }
             }
         }
+    }
+
+    private static bool LayoutContainsField(IEnumerable<LayoutNode> nodes, Guid fieldId)
+    {
+        foreach (var node in nodes)
+        {
+            if (node is FieldNode fn && fn.FieldId == fieldId) return true;
+            if (node is TabControlNode tcn && tcn.Tabs.Any(t => LayoutContainsField(t.Children, fieldId))) return true;
+            if (node is TabNode tn && LayoutContainsField(tn.Children, fieldId)) return true;
+            if (node is GroupNode gn && LayoutContainsField(gn.Children, fieldId)) return true;
+            if (node is RowNode rn && rn.Columns.Any(c => LayoutContainsField(c.Children, fieldId))) return true;
+            if (node is ColumnNode cn && LayoutContainsField(cn.Children, fieldId)) return true;
+        }
+        return false;
     }
 
     private async Task<FormLayoutSchema?> LoadDefaultFormLayout(Guid appDefinitionId, FormType formType)

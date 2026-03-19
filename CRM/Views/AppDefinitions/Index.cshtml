@@ -8,6 +8,7 @@ int pageNumber = ViewBag.PageNumber ?? 1;
 int pageSize = ViewBag.PageSize ?? 10;
 int totalPages = ViewBag.TotalPages ?? 1;
 string currentSearch = ViewBag.CurrentSearch;
+string currentSystemFilter = ViewBag.SystemFilter ?? "all";
 }
 
 <div class="container-fluid px-4">
@@ -29,6 +30,14 @@ string currentSearch = ViewBag.CurrentSearch;
             </ul>
         </div>
 
+        <div class="d-inline-flex align-items-center gap-2">
+            <select name="systemFilter" class="form-select form-select-sm shadow-sm" style="width: auto;" onchange="setSystemFilter(this.value)">
+                <option value="all" selected="@(currentSystemFilter == "all")">Все объекты</option>
+                <option value="user" selected="@(currentSystemFilter == "user")">Пользовательские</option>
+                <option value="system" selected="@(currentSystemFilter == "system")">Системные</option>
+            </select>
+        </div>
+
         @* 2. Кнопка фильтров *@
         <button crm-button variant="outline-primary" icon="funnel" class="shadow-sm" type="button" data-bs-toggle="collapse" data-bs-target="#filterPanel">
             Фильтры
@@ -44,6 +53,7 @@ string currentSearch = ViewBag.CurrentSearch;
     <form asp-action="Index" method="get" id="mainFilterForm">
         <input type="hidden" name="pageSize" value="@pageSize" id="hiddenPageSize" />
         <input type="hidden" name="pageNumber" value="1" id="hiddenPageNumber" />
+        <input type="hidden" name="systemFilter" value="@currentSystemFilter" id="hiddenSystemFilter" />
 
         <div crm-card class="mb-4">
             <div class="card-body p-3">
@@ -90,8 +100,16 @@ string currentSearch = ViewBag.CurrentSearch;
                 }
                 else
                 {
-                @foreach (var item in Model)
-                {
+                    var systemItems = Model.Where(m => m.IsSystem).OrderBy(m => m.Name).ToList();
+                    var userItems = Model.Where(m => !m.IsSystem).OrderBy(m => m.Name).ToList();
+
+                    if (systemItems.Any())
+                    {
+                        @:<tr class="table-section">
+                        @:<td class="ps-4 fw-bold text-uppercase text-muted small" colspan="6">Системные объекты</td>
+                        @:</tr>
+                        foreach (var item in systemItems)
+                        {
                 <tr>
                     <td class="ps-4 col-icon">
                         <div class="d-flex align-items-center justify-content-center bg-light rounded shadow-sm" style="width: 40px; height: 40px;">
@@ -127,6 +145,12 @@ string currentSearch = ViewBag.CurrentSearch;
                     </td>
                     <td class="text-end pe-4">
                         <div class="btn-group btn-group-sm shadow-sm">
+                            @if (!item.IsSystem)
+                            {
+                            <button type="button" onclick="openFormBuilder('@item.Id')"
+                                    crm-button variant="white" icon="ui-checks-grid" icon-class="text-primary"
+                                    class="border" title="Конструктор форм"></button>
+                            }
                             <a asp-action="Fields" asp-route-id="@item.Id"
                                crm-button variant="white" icon="gear-fill" icon-class="text-primary"
                                class="border" title="Настроить поля"></a>
@@ -148,8 +172,82 @@ string currentSearch = ViewBag.CurrentSearch;
                         </div>
                     </td>
                 </tr>
+                        }
+                    }
+
+                    if (userItems.Any())
+                    {
+                        @:<tr class="table-section">
+                        @:<td class="ps-4 fw-bold text-uppercase text-muted small" colspan="6">Пользовательские объекты</td>
+                        @:</tr>
+                        foreach (var item in userItems)
+                        {
+                <tr>
+                    <td class="ps-4 col-icon">
+                        <div class="d-flex align-items-center justify-content-center bg-light rounded shadow-sm" style="width: 40px; height: 40px;">
+                            <i class="bi bi-@item.Icon fs-5 text-primary"></i>
+                        </div>
+                    </td>
+                    <td class="col-name">
+                        <div class="fw-bold text-dark">@item.Name</div>
+                        @if (item.IsSystem)
+                        {
+                        <span class="badge bg-info bg-opacity-10 text-info border-0 small py-1">Системная</span>
+                        }
+                    </td>
+                    <td class="col-code">
+                        <code class="text-primary bg-light px-2 py-1 rounded">@item.EntityCode</code>
+                    </td>
+                    <td class="col-cat">
+                        @if (item.Category != null)
+                        {
+                        <span class="badge bg-info bg-opacity-10 text-info border-0 small py-1">
+                                            <i class="bi bi-@item.Category.Icon me-1"></i> @item.Category.Name
+                                        </span>
+                        }
+                        else
+                        {
+                        <span class="text-muted small">Не задан</span>
+                        }
+                    </td>
+                    <td class="col-fields">
+                                    <span class="badge bg-light text-dark border-0 small py-1">
+                                        <i class="bi bi-list-check me-1"></i> @(item.Fields?.Count ?? 0)
+                                    </span>
+                    </td>
+                    <td class="text-end pe-4">
+                        <div class="btn-group btn-group-sm shadow-sm">
+                            @if (!item.IsSystem)
+                            {
+                            <button type="button" onclick="openFormBuilder('@item.Id')"
+                                    crm-button variant="white" icon="ui-checks-grid" icon-class="text-primary"
+                                    class="border" title="Конструктор форм"></button>
+                            }
+                            <a asp-action="Fields" asp-route-id="@item.Id"
+                               crm-button variant="white" icon="gear-fill" icon-class="text-primary"
+                               class="border" title="Настроить поля"></a>
+
+                            @if (!item.IsSystem)
+                            {
+                            <a asp-action="Edit" asp-route-id="@item.Id"
+                               crm-button variant="white" icon="pencil-fill" icon-class="text-primary"
+                               class="border" title="Редактировать"></a>
+
+                            <a asp-action="Delete" asp-route-id="@item.Id"
+                               crm-button variant="white" icon="trash-fill" icon-class="text-danger"
+                               class="border" title="Удалить"></a>
+                            }
+                            else
+                            {
+                            <button crm-button variant="white" icon="lock-fill" class="border disabled opacity-50" title="Защищено"></button>
+                            }
+                        </div>
+                    </td>
+                </tr>
+                        }
+                    }
                 }
-                }
+
                 </tbody>
             </table>
         </div>
@@ -197,6 +295,12 @@ string currentSearch = ViewBag.CurrentSearch;
         document.getElementById('mainFilterForm').submit();
     }
 
+    function setSystemFilter(val) {
+        document.getElementById('hiddenSystemFilter').value = val;
+        document.getElementById('hiddenPageNumber').value = 1;
+        document.getElementById('mainFilterForm').submit();
+    }
+
     document.addEventListener('DOMContentLoaded', function() {
         const STORAGE_KEY = 'crm_definitions_table_columns';
         const checkboxes = document.querySelectorAll('.col-chk');
@@ -229,4 +333,30 @@ string currentSearch = ViewBag.CurrentSearch;
     .table-hover tbody tr:hover { background-color: rgba(13, 110, 253, 0.03); cursor: pointer; }
     .form-check-input:checked { background-color: #0d6efd; border-color: #0d6efd; }
     .dropdown-menu { font-size: 0.85rem; }
+    .table-section td { background: #f8f9fb; }
 </style>
+
+<div id="formBuilderModalContainer"></div>
+
+<link rel="stylesheet" href="~/css/form-builder.css" />
+
+<script>
+    function openFormBuilder(appId) {
+        // Загружаем PartialView конструктора
+        $.get('/AppDefinitions/FormBuilder/' + appId, function(html) {
+            $('#formBuilderModalContainer').html(html);
+            
+            // Инициализируем и открываем модальное окно Bootstrap
+            const modalElement = document.getElementById('builderModal');
+            const modal = new bootstrap.Modal(modalElement);
+            modal.show();
+            
+            // Очистка DOM после закрытия (чтобы не дублировать ID при повторном открытии)
+            modalElement.addEventListener('hidden.bs.modal', function () {
+                $('#formBuilderModalContainer').empty();
+            });
+        }).fail(function() {
+            alert('Ошибка загрузки интерфейса конструктора. Проверьте консоль.');
+        });
+    }
+</script>

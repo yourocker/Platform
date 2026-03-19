@@ -9,6 +9,7 @@
     var fieldsById = fields?.ToDictionary(f => f.Id) ?? new Dictionary<Guid, AppFieldDefinition>();
     var lookupData = ViewBag.LookupData as Dictionary<string, List<SelectListItem>> ?? new Dictionary<string, List<SelectListItem>>();
     var formLayout = ViewBag.FormLayout as FormLayoutSchema;
+    var hasNameInLayout = ViewBag.HasNameInLayout as bool? ?? false;
 
     var values = Model?.DynamicValues ?? new Dictionary<string, object>();
 
@@ -20,6 +21,46 @@
 
     void RenderFieldBlock(AppFieldDefinition field, bool isReadOnly, bool isRequiredOverride, bool canCreate, bool canView)
     {
+        if (string.Equals(field.SystemName, "Name", StringComparison.OrdinalIgnoreCase))
+        {
+            var nameValue = Model?.GetType().GetProperty("Name")?.GetValue(Model)?.ToString() ?? "";
+            var hasNameError = ViewData.ModelState.ContainsKey("Name") && ViewData.ModelState["Name"].Errors.Any();
+            var nameShowAsReadOnly = !isEditMode || isReadOnly;
+            var nameIsRequired = isRequiredOverride || field.IsRequired;
+            
+            <div class="row mb-3 align-items-start">
+                <label class="col-sm-3 col-lg-2 col-form-label text-muted text-sm-end fw-bold">
+                    @field.Label
+                    @if (nameIsRequired && isEditMode && !isReadOnly)
+                    {
+                        <span class="text-danger">*</span>
+                    }
+                </label>
+
+                <div class="col-sm-9 col-lg-10">
+                    @if (!nameShowAsReadOnly)
+                    {
+                        <input type="text" name="Name" value="@nameValue" class="form-control @(hasNameError ? "is-invalid" : "")" @(nameIsRequired ? "required" : "") />
+                    }
+                    else
+                    {
+                        <div class="form-control-plaintext">@(string.IsNullOrEmpty(nameValue) ? "—" : nameValue)</div>
+                    }
+
+                    @if (hasNameError && isEditMode)
+                    {
+                        <div class="text-danger small mt-1">
+                            @foreach (var error in ViewData.ModelState["Name"].Errors)
+                            {
+                                <div><i class="bi bi-exclamation-circle"></i> @error.ErrorMessage</div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+            return;
+        }
+
         var formKey = $"DynamicProps[{field.SystemName}]";
         var hasError = ViewData.ModelState.ContainsKey(formKey) && ViewData.ModelState[formKey].Errors.Any();
 
@@ -229,8 +270,8 @@
     }
 }
 
-<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/select2-bootstrap-5-theme@1.3.0/dist/select2-bootstrap-5-theme.min.css" />
+<link rel="stylesheet" href="~/lib/select2/css/select2.min.css" />
+<link rel="stylesheet" href="~/lib/select2-bootstrap-5-theme/select2-bootstrap-5-theme.min.css" />
 
 @if (fields != null && fields.Any())
 {
@@ -243,6 +284,8 @@
         {
             foreach (var field in fields.OrderBy(f => f.SortOrder))
             {
+                if (!hasNameInLayout && string.Equals(field.SystemName, "Name", StringComparison.OrdinalIgnoreCase))
+                    continue;
                 RenderFieldBlock(field, false, false, true, true);
             }
         }
@@ -268,7 +311,7 @@
         <div data-type="Text"><textarea class="form-control" rows="3"></textarea></div>
     </div>
 
-    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script src="~/lib/select2/js/select2.min.js"></script>
     <script>
         function initSelect2(element) {
             $(element).select2({

@@ -14,13 +14,23 @@ public class AppDefinitionsController(AppDbContext context) : Controller
 {
     private readonly AppDbContext _context = context;
 
-    public async Task<IActionResult> Index(string search, int pageNumber = 1, int pageSize = 10)
+    public async Task<IActionResult> Index(string search, string? f_Search, int pageNumber = 1, int pageSize = 10, string systemFilter = "all")
     {
+        if (string.IsNullOrWhiteSpace(search) && !string.IsNullOrWhiteSpace(f_Search))
+        {
+            search = f_Search;
+        }
         // 1. Начинаем формирование запроса
         var query = _context.AppDefinitions
             .Include(a => a.Fields)
             .Include(a => a.Category)
             .AsQueryable();
+
+        // 1.1. Быстрый фильтр по системности
+        systemFilter = (systemFilter ?? "all").Trim().ToLowerInvariant();
+        if (systemFilter == "system") query = query.Where(a => a.IsSystem);
+        else if (systemFilter == "user") query = query.Where(a => !a.IsSystem);
+        else systemFilter = "all";
 
         // 2. Логика поиска (фильтруем по имени или коду)
         if (!string.IsNullOrEmpty(search))
@@ -46,6 +56,7 @@ public class AppDefinitionsController(AppDbContext context) : Controller
         ViewBag.PageSize = pageSize;
         ViewBag.TotalPages = (int)Math.Ceiling((double)totalItems / pageSize);
         ViewBag.CurrentSearch = search;
+        ViewBag.SystemFilter = systemFilter;
 
         return View(apps);
     }
@@ -71,6 +82,11 @@ public class AppDefinitionsController(AppDbContext context) : Controller
 
             _context.AppDefinitions.Add(app);
             await _context.SaveChangesAsync();
+
+            if (!app.IsSystem)
+            {
+                await EnsureNameFieldAsync(app.Id);
+            }
             return RedirectToAction(nameof(Index));
         }
 
@@ -220,6 +236,26 @@ public class AppDefinitionsController(AppDbContext context) : Controller
         await _context.SaveChangesAsync();
 
         return RedirectToAction(nameof(Fields), new { id = appId });
+    }
+
+    private async Task EnsureNameFieldAsync(Guid appDefinitionId)
+    {
+        var exists = await _context.AppFieldDefinitions
+            .AnyAsync(f => f.AppDefinitionId == appDefinitionId && f.SystemName.ToLower() == "name");
+        if (exists) return;
+
+        _context.AppFieldDefinitions.Add(new AppFieldDefinition
+        {
+            Id = Guid.NewGuid(),
+            AppDefinitionId = appDefinitionId,
+            Label = "Название",
+            SystemName = "Name",
+            DataType = FieldDataType.String,
+            IsRequired = true,
+            IsSystem = true,
+            SortOrder = 0
+        });
+        await _context.SaveChangesAsync();
     }
     
     // GET: AppDefinitions/FormBuilder/{id}

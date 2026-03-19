@@ -4,11 +4,15 @@ import { fieldManager } from './field-manager.js';
 export const layoutDesigner = {
     layout: { nodes: [] },
     formId: null,
+    appDefinitionId: null,
+    formType: null,
     canvas: null,
     selectedPath: null,
 
-    init(formId, layout) {
-        this.formId = formId;
+    init(formId, layout, appDefinitionId, formType) {
+        this.formId = formId || null;
+        this.appDefinitionId = appDefinitionId;
+        this.formType = formType;
         this.layout = this.normalizeLayout(layout || { nodes: [] });
         this.canvas = document.getElementById('formCanvas');
         this.selectedPath = null;
@@ -507,8 +511,19 @@ export const layoutDesigner = {
 
     async save() {
         try {
+            const modalAppId = document.getElementById('builderModal')?.dataset?.appId || null;
+            const appDefinitionId = this.appDefinitionId || window.formBuilder?.appId || modalAppId || null;
+            const formType = this.formType || window.formBuilder?.currentMode || null;
+            const formTypeMap = { Create: 0, Edit: 1, View: 2 };
+            const formTypeValue = typeof formType === 'string' ? formTypeMap[formType] : (formType ?? 0);
+            if (!this.formId && !appDefinitionId) {
+                throw new Error('Не удалось определить сущность для сохранения формы.');
+            }
+
             const response = await FormApiClient.saveLayout({
                 formId: this.formId,
+                appDefinitionId,
+                formType: formTypeValue,
                 layoutJson: JSON.stringify(this.layout)
             });
 
@@ -525,6 +540,8 @@ export const layoutDesigner = {
 
                 const forceResponse = await FormApiClient.saveLayout({
                     formId: this.formId,
+                    appDefinitionId,
+                    formType: formTypeValue,
                     layoutJson: JSON.stringify(this.layout),
                     forceSave: true
                 });
@@ -539,12 +556,28 @@ export const layoutDesigner = {
                     throw new Error(forceResult.message || 'Ошибка принудительного сохранения макета');
                 }
 
+                if (forceResult.formId && !this.formId) {
+                    this.formId = forceResult.formId;
+                    const modeKey = typeof formType === 'string' ? formType : this.formType;
+                    if (window.formBuilder?.formsByMode?.[modeKey]) {
+                        window.formBuilder.formsByMode[modeKey].formId = forceResult.formId;
+                    }
+                }
+
                 alert(forceResult.message || 'Макет сохранен успешно');
                 return;
             }
 
             if (!result.success) {
                 throw new Error(result.message || 'Ошибка сохранения макета');
+            }
+
+            if (result.formId && !this.formId) {
+                this.formId = result.formId;
+                const modeKey = typeof formType === 'string' ? formType : this.formType;
+                if (window.formBuilder?.formsByMode?.[modeKey]) {
+                    window.formBuilder.formsByMode[modeKey].formId = result.formId;
+                }
             }
 
             alert(result.message || 'Макет сохранен успешно');

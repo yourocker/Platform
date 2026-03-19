@@ -13,6 +13,9 @@ publish/
 *.sln.docstates
 _ReSharper.Caches/
 
+# macOS
+.DS_Store
+
 # База данных (локальная)
 *.db
 *.sqlite

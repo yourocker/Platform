@@ -11,7 +11,10 @@
                 
                 <div crm-card>
                     <div class="card-body p-4">
+                        @if (!(ViewBag.HasNameInLayout ?? false))
+                        {
                         <crm-input label="Наименование" asp-for="Name" placeholder="Введите название..." required="required"></crm-input>
+                        }
                         
                         @* Динамические поля через partial [cite: 9] *@
                         <div class="mt-4 pt-4 border-top">

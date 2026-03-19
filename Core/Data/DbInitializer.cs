@@ -17,13 +17,16 @@ namespace Core.Data
             // --- ШАГ 2: Системные приложения (Определения) ---
             await EnsureAppDefinitionsAsync(context, catCRM);
 
-            // --- ШАГ 3: Специфические поля для CRM ---
+            // --- ШАГ 3: Обязательное системное поле "Название" для пользовательских сущностей ---
+            await EnsureNameFieldsAsync(context);
+
+            // --- ШАГ 4: Специфические поля для CRM ---
             await EnsureCrmFieldsAsync(context);
 
-            // --- ШАГ 4: Базовые воронки и этапы ---
+            // --- ШАГ 5: Базовые воронки и этапы ---
             await EnsureDefaultPipelinesAsync(context);
 
-            // --- ШАГ 5: Создание администратора из конфигурации ---
+            // --- ШАГ 6: Создание администратора из конфигурации ---
             await EnsureAdminAsync(userManager, configuration);
         }
 
@@ -118,6 +121,53 @@ namespace Core.Data
                     existingApp.AppCategoryId = app.AppCategoryId;
                 }
             }
+            await context.SaveChangesAsync();
+        }
+
+        private static async Task EnsureNameFieldsAsync(AppDbContext context)
+        {
+            var appIds = await context.AppDefinitions
+                .Where(a => !a.IsSystem)
+                .Select(a => a.Id)
+                .ToListAsync();
+
+            if (!appIds.Any()) return;
+
+            var existingFields = await context.AppFieldDefinitions
+                .Where(f => appIds.Contains(f.AppDefinitionId))
+                .Where(f => f.SystemName.ToLower() == "name")
+                .ToListAsync();
+
+            foreach (var field in existingFields)
+            {
+                field.IsSystem = true;
+                field.IsRequired = true;
+                if (string.IsNullOrWhiteSpace(field.Label)) field.Label = "Название";
+            }
+
+            var existing = existingFields.Select(f => f.AppDefinitionId).ToList();
+            var missing = appIds.Where(id => !existing.Contains(id)).ToList();
+            if (!missing.Any())
+            {
+                await context.SaveChangesAsync();
+                return;
+            }
+
+            foreach (var appId in missing)
+            {
+                context.AppFieldDefinitions.Add(new AppFieldDefinition
+                {
+                    Id = Guid.NewGuid(),
+                    AppDefinitionId = appId,
+                    Label = "Название",
+                    SystemName = "Name",
+                    DataType = FieldDataType.String,
+                    IsRequired = true,
+                    IsSystem = true,
+                    SortOrder = 0
+                });
+            }
+
             await context.SaveChangesAsync();
         }
 

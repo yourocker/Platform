@@ -94,8 +94,11 @@ public class CreateFormRequest
 /// </summary>
 public class SaveLayoutRequest
 {
-    [Required]
-    public Guid FormId { get; set; }
+    public Guid? FormId { get; set; }
+
+    public Guid AppDefinitionId { get; set; }
+
+    public FormType FormType { get; set; }
 
     [Required]
     public string LayoutJson { get; set; } = "{}";
