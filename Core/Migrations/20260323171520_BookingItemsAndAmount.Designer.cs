@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using Core.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -12,9 +13,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace Core.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260323171520_BookingItemsAndAmount")]
+    partial class BookingItemsAndAmount
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -226,9 +229,6 @@ namespace Core.Migrations
                     b.Property<Guid?>("DealItemId")
                         .HasColumnType("uuid");
 
-                    b.Property<string>("DiscountReason")
-                        .HasColumnType("text");
-
                     b.Property<DateTime>("EndTime")
                         .HasColumnType("timestamp without time zone");
 
@@ -250,9 +250,6 @@ namespace Core.Migrations
                     b.Property<DateTime>("StartTime")
                         .HasColumnType("timestamp without time zone");
 
-                    b.Property<Guid?>("StatusId")
-                        .HasColumnType("uuid");
-
                     b.HasKey("Id");
 
                     b.HasIndex("CreatedAt");
@@ -267,26 +264,9 @@ namespace Core.Migrations
 
                     b.HasIndex("StartTime");
 
-                    b.HasIndex("StatusId");
-
                     b.HasIndex("ResourceId", "StartTime", "EndTime");
 
                     b.ToTable("CrmResourceBookings", (string)null);
-                });
-
-            modelBuilder.Entity("Core.Entities.CRM.CrmResourceBookingContact", b =>
-                {
-                    b.Property<Guid>("BookingId")
-                        .HasColumnType("uuid");
-
-                    b.Property<Guid>("ContactId")
-                        .HasColumnType("uuid");
-
-                    b.HasKey("BookingId", "ContactId");
-
-                    b.HasIndex("ContactId");
-
-                    b.ToTable("CrmResourceBookingContacts", (string)null);
                 });
 
             modelBuilder.Entity("Core.Entities.CRM.CrmResourceBookingItem", b =>
@@ -297,12 +277,6 @@ namespace Core.Migrations
 
                     b.Property<Guid>("BookingId")
                         .HasColumnType("uuid");
-
-                    b.Property<decimal?>("CustomUnitPrice")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<decimal>("DiscountAmount")
-                        .HasColumnType("decimal(18,2)");
 
                     b.Property<decimal>("LineTotal")
                         .HasColumnType("decimal(18,2)");
@@ -806,9 +780,6 @@ namespace Core.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<bool>("AllowManualItemPriceChange")
-                        .HasColumnType("boolean");
-
                     b.Property<bool>("AllowOverbooking")
                         .HasColumnType("boolean");
 
@@ -821,41 +792,6 @@ namespace Core.Migrations
                     b.HasKey("Id");
 
                     b.ToTable("BookingPolicySettings", (string)null);
-                });
-
-            modelBuilder.Entity("Core.Entities.System.BookingStatus", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<int>("Category")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("boolean");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(120)
-                        .HasColumnType("character varying(120)");
-
-                    b.Property<int>("SortOrder")
-                        .HasColumnType("integer");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Category");
-
-                    b.HasIndex("IsActive");
-
-                    b.ToTable("BookingStatuses", (string)null);
                 });
 
             modelBuilder.Entity("Core.Entities.System.FeatureToggle", b =>
@@ -979,50 +915,6 @@ namespace Core.Migrations
                     b.HasIndex("EmployeeId");
 
                     b.ToTable("UiSettings", (string)null);
-                });
-
-            modelBuilder.Entity("Core.Entities.System.UserFilterPreset", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.Property<string>("EntityCode")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<string>("FiltersJson")
-                        .IsRequired()
-                        .HasColumnType("jsonb");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(120)
-                        .HasColumnType("character varying(120)");
-
-                    b.Property<DateTime>("UpdatedAt")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.Property<Guid>("UserId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ViewCode")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UserId", "EntityCode", "ViewCode");
-
-                    b.HasIndex("UserId", "EntityCode", "ViewCode", "Name")
-                        .IsUnique();
-
-                    b.ToTable("UserFilterPresets", (string)null);
                 });
 
             modelBuilder.Entity("Core.Entities.Tasks.TaskComment", b =>
@@ -1484,11 +1376,6 @@ namespace Core.Migrations
                         .HasForeignKey("ServiceItemId")
                         .OnDelete(DeleteBehavior.Restrict);
 
-                    b.HasOne("Core.Entities.System.BookingStatus", "Status")
-                        .WithMany()
-                        .HasForeignKey("StatusId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
                     b.Navigation("CreatedByEmployee");
 
                     b.Navigation("DealItem");
@@ -1498,27 +1385,6 @@ namespace Core.Migrations
                     b.Navigation("Resource");
 
                     b.Navigation("ServiceItem");
-
-                    b.Navigation("Status");
-                });
-
-            modelBuilder.Entity("Core.Entities.CRM.CrmResourceBookingContact", b =>
-                {
-                    b.HasOne("Core.Entities.CRM.CrmResourceBooking", "Booking")
-                        .WithMany("BookingContacts")
-                        .HasForeignKey("BookingId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.HasOne("Core.Entities.CRM.Contact", "Contact")
-                        .WithMany()
-                        .HasForeignKey("ContactId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Booking");
-
-                    b.Navigation("Contact");
                 });
 
             modelBuilder.Entity("Core.Entities.CRM.CrmResourceBookingItem", b =>
@@ -1532,7 +1398,7 @@ namespace Core.Migrations
                     b.HasOne("Core.Entities.CRM.ServiceItem", "ServiceItem")
                         .WithMany()
                         .HasForeignKey("ServiceItemId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("Booking");
@@ -1633,17 +1499,6 @@ namespace Core.Migrations
                         .IsRequired();
 
                     b.Navigation("AppDefinition");
-                });
-
-            modelBuilder.Entity("Core.Entities.System.UserFilterPreset", b =>
-                {
-                    b.HasOne("Core.Entities.Company.Employee", "User")
-                        .WithMany()
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("User");
                 });
 
             modelBuilder.Entity("Core.Entities.Tasks.TaskComment", b =>
@@ -1880,8 +1735,6 @@ namespace Core.Migrations
 
             modelBuilder.Entity("Core.Entities.CRM.CrmResourceBooking", b =>
                 {
-                    b.Navigation("BookingContacts");
-
                     b.Navigation("BookingItems");
                 });
 

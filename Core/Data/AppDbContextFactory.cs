@@ -17,7 +17,7 @@ namespace Core.Data
             // 2. Если файла нет, используем локальные настройки
             if (!File.Exists(configPath))
             {
-                connectionString = "Host=localhost;Port=5433;Database=medical_db;Username=postgres;Password=postgres";
+                connectionString = "Host=localhost;Port=5432;Database=medical_db;Username=postgres;Password=postgres";
             }
             else
             {

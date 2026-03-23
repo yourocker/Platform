@@ -3,10 +3,9 @@ using System.ComponentModel.DataAnnotations.Schema;
 
 namespace Core.Entities.CRM
 {
-    public enum ResourceType { Staff, Room, Equipment }
-
     /// <summary>
-    /// Ресурс компании (врач, кабинет или аппарат), который можно забронировать.
+    /// Ресурс компании (кабинет, автомобиль, оборудование и т.д.), который можно забронировать.
+    /// Тип ресурса больше не хардкодится — пользователь задает его через конструктор полей.
     /// </summary>
     [Table("CrmResources")]
     public class CrmResource
@@ -17,14 +16,19 @@ namespace Core.Entities.CRM
         [Required]
         public string Name { get; set; } = string.Empty;
 
-        public ResourceType Type { get; set; }
-
         public bool IsActive { get; set; } = true;
 
         /// <summary>
-        /// Если ресурс - сотрудник, привязываем его ID
+        /// Локальное переопределение политики овербукинга для конкретного ресурса.
+        /// null = использовать глобальные настройки компании.
         /// </summary>
-        public Guid? EmployeeId { get; set; }
+        public bool? AllowOverbooking { get; set; }
+
+        /// <summary>
+        /// Локальный лимит параллельных броней.
+        /// null = использовать глобальные настройки компании.
+        /// </summary>
+        public int? MaxParallelBookings { get; set; }
 
         public string? Description { get; set; }
         

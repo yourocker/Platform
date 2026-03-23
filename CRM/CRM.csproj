@@ -24,8 +24,6 @@
     </ItemGroup>
 
     <ItemGroup>
-      <Folder Include="Views\FormDesigner\" />
-      <Folder Include="Views\Leads\" />
       <Folder Include="wwwroot\uploads\" />
       <Folder Include="wwwroot\uploads\AllFields\" />
       <Folder Include="wwwroot\uploads\temp\" />

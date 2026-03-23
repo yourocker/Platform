@@ -1,0 +1,2388 @@
+@using Core.Entities.CRM
+@using Core.Entities.Company
+@{
+    ViewData["Title"] = "Расписание";
+
+    var resources = ViewBag.Resources as List<CrmResource> ?? new List<CrmResource>();
+    var employees = ViewBag.Employees as List<Employee> ?? new List<Employee>();
+    var services = ViewBag.Services as List<ServiceItem> ?? new List<ServiceItem>();
+
+    var bookingCustomFieldsJson = ViewBag.BookingCustomFieldsJson as string ?? "[]";
+    var bookingLookupDataJson = ViewBag.BookingLookupDataJson as string ?? "{}";
+    var contactCustomFieldsJson = ViewBag.ContactCustomFieldsJson as string ?? "[]";
+    var contactLookupDataJson = ViewBag.ContactLookupDataJson as string ?? "{}";
+    var servicesJson = ViewBag.ServicesJson as string ?? "[]";
+    var contactsJson = ViewBag.ContactsJson as string ?? "[]";
+    var bookingStatusesJson = ViewBag.BookingStatusesJson as string ?? "[]";
+    var allowItemPriceChange = ViewBag.AllowItemPriceChange as bool? ?? false;
+
+    var currentEmployeeName = ViewBag.CurrentEmployeeName as string ?? "Неизвестный пользователь";
+    var currentEmployeeId = ViewBag.CurrentEmployeeId as string ?? string.Empty;
+}
+
+<link rel="stylesheet" href="~/lib/select2/css/select2.min.css" />
+<link rel="stylesheet" href="~/lib/select2-bootstrap-5-theme/select2-bootstrap-5-theme.min.css" />
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@6.1.10/index.global.min.js"></script>
+
+<div class="container-fluid">
+    <div class="card shadow-sm border-0 mb-3">
+        <div class="card-header bg-transparent border-bottom-0 d-flex justify-content-between align-items-center">
+            <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#scheduleFilterCollapse" aria-expanded="false" aria-controls="scheduleFilterCollapse">
+                <i class="bi bi-funnel me-1"></i> Фильтры
+            </button>
+
+            <div class="input-group input-group-sm" style="max-width: 520px;">
+                <select id="savedFilterSelect" class="form-select">
+                    <option value="">Сохраненные фильтры</option>
+                </select>
+                <button type="button" class="btn btn-outline-secondary" id="applySavedFilterBtn">Вызвать</button>
+                <button type="button" class="btn btn-outline-secondary" id="saveCurrentFilterBtn">Сохранить</button>
+                <button type="button" class="btn btn-outline-danger" id="deleteSavedFilterBtn">Удалить</button>
+            </div>
+        </div>
+
+        <div class="collapse" id="scheduleFilterCollapse">
+            <div class="card-body pt-0">
+                <form id="scheduleFilterForm">
+                    <div class="row g-2 align-items-end">
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold">Поиск</label>
+                            <input type="text" class="form-control form-control-sm" name="f_search" placeholder="Ресурс, услуга, исполнитель..." />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold">Ресурс</label>
+                            <select class="form-select form-select-sm searchable-select" name="f_resourceId" data-search-placeholder="Поиск ресурса...">
+                                <option value="">Все</option>
+                                @foreach (var resource in resources)
+                                {
+                                    <option value="@resource.Id">@resource.Name</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold">Исполнитель</label>
+                            <select class="form-select form-select-sm searchable-select" name="f_performerEmployeeId" data-search-placeholder="Поиск исполнителя...">
+                                <option value="">Все</option>
+                                @foreach (var employee in employees)
+                                {
+                                    <option value="@employee.Id">@employee.FullName</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold">Кто записал</label>
+                            <select class="form-select form-select-sm searchable-select" name="f_createdByEmployeeId" data-search-placeholder="Поиск сотрудника...">
+                                <option value="">Все</option>
+                                @foreach (var employee in employees)
+                                {
+                                    <option value="@employee.Id">@employee.FullName</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold">Услуга/товар</label>
+                            <select class="form-select form-select-sm searchable-select" name="f_serviceItemId" data-search-placeholder="Поиск услуги/товара...">
+                                <option value="">Все</option>
+                                @foreach (var service in services)
+                                {
+                                    <option value="@service.Id">@service.Name</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold">Статус</label>
+                            <select class="form-select form-select-sm searchable-select" name="f_statusId" data-search-placeholder="Поиск статуса...">
+                                <option value="">Все</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small fw-bold">Контакт</label>
+                            <select class="form-select form-select-sm searchable-select" name="f_contactId" data-search-placeholder="Поиск контакта...">
+                                <option value="">Все</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small fw-bold">С даты</label>
+                            <input type="date" class="form-control form-control-sm" name="f_startFrom" />
+                        </div>
+                        <div class="col-md-2">
+                            <label class="form-label small fw-bold">По дату</label>
+                            <input type="date" class="form-control form-control-sm" name="f_startTo" />
+                        </div>
+                        <div class="col-md-5 text-end">
+                            <button type="button" class="btn btn-sm btn-primary" id="applyFiltersBtn">Применить</button>
+                            <button type="button" class="btn btn-sm btn-light" id="resetFiltersBtn">Сбросить</button>
+                        </div>
+                    </div>
+
+                    <div class="row g-2 mt-1" id="dynamicFilterFields"></div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow-sm border-0">
+        <div class="card-body">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <span class="badge bg-secondary p-2"><i class="bi bi-cursor me-1"></i> Выделите диапазон в календаре для новой записи</span>
+                <button type="button" class="btn btn-sm btn-primary" id="addBookingBtn">
+                    <i class="bi bi-plus-lg me-1"></i> Добавить запись
+                </button>
+            </div>
+
+            <div id="bookingCalendar" style="background: white;"></div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="bookingModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header">
+                <h5 class="modal-title" id="bookingModalTitle"><i class="bi bi-calendar-plus me-2"></i> Новое бронирование</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="bookingForm" enctype="multipart/form-data">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" id="modalBookingId" />
+
+                    <div class="row g-2 mb-2">
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted">Исполнитель</label>
+                            <select id="modalPerformerEmployeeId" class="form-select form-select-sm searchable-select" data-search-placeholder="Поиск исполнителя..." required>
+                                <option value="">Выберите исполнителя</option>
+                                @foreach (var employee in employees)
+                                {
+                                    <option value="@employee.Id">@employee.FullName</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted">Кто записал</label>
+                            <input id="modalCreatedByEmployeeName" class="form-control form-control-sm" value="@currentEmployeeName" readonly />
+                            <input type="hidden" id="modalCreatedByEmployeeId" value="@currentEmployeeId" />
+                        </div>
+                    </div>
+
+                    <div class="row g-2 mb-2">
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted">Ресурс</label>
+                            <select id="modalResourceId" class="form-select form-select-sm searchable-select" data-search-placeholder="Поиск ресурса..." required>
+                                <option value="">Выберите ресурс</option>
+                                @foreach (var resource in resources)
+                                {
+                                    <option value="@resource.Id">@resource.Name</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted">Статус записи</label>
+                            <div class="dropdown">
+                                <button
+                                    id="statusPickerButton"
+                                    class="btn btn-sm btn-outline-secondary w-100 text-start d-flex align-items-center gap-2 status-picker-button"
+                                    type="button"
+                                    data-bs-toggle="dropdown"
+                                    aria-expanded="false">
+                                    <span class="status-dot" id="statusPickerDot"></span>
+                                    <span id="statusPickerLabel">Выберите статус</span>
+                                </button>
+                                <div class="dropdown-menu w-100 p-2 status-picker-menu" id="statusPickerMenu"></div>
+                                <input type="hidden" id="modalStatusId" />
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="row g-2 mb-2">
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted">Контакты</label>
+                            <div class="d-flex gap-2 align-items-start">
+                                <select
+                                    id="modalContactIds"
+                                    class="form-select form-select-sm searchable-select flex-grow-1"
+                                    data-search-placeholder="Поиск контакта..."
+                                    multiple></select>
+                                <button type="button" class="btn btn-sm btn-outline-primary" id="openQuickContactBtn" title="Создать контакт">
+                                    <i class="bi bi-person-plus"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted">Услуги/товары</label>
+                            <select id="modalServiceItemIds" class="form-select form-select-sm searchable-select" data-search-placeholder="Поиск услуги/товара..."></select>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive mb-2">
+                        <table class="table table-sm align-middle mb-0" id="selectedItemsTable">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Услуга/товар</th>
+                                    <th class="text-end">Цена</th>
+                                    <th style="width: 110px;" class="text-end">Кол-во</th>
+                                    <th style="width: 120px;" class="text-end">Скидка, %</th>
+                                    <th class="text-end">Сумма</th>
+                                </tr>
+                            </thead>
+                            <tbody id="selectedItemsBody">
+                                <tr><td colspan="5" class="text-muted text-center py-2">Ничего не выбрано</td></tr>
+                            </tbody>
+                            <tfoot>
+                                <tr>
+                                    <th colspan="4" class="text-end">Итого:</th>
+                                    <th class="text-end" id="selectedItemsAmount">0.00 ₽</th>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+
+                    <div class="row g-2 mb-2 d-none" id="discountReasonRow">
+                        <div class="col-md-12">
+                            <label class="form-label small text-muted">Обоснование скидки</label>
+                            <textarea id="modalDiscountReason" class="form-control form-control-sm" rows="2" placeholder="Почему применена скидка"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="row g-2 mb-2">
+                        <div class="col-md-3">
+                            <label class="form-label small text-muted">Сумма</label>
+                            <input type="text" id="modalAmount" class="form-control form-control-sm" readonly value="0.00" />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small text-muted">Начало</label>
+                            <input type="datetime-local" id="modalStart" class="form-control form-control-sm" required />
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label small text-muted">Окончание</label>
+                            <input type="datetime-local" id="modalEnd" class="form-control form-control-sm" required />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted">Комментарий</label>
+                            <input id="modalComment" class="form-control form-control-sm" />
+                        </div>
+                    </div>
+
+                    <div class="row g-2" id="dynamicBookingFields"></div>
+
+                    <div id="modalResult" class="small mt-2"></div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-outline-danger me-auto d-none" id="deleteBookingBtn">
+                    <i class="bi bi-trash me-1"></i> Удалить
+                </button>
+                <button type="button" class="btn btn-sm btn-light" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-sm btn-primary" id="saveBookingBtn">Сохранить</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="quickContactModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="bi bi-person-plus me-2"></i> Новый контакт</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="quickContactForm" enctype="multipart/form-data">
+                    @Html.AntiForgeryToken()
+                    <div class="row g-2">
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted">Фамилия</label>
+                            <input type="text" id="quickContactLastName" name="lastName" class="form-control form-control-sm" required />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted">Имя</label>
+                            <input type="text" id="quickContactFirstName" name="firstName" class="form-control form-control-sm" required />
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label small text-muted">Отчество</label>
+                            <input type="text" id="quickContactMiddleName" name="middleName" class="form-control form-control-sm" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted">Телефоны</label>
+                            <div id="quickContactPhonesContainer">
+                                <div class="input-group input-group-sm mb-1">
+                                    <input type="text" name="phones" class="form-control" placeholder="+7..." />
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-link btn-sm text-decoration-none p-0" id="addQuickContactPhoneBtn">
+                                <i class="bi bi-plus-circle me-1"></i> Добавить номер
+                            </button>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted">Email</label>
+                            <div id="quickContactEmailsContainer">
+                                <div class="input-group input-group-sm mb-1">
+                                    <input type="email" name="emails" class="form-control" placeholder="user@example.com" />
+                                </div>
+                            </div>
+                            <button type="button" class="btn btn-link btn-sm text-decoration-none p-0" id="addQuickContactEmailBtn">
+                                <i class="bi bi-plus-circle me-1"></i> Добавить email
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="row g-2 mt-1" id="quickContactDynamicFields"></div>
+                    <div id="quickContactResult" class="small mt-2"></div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-sm btn-light" data-bs-dismiss="modal">Отмена</button>
+                <button type="button" class="btn btn-sm btn-primary" id="saveQuickContactBtn">Сохранить</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+    .fc-v-event {
+        border: none !important;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    }
+
+    .fc-timegrid-slot {
+        height: 1em !important;
+    }
+
+    .fc-theme-bootstrap5 a {
+        color: #495057;
+        text-decoration: none;
+    }
+
+    .select2-container.is-invalid .select2-selection {
+        border-color: #dc3545 !important;
+        box-shadow: 0 0 0 .25rem rgba(220, 53, 69, .15) !important;
+    }
+
+    .status-picker-button {
+        min-height: 31px;
+    }
+
+    .status-picker-button.is-invalid {
+        border-color: #dc3545 !important;
+        box-shadow: 0 0 0 .25rem rgba(220, 53, 69, .15) !important;
+    }
+
+    .status-picker-menu {
+        max-height: 280px;
+        overflow-y: auto;
+    }
+
+    .status-picker-option {
+        border: 1px solid transparent;
+        border-radius: 0.35rem;
+    }
+
+    .status-picker-option.active {
+        border-color: rgba(13, 110, 253, 0.35);
+        background-color: rgba(13, 110, 253, 0.08);
+    }
+
+    .status-dot {
+        width: 0.7rem;
+        height: 0.7rem;
+        border-radius: 999px;
+        display: inline-block;
+        border: 1px solid rgba(0, 0, 0, 0.2);
+        background: #6c757d;
+        flex-shrink: 0;
+    }
+</style>
+
+@section Scripts {
+<script src="~/lib/select2/js/select2.min.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        try {
+            const hasJquery = typeof window.jQuery !== 'undefined';
+            const hasSelect2 = hasJquery &&
+                typeof window.jQuery.fn !== 'undefined' &&
+                typeof window.jQuery.fn.select2 === 'function';
+
+            const customFields = @Html.Raw(bookingCustomFieldsJson);
+            const lookupData = @Html.Raw(bookingLookupDataJson);
+            const contactCustomFields = @Html.Raw(contactCustomFieldsJson);
+            const contactLookupData = @Html.Raw(contactLookupDataJson);
+            const servicesCatalog = @Html.Raw(servicesJson);
+            const contactsCatalog = @Html.Raw(contactsJson);
+            const statusesCatalog = @Html.Raw(bookingStatusesJson);
+            const allowItemPriceChange = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(allowItemPriceChange));
+
+            const servicesMap = new Map((servicesCatalog || []).map(x => [String(x.id), x]));
+            const contactsMap = new Map((contactsCatalog || []).map(x => [String(x.id), x]));
+            const statusesMap = new Map((statusesCatalog || []).map(x => [String(x.id), x]));
+            const bookingLineItems = [];
+            let bookingLineCounter = 0;
+            const editingServicePrices = new Set();
+            const editingServicePriceDrafts = new Map();
+
+            const filterForm = document.getElementById('scheduleFilterForm');
+            const dynamicFilterFields = document.getElementById('dynamicFilterFields');
+            const dynamicBookingFields = document.getElementById('dynamicBookingFields');
+
+            const bookingForm = document.getElementById('bookingForm');
+            const bookingModalEl = document.getElementById('bookingModal');
+            const bookingModal = new bootstrap.Modal(bookingModalEl);
+            const bookingModalTitle = document.getElementById('bookingModalTitle');
+            const modalResult = document.getElementById('modalResult');
+            const modalBookingId = document.getElementById('modalBookingId');
+            const modalCreatedByEmployeeName = document.getElementById('modalCreatedByEmployeeName');
+            const addBookingBtn = document.getElementById('addBookingBtn');
+
+            const modalResourceId = document.getElementById('modalResourceId');
+            const modalPerformerEmployeeId = document.getElementById('modalPerformerEmployeeId');
+            const modalContactIds = document.getElementById('modalContactIds');
+            const modalServiceItemIds = document.getElementById('modalServiceItemIds');
+            const modalAmount = document.getElementById('modalAmount');
+            const selectedItemsBody = document.getElementById('selectedItemsBody');
+            const selectedItemsAmount = document.getElementById('selectedItemsAmount');
+            const discountReasonRow = document.getElementById('discountReasonRow');
+            const modalDiscountReason = document.getElementById('modalDiscountReason');
+            const modalStart = document.getElementById('modalStart');
+            const modalEnd = document.getElementById('modalEnd');
+            const modalComment = document.getElementById('modalComment');
+            const saveBookingBtn = document.getElementById('saveBookingBtn');
+            const deleteBookingBtn = document.getElementById('deleteBookingBtn');
+
+            const statusPickerButton = document.getElementById('statusPickerButton');
+            const statusPickerLabel = document.getElementById('statusPickerLabel');
+            const statusPickerDot = document.getElementById('statusPickerDot');
+            const statusPickerMenu = document.getElementById('statusPickerMenu');
+            const modalStatusId = document.getElementById('modalStatusId');
+
+            const quickContactModalEl = document.getElementById('quickContactModal');
+            const quickContactModal = new bootstrap.Modal(quickContactModalEl);
+            const quickContactForm = document.getElementById('quickContactForm');
+            const quickContactResult = document.getElementById('quickContactResult');
+            const quickContactDynamicFields = document.getElementById('quickContactDynamicFields');
+            const quickContactLastName = document.getElementById('quickContactLastName');
+            const quickContactFirstName = document.getElementById('quickContactFirstName');
+            const quickContactMiddleName = document.getElementById('quickContactMiddleName');
+            const quickContactPhonesContainer = document.getElementById('quickContactPhonesContainer');
+            const quickContactEmailsContainer = document.getElementById('quickContactEmailsContainer');
+
+            const statusFilterSelect = filterForm.querySelector('[name="f_statusId"]');
+            const contactFilterSelect = filterForm.querySelector('[name="f_contactId"]');
+            const savedFilterSelect = document.getElementById('savedFilterSelect');
+
+            const currentEmployeeName = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(currentEmployeeName));
+            let presetCache = [];
+            let isEditMode = false;
+            let activeBookingId = null;
+            let createSource = 'calendar';
+            let calendar = null;
+            const companyWorkStart = '@ViewBag.MinTime';
+            const companyWorkEnd = '@ViewBag.MaxTime';
+            let currentSlotMinTime = companyWorkStart;
+            let currentSlotMaxTime = companyWorkEnd;
+
+            function categoryColor(category) {
+                switch (String(category || '')) {
+                    case 'New':
+                        return '#f59f00';
+                    case 'Intermediate':
+                        return '#0dcaf0';
+                    case 'SuccessFinal':
+                        return '#198754';
+                    case 'FailedFinal':
+                        return '#dc3545';
+                    default:
+                        return '#6c757d';
+                }
+            }
+
+            function getStatusColor(statusId) {
+                const status = statusesMap.get(String(statusId || ''));
+                if (!status) {
+                    return '#6c757d';
+                }
+
+                return status.color || categoryColor(status.category);
+            }
+
+            function formatMoney(value) {
+                const number = Number(value || 0);
+                return number.toLocaleString('ru-RU', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' ₽';
+            }
+
+            function formatLineMoney(value) {
+                const rounded = roundToOneDecimal(value);
+                const hasFraction = Math.abs(rounded % 1) > 0;
+                return rounded.toLocaleString('ru-RU', {
+                    minimumFractionDigits: hasFraction ? 1 : 0,
+                    maximumFractionDigits: 1
+                }) + ' ₽';
+            }
+
+            function toLocalInput(date) {
+                const pad = n => String(n).padStart(2, '0');
+                return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
+            }
+
+            function parseDate(value) {
+                if (!value) {
+                    return null;
+                }
+
+                const parsed = new Date(value);
+                return Number.isNaN(parsed.getTime()) ? null : parsed;
+            }
+
+            function normalizeDateForInput(value) {
+                if (!value) {
+                    return '';
+                }
+
+                const date = parseDate(value);
+                if (!date) {
+                    return '';
+                }
+
+                const pad = n => String(n).padStart(2, '0');
+                return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+            }
+
+            function normalizeDateTimeForInput(value) {
+                if (!value) {
+                    return '';
+                }
+
+                const date = parseDate(value);
+                return date ? toLocalInput(date) : '';
+            }
+
+            function roundToOneDecimal(value) {
+                return Math.round(Number(value || 0) * 10) / 10;
+            }
+
+            function parsePositiveIntInput(value, fallback) {
+                const match = String(value || '').match(/\d+/);
+                if (!match) {
+                    return fallback;
+                }
+
+                const parsed = Number(match[0]);
+                if (!Number.isFinite(parsed) || parsed <= 0) {
+                    return fallback;
+                }
+
+                return Math.max(1, Math.round(parsed));
+            }
+
+            function parsePercentInput(value) {
+                const match = String(value || '').match(/\d+/);
+                if (!match) {
+                    return 0;
+                }
+
+                const parsed = Number(match[0]);
+                if (!Number.isFinite(parsed)) {
+                    return 0;
+                }
+
+                return Math.max(0, Math.min(100, Math.round(parsed)));
+            }
+
+            function parseNonNegativeDecimalInput(value) {
+                const normalized = String(value || '').trim().replace(/\s+/g, '').replace(',', '.');
+                if (!normalized) {
+                    return null;
+                }
+
+                const parsed = Number(normalized);
+                if (!Number.isFinite(parsed) || parsed < 0) {
+                    return null;
+                }
+
+                return parsed;
+            }
+
+            function formatEditableNumber(value) {
+                const number = Number(value || 0);
+                if (!Number.isFinite(number)) {
+                    return '0';
+                }
+
+                if (Math.abs(number % 1) < 0.000001) {
+                    return String(Math.trunc(number));
+                }
+
+                return number.toFixed(2);
+            }
+
+            function roundToQuarterHour(date) {
+                const copy = new Date(date.getTime());
+                const minutes = copy.getMinutes();
+                const rounded = Math.ceil(minutes / 15) * 15;
+                copy.setMinutes(rounded, 0, 0);
+                return copy;
+            }
+
+            function parseTimeToMinutes(timeText) {
+                if (!timeText) {
+                    return null;
+                }
+
+                const parts = String(timeText).split(':');
+                if (parts.length < 2) {
+                    return null;
+                }
+
+                const hours = Number(parts[0]);
+                const minutes = Number(parts[1]);
+                if (Number.isNaN(hours) || Number.isNaN(minutes)) {
+                    return null;
+                }
+
+                return hours * 60 + minutes;
+            }
+
+            function minutesToTimeString(totalMinutes) {
+                const normalized = Math.max(0, Math.min(24 * 60, Math.round(totalMinutes)));
+                const hours = Math.floor(normalized / 60);
+                const minutes = normalized % 60;
+                const pad = n => String(n).padStart(2, '0');
+                return `${pad(hours)}:${pad(minutes)}:00`;
+            }
+
+            function resolveCalendarSlotRange(events) {
+                const baseStart = parseTimeToMinutes(companyWorkStart) ?? (8 * 60);
+                const baseEnd = parseTimeToMinutes(companyWorkEnd) ?? (20 * 60);
+
+                let minMinutes = baseStart;
+                let maxMinutes = baseEnd;
+
+                (events || []).forEach(eventItem => {
+                    const start = parseDate(eventItem.start);
+                    const end = parseDate(eventItem.end);
+                    if (!start || !end) {
+                        return;
+                    }
+
+                    const eventStart = start.getHours() * 60 + start.getMinutes();
+                    const eventEnd = end.getHours() * 60 + end.getMinutes();
+                    minMinutes = Math.min(minMinutes, Math.floor(eventStart / 15) * 15);
+                    maxMinutes = Math.max(maxMinutes, Math.ceil(eventEnd / 15) * 15);
+                });
+
+                if (maxMinutes <= minMinutes) {
+                    maxMinutes = minMinutes + 60;
+                }
+
+                return {
+                    minTime: minutesToTimeString(minMinutes),
+                    maxTime: minutesToTimeString(maxMinutes)
+                };
+            }
+
+            function isOutsideCompanyWorkHours(startDate, endDate) {
+                const startMinutes = parseTimeToMinutes(companyWorkStart);
+                const endMinutes = parseTimeToMinutes(companyWorkEnd);
+                if (startMinutes === null || endMinutes === null) {
+                    return false;
+                }
+
+                const bookingStart = startDate.getHours() * 60 + startDate.getMinutes();
+                const bookingEnd = endDate.getHours() * 60 + endDate.getMinutes();
+                return bookingStart < startMinutes || bookingEnd > endMinutes;
+            }
+
+            function getCreateRangeFromButton() {
+                const roundedStart = roundToQuarterHour(new Date());
+                const roundedEnd = new Date(roundedStart.getTime() + 30 * 60 * 1000);
+                return { start: roundedStart, end: roundedEnd };
+            }
+
+            function updateDiscountReasonVisibility() {
+                const hasDiscount = bookingLineItems.some(line => Number(line.discountPercent || 0) > 0);
+                discountReasonRow.classList.toggle('d-none', !hasDiscount);
+                if (!hasDiscount) {
+                    modalDiscountReason.value = '';
+                    modalDiscountReason.classList.remove('is-invalid');
+                }
+            }
+
+            function appendQuickCollectionInput(container, inputName, inputType, placeholder) {
+                const wrapper = document.createElement('div');
+                wrapper.className = 'input-group input-group-sm mb-1';
+                wrapper.innerHTML = `
+                    <input type="${inputType}" name="${inputName}" class="form-control" placeholder="${placeholder}" />
+                    <button type="button" class="btn btn-outline-danger remove-quick-item"><i class="bi bi-x"></i></button>
+                `;
+
+                wrapper.querySelector('.remove-quick-item')?.addEventListener('click', () => {
+                    wrapper.remove();
+                });
+
+                container.appendChild(wrapper);
+            }
+
+            function getSelectedValues(selectElement) {
+                if (!selectElement) {
+                    return [];
+                }
+
+                if (hasJquery) {
+                    const value = window.jQuery(selectElement).val();
+                    if (Array.isArray(value)) {
+                        return value.map(x => String(x));
+                    }
+                    return value ? [String(value)] : [];
+                }
+
+                return Array.from(selectElement.selectedOptions).map(o => String(o.value));
+            }
+
+            function setSelectValue(selectElement, value) {
+                if (!selectElement) {
+                    return;
+                }
+
+                if (hasJquery) {
+                    const $select = window.jQuery(selectElement);
+                    if (selectElement.multiple) {
+                        const normalized = (Array.isArray(value) ? value : [value])
+                            .filter(v => v !== null && v !== undefined && String(v).length > 0)
+                            .map(v => String(v));
+                        $select.val(normalized).trigger('change');
+                        return;
+                    }
+
+                    const normalized = Array.isArray(value) ? (value[0] ?? '') : (value ?? '');
+                    $select.val(String(normalized)).trigger('change');
+                    return;
+                }
+
+                if (selectElement.multiple) {
+                    const normalized = new Set((Array.isArray(value) ? value : [value]).map(v => String(v)));
+                    Array.from(selectElement.options).forEach(option => {
+                        option.selected = normalized.has(option.value);
+                    });
+                } else {
+                    const normalized = Array.isArray(value) ? (value[0] ?? '') : (value ?? '');
+                    selectElement.value = String(normalized);
+                }
+
+                selectElement.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+
+            function initSearchableSelects(root) {
+                if (!hasSelect2) {
+                    return;
+                }
+
+                (root || document).querySelectorAll('select.searchable-select').forEach(select => {
+                    const $select = window.jQuery(select);
+                    if ($select.hasClass('select2-hidden-accessible')) {
+                        return;
+                    }
+
+                    const options = {
+                        theme: 'bootstrap-5',
+                        width: '100%',
+                        language: {
+                            noResults: () => 'Ничего не найдено',
+                            searching: () => 'Поиск...',
+                            inputTooShort: () => 'Введите текст для поиска'
+                        },
+                        minimumResultsForSearch: 0,
+                        closeOnSelect: !select.multiple
+                    };
+
+                    const placeholderFromData = select.dataset.searchPlaceholder || '';
+                    const placeholderFromFirstOption = (!select.multiple && select.options.length > 0)
+                        ? select.options[0].textContent
+                        : '';
+                    const placeholder = (placeholderFromData || placeholderFromFirstOption || '').trim();
+                    if (placeholder.length > 0) {
+                        options.placeholder = placeholder;
+                    }
+
+                    if (!select.multiple) {
+                        options.allowClear = !select.required;
+                    }
+
+                    const parentModal = select.closest('.modal');
+                    if (parentModal) {
+                        options.dropdownParent = window.jQuery(parentModal);
+                    }
+
+                    $select.select2(options);
+                    $select.on('change', () => setFieldInvalid(select, false));
+                });
+            }
+
+            function setFieldInvalid(element, invalid) {
+                if (!element) {
+                    return;
+                }
+
+                element.classList.toggle('is-invalid', invalid);
+                if (!hasSelect2) {
+                    return;
+                }
+
+                const $container = window.jQuery(element).next('.select2-container');
+                if ($container.length > 0) {
+                    $container.toggleClass('is-invalid', invalid);
+                }
+            }
+
+            function setStatusInvalid(invalid) {
+                statusPickerButton.classList.toggle('is-invalid', invalid);
+            }
+
+            function clearValidation() {
+                bookingForm.querySelectorAll('.is-invalid').forEach(el => el.classList.remove('is-invalid'));
+                bookingModalEl.querySelectorAll('.select2-container.is-invalid').forEach(el => el.classList.remove('is-invalid'));
+                setStatusInvalid(false);
+            }
+
+            function buildServiceOptions() {
+                modalServiceItemIds.innerHTML = '';
+                const emptyOption = document.createElement('option');
+                emptyOption.value = '';
+                emptyOption.textContent = 'Выберите услугу/товар';
+                modalServiceItemIds.appendChild(emptyOption);
+
+                servicesCatalog.forEach(service => {
+                    const option = document.createElement('option');
+                    option.value = service.id;
+                    option.textContent = `${service.name} (${formatMoney(service.price)})`;
+                    modalServiceItemIds.appendChild(option);
+                });
+            }
+
+            function buildContactOptions() {
+                modalContactIds.innerHTML = '';
+                contactFilterSelect.innerHTML = '<option value="">Все</option>';
+
+                contactsCatalog
+                    .slice()
+                    .sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'ru'))
+                    .forEach(contact => {
+                        const modalOption = document.createElement('option');
+                        modalOption.value = contact.id;
+                        modalOption.textContent = contact.name;
+                        modalContactIds.appendChild(modalOption);
+
+                        const filterOption = document.createElement('option');
+                        filterOption.value = contact.id;
+                        filterOption.textContent = contact.name;
+                        contactFilterSelect.appendChild(filterOption);
+                    });
+            }
+
+            function buildStatusPicker() {
+                statusFilterSelect.innerHTML = '<option value="">Все</option>';
+                statusPickerMenu.innerHTML = '';
+
+                const categoryOrder = {
+                    New: 1,
+                    Intermediate: 2,
+                    SuccessFinal: 3,
+                    FailedFinal: 4
+                };
+
+                statusesCatalog
+                    .slice()
+                    .sort((a, b) => {
+                        const aRank = categoryOrder[String(a.category || '')] || 99;
+                        const bRank = categoryOrder[String(b.category || '')] || 99;
+                        if (aRank !== bRank) {
+                            return aRank - bRank;
+                        }
+
+                        const aSortOrder = Number(a.sortOrder ?? 9999);
+                        const bSortOrder = Number(b.sortOrder ?? 9999);
+                        if (aSortOrder !== bSortOrder) {
+                            return aSortOrder - bSortOrder;
+                        }
+
+                        return String(a.name || '').localeCompare(String(b.name || ''), 'ru');
+                    })
+                    .forEach(status => {
+                        const filterOption = document.createElement('option');
+                        filterOption.value = status.id;
+                        filterOption.textContent = status.name;
+                        statusFilterSelect.appendChild(filterOption);
+
+                        const button = document.createElement('button');
+                        button.type = 'button';
+                        button.className = 'dropdown-item d-flex align-items-center gap-2 status-picker-option';
+                        button.dataset.id = status.id;
+                        button.innerHTML = `<span class="status-dot" style="background:${status.color || categoryColor(status.category)};"></span><span>${status.name}</span>`;
+                        button.addEventListener('click', () => {
+                            setStatusValue(status.id);
+                        });
+
+                        statusPickerMenu.appendChild(button);
+                    });
+            }
+
+            function getDefaultStatusId() {
+                const newStatus = statusesCatalog.find(x => String(x.category) === 'New');
+                return String(newStatus ? newStatus.id : (statusesCatalog[0]?.id || ''));
+            }
+
+            function setStatusValue(statusId) {
+                const normalized = String(statusId || '');
+                modalStatusId.value = normalized;
+
+                const status = statusesMap.get(normalized);
+                statusPickerLabel.textContent = status ? status.name : 'Выберите статус';
+                statusPickerDot.style.background = status ? (status.color || categoryColor(status.category)) : '#6c757d';
+
+                statusPickerMenu.querySelectorAll('.status-picker-option').forEach(el => {
+                    el.classList.toggle('active', String(el.dataset.id) === normalized);
+                });
+
+                setStatusInvalid(false);
+            }
+
+            function nextBookingLineId() {
+                bookingLineCounter += 1;
+                return `line_${bookingLineCounter}`;
+            }
+
+            function createBookingLine(serviceId, quantity, discountPercent, customUnitPrice) {
+                const normalizedServiceId = String(serviceId || '');
+                if (!normalizedServiceId || !servicesMap.has(normalizedServiceId)) {
+                    return null;
+                }
+
+                const line = {
+                    lineId: nextBookingLineId(),
+                    serviceId: normalizedServiceId,
+                    quantity: parsePositiveIntInput(quantity, 1),
+                    discountPercent: parsePercentInput(discountPercent),
+                    customUnitPrice: null
+                };
+
+                const parsedCustomPrice = parseNonNegativeDecimalInput(customUnitPrice);
+                if (parsedCustomPrice !== null) {
+                    const baseUnitPrice = Number(servicesMap.get(normalizedServiceId)?.price || 0);
+                    line.customUnitPrice = Math.min(baseUnitPrice, parsedCustomPrice);
+                    line.discountPercent = baseUnitPrice > 0
+                        ? roundToOneDecimal(Math.max(0, ((baseUnitPrice - line.customUnitPrice) / baseUnitPrice) * 100))
+                        : 0;
+                }
+
+                return line;
+            }
+
+            function getBookingLine(lineId) {
+                return bookingLineItems.find(x => x.lineId === lineId) || null;
+            }
+
+            function clearBookingLines() {
+                bookingLineItems.length = 0;
+                editingServicePrices.clear();
+                editingServicePriceDrafts.clear();
+            }
+
+            function appendBookingLine(serviceId, quantity, discountPercent, customUnitPrice) {
+                const line = createBookingLine(serviceId, quantity, discountPercent, customUnitPrice);
+                if (!line) {
+                    return null;
+                }
+
+                bookingLineItems.push(line);
+                return line;
+            }
+
+            function addBookingLine(serviceId) {
+                const line = appendBookingLine(serviceId, 1, 0, null);
+                if (!line) {
+                    return;
+                }
+
+                refreshSelectedItemsTable();
+                setFieldInvalid(modalServiceItemIds, false);
+            }
+
+            function removeBookingLine(lineId) {
+                const index = bookingLineItems.findIndex(x => x.lineId === lineId);
+                if (index < 0) {
+                    return;
+                }
+
+                bookingLineItems.splice(index, 1);
+                editingServicePrices.delete(lineId);
+                editingServicePriceDrafts.delete(lineId);
+                refreshSelectedItemsTable();
+            }
+
+            function calculateLineTotals(line) {
+                const service = servicesMap.get(String(line.serviceId || ''));
+                if (!service) {
+                    return null;
+                }
+
+                line.quantity = parsePositiveIntInput(line.quantity, 1);
+
+                const baseUnitPrice = Number(service.price || 0);
+                const hasCustomPrice = line.customUnitPrice !== null && line.customUnitPrice !== undefined;
+
+                let effectiveUnitPrice = baseUnitPrice;
+                let discountPercent = 0;
+                if (hasCustomPrice) {
+                    const normalizedCustomPrice = parseNonNegativeDecimalInput(line.customUnitPrice);
+                    if (normalizedCustomPrice === null) {
+                        line.customUnitPrice = null;
+                    } else {
+                        line.customUnitPrice = Math.min(baseUnitPrice, normalizedCustomPrice);
+                        effectiveUnitPrice = line.customUnitPrice;
+                        discountPercent = baseUnitPrice > 0
+                            ? roundToOneDecimal(Math.max(0, ((baseUnitPrice - effectiveUnitPrice) / baseUnitPrice) * 100))
+                            : 0;
+                    }
+                }
+
+                if (!line.customUnitPrice && line.customUnitPrice !== 0) {
+                    line.discountPercent = parsePercentInput(line.discountPercent);
+                    discountPercent = line.discountPercent;
+                    effectiveUnitPrice = baseUnitPrice * (100 - discountPercent) / 100;
+                } else {
+                    line.discountPercent = discountPercent;
+                }
+
+                const lineTotal = roundToOneDecimal(effectiveUnitPrice * line.quantity);
+
+                return {
+                    service,
+                    baseUnitPrice,
+                    hasCustomPrice: line.customUnitPrice !== null && line.customUnitPrice !== undefined,
+                    effectiveUnitPrice,
+                    discountPercent: line.discountPercent,
+                    lineTotal
+                };
+            }
+
+            function recalculateSelectedItemsTotals() {
+                let total = 0;
+
+                bookingLineItems.forEach(line => {
+                    const lineTotals = calculateLineTotals(line);
+                    if (!lineTotals) {
+                        return;
+                    }
+
+                    total += lineTotals.lineTotal;
+                    const row = selectedItemsBody.querySelector(`tr[data-line-id="${line.lineId}"]`);
+                    if (row) {
+                        const lineTotalCell = row.querySelector('.line-total');
+                        if (lineTotalCell) {
+                            lineTotalCell.textContent = formatLineMoney(lineTotals.lineTotal);
+                        }
+                    }
+                });
+
+                total = roundToOneDecimal(total);
+                selectedItemsAmount.textContent = formatLineMoney(total);
+                modalAmount.value = total.toFixed(1);
+                updateDiscountReasonVisibility();
+            }
+
+            function sanitizeIntegerInputText(text) {
+                return String(text || '').replace(/[^\d]/g, '');
+            }
+
+            function refreshSelectedItemsTable() {
+                for (let i = bookingLineItems.length - 1; i >= 0; i -= 1) {
+                    const line = bookingLineItems[i];
+                    if (!servicesMap.has(String(line.serviceId || ''))) {
+                        bookingLineItems.splice(i, 1);
+                        editingServicePrices.delete(line.lineId);
+                        editingServicePriceDrafts.delete(line.lineId);
+                    }
+                }
+
+                if (!bookingLineItems.length) {
+                    selectedItemsBody.innerHTML = '<tr><td colspan="5" class="text-muted text-center py-2">Ничего не выбрано</td></tr>';
+                    selectedItemsAmount.textContent = formatLineMoney(0);
+                    modalAmount.value = '0.00';
+                    updateDiscountReasonVisibility();
+                    return;
+                }
+
+                selectedItemsBody.innerHTML = '';
+
+                bookingLineItems.forEach(line => {
+                    const lineTotals = calculateLineTotals(line);
+                    if (!lineTotals) {
+                        return;
+                    }
+
+                    const { service, baseUnitPrice, hasCustomPrice, effectiveUnitPrice, discountPercent, lineTotal } = lineTotals;
+                    const lineId = line.lineId;
+                    const isPriceEditing = editingServicePrices.has(lineId);
+                    if (!isPriceEditing && !editingServicePriceDrafts.has(lineId)) {
+                        editingServicePriceDrafts.set(lineId, hasCustomPrice ? effectiveUnitPrice : baseUnitPrice);
+                    }
+
+                    let priceCellHtml = `<div class="text-end">${formatMoney(hasCustomPrice ? effectiveUnitPrice : baseUnitPrice)}</div>`;
+                    if (allowItemPriceChange) {
+                        if (isPriceEditing) {
+                            const draft = editingServicePriceDrafts.get(lineId);
+                            priceCellHtml = `
+                                <div class="d-flex justify-content-end align-items-center gap-1">
+                                    <input
+                                        type="text"
+                                        inputmode="decimal"
+                                        class="form-control form-control-sm text-end service-price-input"
+                                        style="max-width: 120px;"
+                                        value="${formatEditableNumber(draft)}"
+                                        data-line-id="${lineId}" />
+                                    <button type="button" class="btn btn-sm btn-success service-price-apply" data-line-id="${lineId}" title="Применить">
+                                        <i class="bi bi-check-lg"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-outline-secondary service-price-cancel" data-line-id="${lineId}" title="Отменить">
+                                        <i class="bi bi-x-lg"></i>
+                                    </button>
+                                </div>`;
+                        } else {
+                            priceCellHtml = `
+                                <div class="d-flex justify-content-end align-items-center gap-2">
+                                    <button type="button" class="btn btn-sm btn-outline-secondary service-price-edit" data-line-id="${lineId}">
+                                        Изменить цену
+                                    </button>
+                                    <span>${formatMoney(hasCustomPrice ? effectiveUnitPrice : baseUnitPrice)}</span>
+                                </div>`;
+                        }
+                    }
+
+                    const tr = document.createElement('tr');
+                    tr.dataset.lineId = lineId;
+                    tr.innerHTML = `
+                        <td>
+                            <div class="d-flex align-items-center justify-content-between gap-2">
+                                <span>${service.name}</span>
+                                <button type="button" class="btn btn-sm btn-link text-danger p-0 service-line-remove" data-line-id="${lineId}" title="Удалить позицию">
+                                    <i class="bi bi-x-circle"></i>
+                                </button>
+                            </div>
+                        </td>
+                        <td class="text-end">${priceCellHtml}</td>
+                        <td>
+                            <input
+                                type="text"
+                                inputmode="numeric"
+                                pattern="[0-9]*"
+                                class="form-control form-control-sm text-end service-qty"
+                                value="${line.quantity}"
+                                data-line-id="${lineId}" />
+                        </td>
+                        <td>
+                            <input
+                                type="text"
+                                inputmode="numeric"
+                                pattern="[0-9]*"
+                                class="form-control form-control-sm text-end service-discount"
+                                value="${hasCustomPrice ? formatEditableNumber(discountPercent) : String(parsePercentInput(discountPercent))}"
+                                data-line-id="${lineId}"
+                                ${hasCustomPrice || isPriceEditing ? 'readonly' : ''} />
+                        </td>
+                        <td class="text-end line-total">${formatLineMoney(lineTotal)}</td>
+                    `;
+
+                    selectedItemsBody.appendChild(tr);
+                });
+
+                selectedItemsBody.querySelectorAll('.service-line-remove').forEach(button => {
+                    button.addEventListener('click', () => {
+                        const lineId = String(button.dataset.lineId || '');
+                        removeBookingLine(lineId);
+                    });
+                });
+
+                selectedItemsBody.querySelectorAll('.service-qty').forEach(input => {
+                    input.addEventListener('input', () => {
+                        const lineId = String(input.dataset.lineId || '');
+                        const line = getBookingLine(lineId);
+                        if (!line) {
+                            return;
+                        }
+
+                        const sanitized = sanitizeIntegerInputText(input.value);
+                        if (sanitized !== input.value) {
+                            input.value = sanitized;
+                        }
+
+                        line.quantity = parsePositiveIntInput(sanitized, 1);
+                        recalculateSelectedItemsTotals();
+                    });
+
+                    input.addEventListener('blur', () => {
+                        const lineId = String(input.dataset.lineId || '');
+                        const line = getBookingLine(lineId);
+                        if (!line) {
+                            return;
+                        }
+
+                        line.quantity = parsePositiveIntInput(input.value, 1);
+                        input.value = String(line.quantity);
+                        recalculateSelectedItemsTotals();
+                    });
+                });
+
+                selectedItemsBody.querySelectorAll('.service-discount').forEach(input => {
+                    input.addEventListener('input', () => {
+                        const lineId = String(input.dataset.lineId || '');
+                        const line = getBookingLine(lineId);
+                        if (!line) {
+                            return;
+                        }
+
+                        if (line.customUnitPrice !== null && line.customUnitPrice !== undefined) {
+                            return;
+                        }
+
+                        const sanitized = sanitizeIntegerInputText(input.value);
+                        if (sanitized !== input.value) {
+                            input.value = sanitized;
+                        }
+
+                        const normalizedDiscount = parsePercentInput(sanitized);
+                        line.discountPercent = normalizedDiscount;
+                        if (sanitized.length > 0 && Number(sanitized) > 100) {
+                            input.value = String(normalizedDiscount);
+                        }
+                        recalculateSelectedItemsTotals();
+                    });
+
+                    input.addEventListener('blur', () => {
+                        const lineId = String(input.dataset.lineId || '');
+                        const line = getBookingLine(lineId);
+                        if (!line) {
+                            return;
+                        }
+
+                        if (line.customUnitPrice !== null && line.customUnitPrice !== undefined) {
+                            input.value = formatEditableNumber(line.discountPercent);
+                            return;
+                        }
+
+                        line.discountPercent = parsePercentInput(input.value);
+                        input.value = String(line.discountPercent);
+                        recalculateSelectedItemsTotals();
+                    });
+                });
+
+                selectedItemsBody.querySelectorAll('.service-price-edit').forEach(button => {
+                    button.addEventListener('click', () => {
+                        const lineId = String(button.dataset.lineId || '');
+                        const line = getBookingLine(lineId);
+                        if (!line) {
+                            return;
+                        }
+
+                        const service = servicesMap.get(String(line.serviceId || ''));
+                        if (!service) {
+                            return;
+                        }
+
+                        editingServicePriceDrafts.set(
+                            lineId,
+                            line.customUnitPrice !== null && line.customUnitPrice !== undefined
+                                ? Number(line.customUnitPrice)
+                                : Number(service.price || 0));
+                        editingServicePrices.add(lineId);
+                        refreshSelectedItemsTable();
+                    });
+                });
+
+                selectedItemsBody.querySelectorAll('.service-price-input').forEach(input => {
+                    input.addEventListener('input', () => {
+                        const lineId = String(input.dataset.lineId || '');
+                        editingServicePriceDrafts.set(lineId, input.value);
+                    });
+                });
+
+                selectedItemsBody.querySelectorAll('.service-price-apply').forEach(button => {
+                    button.addEventListener('click', () => {
+                        const lineId = String(button.dataset.lineId || '');
+                        const line = getBookingLine(lineId);
+                        if (!line) {
+                            return;
+                        }
+
+                        const service = servicesMap.get(String(line.serviceId || ''));
+                        if (!service) {
+                            return;
+                        }
+
+                        const draftRaw = editingServicePriceDrafts.get(lineId);
+                        const parsedPrice = parseNonNegativeDecimalInput(draftRaw);
+                        if (parsedPrice === null) {
+                            alert('Укажите корректную цену.');
+                            return;
+                        }
+
+                        const baseUnitPrice = Number(service.price || 0);
+                        if (parsedPrice > baseUnitPrice) {
+                            alert('Новая цена не может быть выше цены в прайс-листе.');
+                            return;
+                        }
+
+                        line.customUnitPrice = parsedPrice;
+                        editingServicePrices.delete(lineId);
+                        editingServicePriceDrafts.delete(lineId);
+                        refreshSelectedItemsTable();
+                    });
+                });
+
+                selectedItemsBody.querySelectorAll('.service-price-cancel').forEach(button => {
+                    button.addEventListener('click', () => {
+                        const lineId = String(button.dataset.lineId || '');
+                        const line = getBookingLine(lineId);
+                        if (!line) {
+                            return;
+                        }
+
+                        line.customUnitPrice = null;
+                        line.discountPercent = 0;
+                        editingServicePrices.delete(lineId);
+                        editingServicePriceDrafts.delete(lineId);
+                        refreshSelectedItemsTable();
+                    });
+                });
+
+                recalculateSelectedItemsTotals();
+                setFieldInvalid(modalServiceItemIds, false);
+            }
+
+            function renderFilterField(field) {
+                const col = document.createElement('div');
+                col.className = 'col-md-3';
+
+                const label = document.createElement('label');
+                label.className = 'form-label small fw-bold';
+                label.textContent = field.Label;
+                col.appendChild(label);
+
+                const inputName = `f_dyn_${field.SystemName}`;
+                let input;
+
+                if (field.DataType === 'EntityLink') {
+                    input = document.createElement('select');
+                    input.className = 'form-select form-select-sm searchable-select';
+                    input.name = inputName;
+                    input.dataset.searchPlaceholder = `Поиск: ${field.Label.toLowerCase()}...`;
+
+                    const emptyOption = document.createElement('option');
+                    emptyOption.value = '';
+                    emptyOption.textContent = 'Все';
+                    input.appendChild(emptyOption);
+
+                    const options = lookupData[field.SystemName] || [];
+                    options.forEach(opt => {
+                        const option = document.createElement('option');
+                        option.value = opt.Value;
+                        option.textContent = opt.Text;
+                        input.appendChild(option);
+                    });
+                } else {
+                    input = document.createElement('input');
+                    input.className = 'form-control form-control-sm';
+                    input.name = inputName;
+                    input.type = field.DataType === 'Date' ? 'date' : (field.DataType === 'DateTime' ? 'datetime-local' : 'text');
+                }
+
+                col.appendChild(input);
+                dynamicFilterFields.appendChild(col);
+            }
+
+            function renderBookingField(field) {
+                const col = document.createElement('div');
+                col.className = 'col-md-6';
+
+                const label = document.createElement('label');
+                label.className = 'form-label small text-muted';
+                label.textContent = field.Label;
+                col.appendChild(label);
+
+                const inputName = `DynamicProps[${field.SystemName}]`;
+                let input;
+
+                if (field.DataType === 'Text') {
+                    input = document.createElement('textarea');
+                    input.className = 'form-control form-control-sm';
+                    input.rows = 2;
+                } else if (field.DataType === 'EntityLink') {
+                    input = document.createElement('select');
+                    input.className = 'form-select form-select-sm searchable-select';
+                    input.dataset.searchPlaceholder = `Поиск: ${field.Label.toLowerCase()}...`;
+
+                    const emptyOption = document.createElement('option');
+                    emptyOption.value = '';
+                    emptyOption.textContent = 'Не выбрано';
+                    input.appendChild(emptyOption);
+
+                    const options = lookupData[field.SystemName] || [];
+                    options.forEach(opt => {
+                        const option = document.createElement('option');
+                        option.value = opt.Value;
+                        option.textContent = opt.Text;
+                        input.appendChild(option);
+                    });
+                } else if (field.DataType === 'Boolean') {
+                    input = document.createElement('select');
+                    input.className = 'form-select form-select-sm';
+
+                    const noOption = document.createElement('option');
+                    noOption.value = 'false';
+                    noOption.textContent = 'Нет';
+                    input.appendChild(noOption);
+
+                    const yesOption = document.createElement('option');
+                    yesOption.value = 'true';
+                    yesOption.textContent = 'Да';
+                    input.appendChild(yesOption);
+                } else {
+                    input = document.createElement('input');
+                    input.className = 'form-control form-control-sm';
+
+                    if (field.DataType === 'Date') {
+                        input.type = 'date';
+                    } else if (field.DataType === 'DateTime') {
+                        input.type = 'datetime-local';
+                    } else if (field.DataType === 'Number' || field.DataType === 'Money') {
+                        input.type = 'number';
+                        input.step = field.DataType === 'Money' ? '0.01' : '1';
+                    } else if (field.DataType === 'File') {
+                        input.type = 'file';
+                        if (field.IsArray) {
+                            input.multiple = true;
+                        }
+                    } else {
+                        input.type = 'text';
+                    }
+                }
+
+                input.name = inputName;
+                input.dataset.dynamicRequired = field.IsRequired ? 'true' : 'false';
+
+                if (field.IsArray && field.DataType !== 'File') {
+                    input.dataset.array = 'true';
+                    if (input.tagName === 'INPUT') {
+                        input.placeholder = 'Несколько значений через перенос строки';
+                    }
+                }
+
+                col.appendChild(input);
+                dynamicBookingFields.appendChild(col);
+            }
+
+            function renderQuickContactField(field) {
+                const col = document.createElement('div');
+                col.className = 'col-md-6';
+
+                const label = document.createElement('label');
+                label.className = 'form-label small text-muted';
+                label.textContent = field.Label;
+                col.appendChild(label);
+
+                const inputName = `DynamicProps[${field.SystemName}]`;
+                let input;
+
+                if (field.DataType === 'Text') {
+                    input = document.createElement('textarea');
+                    input.className = 'form-control form-control-sm quick-contact-dynamic';
+                    input.rows = 2;
+                } else if (field.DataType === 'EntityLink') {
+                    input = document.createElement('select');
+                    input.className = 'form-select form-select-sm searchable-select quick-contact-dynamic';
+                    input.dataset.searchPlaceholder = `Поиск: ${field.Label.toLowerCase()}...`;
+
+                    const emptyOption = document.createElement('option');
+                    emptyOption.value = '';
+                    emptyOption.textContent = 'Не выбрано';
+                    input.appendChild(emptyOption);
+
+                    const options = contactLookupData[field.SystemName] || [];
+                    options.forEach(opt => {
+                        const option = document.createElement('option');
+                        option.value = opt.Value;
+                        option.textContent = opt.Text;
+                        input.appendChild(option);
+                    });
+                } else if (field.DataType === 'Boolean') {
+                    input = document.createElement('select');
+                    input.className = 'form-select form-select-sm quick-contact-dynamic';
+
+                    const noOption = document.createElement('option');
+                    noOption.value = 'false';
+                    noOption.textContent = 'Нет';
+                    input.appendChild(noOption);
+
+                    const yesOption = document.createElement('option');
+                    yesOption.value = 'true';
+                    yesOption.textContent = 'Да';
+                    input.appendChild(yesOption);
+                } else {
+                    input = document.createElement('input');
+                    input.className = 'form-control form-control-sm quick-contact-dynamic';
+
+                    if (field.DataType === 'Date') {
+                        input.type = 'date';
+                    } else if (field.DataType === 'DateTime') {
+                        input.type = 'datetime-local';
+                    } else if (field.DataType === 'Number' || field.DataType === 'Money') {
+                        input.type = 'number';
+                        input.step = field.DataType === 'Money' ? '0.01' : '1';
+                    } else if (field.DataType === 'File') {
+                        input.type = 'file';
+                        if (field.IsArray) {
+                            input.multiple = true;
+                        }
+                    } else {
+                        input.type = 'text';
+                    }
+                }
+
+                input.name = inputName;
+                input.dataset.dynamicRequired = field.IsRequired ? 'true' : 'false';
+
+                if (field.IsArray && field.DataType !== 'File') {
+                    input.dataset.array = 'true';
+                    if (input.tagName === 'INPUT') {
+                        input.placeholder = 'Несколько значений через перенос строки';
+                    }
+                }
+
+                col.appendChild(input);
+                quickContactDynamicFields.appendChild(col);
+            }
+
+            function getFilterValues() {
+                const result = {};
+                filterForm.querySelectorAll('[name^="f_"]').forEach(input => {
+                    result[input.name] = input.value || '';
+                });
+                return result;
+            }
+
+            function applyFilterValues(values) {
+                filterForm.querySelectorAll('[name^="f_"]').forEach(input => {
+                    const value = values[input.name] || '';
+                    input.value = value;
+                    if (input.tagName === 'SELECT') {
+                        setSelectValue(input, value);
+                    }
+                });
+            }
+
+            function getAntiForgeryToken() {
+                const tokenInput = bookingForm.querySelector('input[name="__RequestVerificationToken"]');
+                return tokenInput ? tokenInput.value : '';
+            }
+
+            function renderFilterPresets(selectedId) {
+                savedFilterSelect.innerHTML = '<option value="">Сохраненные фильтры</option>';
+
+                presetCache.forEach(preset => {
+                    const option = document.createElement('option');
+                    option.value = preset.id;
+                    option.textContent = preset.name;
+                    savedFilterSelect.appendChild(option);
+                });
+
+                if (selectedId) {
+                    savedFilterSelect.value = selectedId;
+                }
+            }
+
+            async function reloadFilterPresets(selectedId) {
+                try {
+                    const response = await fetch('/Schedule/GetFilterPresets');
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+
+                    const data = await response.json();
+                    presetCache = Array.isArray(data) ? data : [];
+                    renderFilterPresets(selectedId);
+                } catch {
+                    presetCache = [];
+                    renderFilterPresets();
+                }
+            }
+
+            function buildFilterParams(info) {
+                const params = new URLSearchParams();
+                params.set('start', info.startStr);
+                params.set('end', info.endStr);
+
+                const formData = new FormData(filterForm);
+                for (const [key, value] of formData.entries()) {
+                    const text = String(value || '').trim();
+                    if (text.length > 0) {
+                        params.set(key, text);
+                    }
+                }
+
+                return params;
+            }
+
+            function clearDynamicBookingFields() {
+                dynamicBookingFields.querySelectorAll('[name^="DynamicProps["]').forEach(input => {
+                    if (input.type === 'file') {
+                        input.value = '';
+                    } else if (input.tagName === 'SELECT') {
+                        setSelectValue(input, '');
+                    } else {
+                        input.value = '';
+                    }
+                });
+            }
+
+            function extractDynamicName(inputName) {
+                const match = /^DynamicProps\[(.+)]$/.exec(inputName || '');
+                return match ? match[1] : '';
+            }
+
+            function parseProperties(raw) {
+                if (!raw) {
+                    return {};
+                }
+
+                if (typeof raw === 'object') {
+                    return raw;
+                }
+
+                if (typeof raw === 'string') {
+                    try {
+                        return JSON.parse(raw);
+                    } catch {
+                        return {};
+                    }
+                }
+
+                return {};
+            }
+
+            function normalizePropertyValue(value) {
+                if (value && typeof value === 'object' && value.valueKind !== undefined) {
+                    return value;
+                }
+                return value;
+            }
+
+            function setDynamicValues(rawProperties) {
+                const properties = parseProperties(rawProperties);
+
+                dynamicBookingFields.querySelectorAll('[name^="DynamicProps["]').forEach(input => {
+                    const dynamicName = extractDynamicName(input.name);
+                    const rawValue = normalizePropertyValue(properties[dynamicName]);
+
+                    if (rawValue === null || rawValue === undefined) {
+                        if (input.type === 'file') {
+                            input.value = '';
+                        } else if (input.tagName === 'SELECT') {
+                            setSelectValue(input, '');
+                        } else {
+                            input.value = '';
+                        }
+                        return;
+                    }
+
+                    if (input.type === 'file') {
+                        return;
+                    }
+
+                    if (input.dataset.array === 'true') {
+                        const values = Array.isArray(rawValue)
+                            ? rawValue
+                            : [rawValue];
+                        input.value = values.map(v => String(v)).join('\n');
+                        return;
+                    }
+
+                    if (input.tagName === 'SELECT') {
+                        setSelectValue(input, String(rawValue));
+                        return;
+                    }
+
+                    if (input.type === 'datetime-local') {
+                        input.value = normalizeDateTimeForInput(rawValue);
+                        return;
+                    }
+
+                    if (input.type === 'date') {
+                        input.value = normalizeDateForInput(rawValue);
+                        return;
+                    }
+
+                    input.value = String(rawValue);
+                });
+            }
+
+            function resetBookingModalForCreate(start, end, source) {
+                isEditMode = false;
+                createSource = source || 'calendar';
+                activeBookingId = null;
+                modalBookingId.value = '';
+                modalResult.innerHTML = '';
+                clearValidation();
+
+                bookingModalTitle.innerHTML = '<i class="bi bi-calendar-plus me-2"></i> Новое бронирование';
+                saveBookingBtn.textContent = 'Сохранить';
+                deleteBookingBtn.classList.add('d-none');
+
+                modalCreatedByEmployeeName.value = currentEmployeeName;
+                modalComment.value = '';
+                modalAmount.value = '0.00';
+                modalDiscountReason.value = '';
+                modalStart.value = toLocalInput(start);
+                modalEnd.value = toLocalInput(end);
+
+                clearBookingLines();
+                setSelectValue(modalServiceItemIds, '');
+                setSelectValue(modalContactIds, []);
+                setStatusValue(getDefaultStatusId());
+
+                const resourceFilter = filterForm.querySelector('[name="f_resourceId"]');
+                setSelectValue(modalResourceId, resourceFilter && resourceFilter.value ? resourceFilter.value : '');
+
+                const performerFilter = filterForm.querySelector('[name="f_performerEmployeeId"]');
+                setSelectValue(modalPerformerEmployeeId, performerFilter && performerFilter.value ? performerFilter.value : '');
+
+                clearDynamicBookingFields();
+                refreshSelectedItemsTable();
+            }
+
+            function applySelectedServices(services, fallbackServiceId) {
+                clearBookingLines();
+
+                (services || []).forEach(service => {
+                    const serviceId = String(service.serviceItemId || '');
+                    if (!serviceId) {
+                        return;
+                    }
+
+                    const qty = Number(service.quantity || 1);
+                    const discount = Number(service.discountAmount || 0);
+                    const customUnitPrice = Number(service.customUnitPrice);
+                    appendBookingLine(
+                        serviceId,
+                        qty > 0 ? Math.round(qty) : 1,
+                        discount > 0 ? discount : 0,
+                        Number.isFinite(customUnitPrice) && customUnitPrice >= 0 ? customUnitPrice : null);
+                });
+
+                if (!bookingLineItems.length && fallbackServiceId) {
+                    const fallbackId = String(fallbackServiceId);
+                    if (servicesMap.has(fallbackId)) {
+                        appendBookingLine(fallbackId, 1, 0, null);
+                    }
+                }
+
+                setSelectValue(modalServiceItemIds, '');
+                refreshSelectedItemsTable();
+            }
+
+            async function openBookingForEdit(bookingId) {
+                clearValidation();
+                modalResult.innerHTML = '';
+
+                try {
+                    const response = await fetch(`/Schedule/GetBooking?id=${encodeURIComponent(bookingId)}`);
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+
+                    const result = await response.json();
+                    if (!result.success || !result.booking) {
+                        alert(result.message || 'Не удалось загрузить запись.');
+                        return;
+                    }
+
+                    const booking = result.booking;
+                    isEditMode = true;
+                    createSource = 'edit';
+                    activeBookingId = String(booking.id);
+                    modalBookingId.value = activeBookingId;
+
+                    bookingModalTitle.innerHTML = '<i class="bi bi-calendar-check me-2"></i> Запись в расписании';
+                    saveBookingBtn.textContent = 'Сохранить изменения';
+                    deleteBookingBtn.classList.remove('d-none');
+
+                    modalCreatedByEmployeeName.value = booking.createdByName || currentEmployeeName;
+
+                    setSelectValue(modalResourceId, booking.resourceId || '');
+                    setSelectValue(modalPerformerEmployeeId, booking.performerEmployeeId || '');
+                    setSelectValue(modalContactIds, (booking.contacts || []).map(x => String(x.contactId)));
+                    applySelectedServices(booking.services || [], booking.primaryServiceItemId || null);
+                    setStatusValue(booking.statusId || getDefaultStatusId());
+                    modalDiscountReason.value = booking.discountReason || '';
+
+                    modalStart.value = normalizeDateTimeForInput(booking.start);
+                    modalEnd.value = normalizeDateTimeForInput(booking.end);
+                    modalComment.value = booking.comment || '';
+
+                    setDynamicValues(booking.properties);
+                    bookingModal.show();
+                } catch {
+                    alert('Ошибка сети при загрузке записи.');
+                }
+            }
+
+            function validateRequiredFields() {
+                clearValidation();
+                modalResult.innerHTML = '';
+
+                let hasErrors = false;
+
+                const requiredBase = [modalResourceId, modalPerformerEmployeeId, modalStart, modalEnd];
+                requiredBase.forEach(input => {
+                    const invalid = !input.value || String(input.value).trim().length === 0;
+                    setFieldInvalid(input, invalid);
+                    hasErrors = hasErrors || invalid;
+                });
+
+                const invalidServices = bookingLineItems.length === 0;
+                setFieldInvalid(modalServiceItemIds, invalidServices);
+                hasErrors = hasErrors || invalidServices;
+
+                const invalidStatus = !modalStatusId.value || String(modalStatusId.value).trim().length === 0;
+                setStatusInvalid(invalidStatus);
+                hasErrors = hasErrors || invalidStatus;
+
+                const hasDiscount = bookingLineItems.some(line => Number(line.discountPercent || 0) > 0);
+                if (hasDiscount) {
+                    const invalidDiscountReason = !modalDiscountReason.value || String(modalDiscountReason.value).trim().length === 0;
+                    modalDiscountReason.classList.toggle('is-invalid', invalidDiscountReason);
+                    hasErrors = hasErrors || invalidDiscountReason;
+                } else {
+                    modalDiscountReason.classList.remove('is-invalid');
+                }
+
+                if (!hasErrors) {
+                    const startValue = parseDate(modalStart.value);
+                    const endValue = parseDate(modalEnd.value);
+                    if (!startValue || !endValue || startValue >= endValue) {
+                        setFieldInvalid(modalStart, true);
+                        setFieldInvalid(modalEnd, true);
+                        modalResult.innerHTML = '<span class="text-danger">Время окончания должно быть позже времени начала.</span>';
+                        return false;
+                    }
+                }
+
+                dynamicBookingFields.querySelectorAll('[name^="DynamicProps["]').forEach(input => {
+                    const isRequired = input.dataset.dynamicRequired === 'true';
+                    if (!isRequired) {
+                        return;
+                    }
+
+                    let invalid = false;
+                    if (input.type === 'file') {
+                        invalid = !input.files || input.files.length === 0;
+                    } else if (input.dataset.array === 'true') {
+                        const parts = (input.value || '')
+                            .split(/\n|,/)
+                            .map(x => x.trim())
+                            .filter(x => x.length > 0);
+                        invalid = parts.length === 0;
+                    } else {
+                        invalid = !input.value || String(input.value).trim().length === 0;
+                    }
+
+                    setFieldInvalid(input, invalid);
+                    hasErrors = hasErrors || invalid;
+                });
+
+                if (hasErrors && modalResult.innerHTML.length === 0) {
+                    modalResult.innerHTML = '<span class="text-danger">Заполните обязательные поля, они выделены красным.</span>';
+                }
+
+                return !hasErrors;
+            }
+
+            function buildBookingFormData(options) {
+                const opts = options || {};
+                const token = getAntiForgeryToken();
+                const formData = new FormData();
+
+                formData.append('__RequestVerificationToken', token);
+                if (isEditMode && activeBookingId) {
+                    formData.append('bookingId', activeBookingId);
+                }
+
+                formData.append('resourceId', modalResourceId.value);
+                formData.append('performerEmployeeId', modalPerformerEmployeeId.value);
+                formData.append('statusId', modalStatusId.value || '');
+                formData.append('start', modalStart.value);
+                formData.append('end', modalEnd.value);
+                formData.append('comment', modalComment.value || '');
+                formData.append('amount', modalAmount.value || '0');
+                formData.append('discountReason', modalDiscountReason.value || '');
+                formData.append('allowOutOfHours', opts.allowOutOfHours ? 'true' : 'false');
+                formData.append('createSource', isEditMode ? 'edit' : createSource);
+
+                getSelectedValues(modalContactIds).forEach(contactId => {
+                    formData.append('contactIds', contactId);
+                });
+
+                bookingLineItems.forEach(line => {
+                    const lineTotals = calculateLineTotals(line);
+                    if (!lineTotals) {
+                        return;
+                    }
+
+                    formData.append('serviceItemIds', line.serviceId);
+                    formData.append('lineServiceId', line.serviceId);
+                    formData.append('lineQuantity', String(line.quantity));
+                    formData.append('lineDiscountPercent', String(roundToOneDecimal(line.discountPercent || 0)));
+                    formData.append(
+                        'lineCustomUnitPrice',
+                        line.customUnitPrice !== null && line.customUnitPrice !== undefined
+                            ? String(line.customUnitPrice)
+                            : '');
+                });
+
+                dynamicBookingFields.querySelectorAll('[name^="DynamicProps["]').forEach(input => {
+                    const fieldName = input.name;
+
+                    if (input.type === 'file') {
+                        const files = input.files || [];
+                        for (const file of files) {
+                            formData.append(fieldName, file);
+                        }
+                        return;
+                    }
+
+                    if (input.dataset.array === 'true') {
+                        const parts = (input.value || '')
+                            .split(/\n|,/)
+                            .map(x => x.trim())
+                            .filter(x => x.length > 0);
+                        parts.forEach(part => formData.append(fieldName, part));
+                        return;
+                    }
+
+                    if (input.value !== null && String(input.value).trim().length > 0) {
+                        formData.append(fieldName, input.value);
+                    }
+                });
+
+                return formData;
+            }
+
+            function resetQuickContactForm() {
+                quickContactForm.reset();
+                quickContactPhonesContainer.innerHTML = '';
+                quickContactEmailsContainer.innerHTML = '';
+                appendQuickCollectionInput(quickContactPhonesContainer, 'phones', 'text', '+7...');
+                appendQuickCollectionInput(quickContactEmailsContainer, 'emails', 'email', 'user@example.com');
+                quickContactResult.innerHTML = '';
+
+                quickContactDynamicFields.querySelectorAll('.quick-contact-dynamic').forEach(input => {
+                    if (input.type === 'file') {
+                        input.value = '';
+                    } else if (input.tagName === 'SELECT') {
+                        setSelectValue(input, '');
+                    } else {
+                        input.value = '';
+                    }
+                });
+            }
+
+            function upsertContactOption(contactId, contactName) {
+                const id = String(contactId);
+                const name = String(contactName || '').trim();
+                if (!id || !name) {
+                    return;
+                }
+
+                contactsMap.set(id, { id, name });
+
+                const hasInModal = Array.from(modalContactIds.options).some(o => o.value === id);
+                if (!hasInModal) {
+                    const modalOption = document.createElement('option');
+                    modalOption.value = id;
+                    modalOption.textContent = name;
+                    modalContactIds.appendChild(modalOption);
+                }
+
+                const hasInFilter = Array.from(contactFilterSelect.options).some(o => o.value === id);
+                if (!hasInFilter) {
+                    const filterOption = document.createElement('option');
+                    filterOption.value = id;
+                    filterOption.textContent = name;
+                    contactFilterSelect.appendChild(filterOption);
+                }
+
+                const selected = getSelectedValues(modalContactIds);
+                if (!selected.includes(id)) {
+                    selected.push(id);
+                }
+                setSelectValue(modalContactIds, selected);
+            }
+
+            customFields.forEach(field => {
+                renderFilterField(field);
+                renderBookingField(field);
+            });
+            contactCustomFields.forEach(field => {
+                renderQuickContactField(field);
+            });
+
+            buildServiceOptions();
+            buildContactOptions();
+            buildStatusPicker();
+            initSearchableSelects(document);
+            initSearchableSelects(quickContactModalEl);
+            setStatusValue(getDefaultStatusId());
+            resetQuickContactForm();
+            refreshSelectedItemsTable();
+
+            bookingForm.querySelectorAll('input, textarea, select').forEach(input => {
+                input.addEventListener('input', () => setFieldInvalid(input, false));
+                input.addEventListener('change', () => setFieldInvalid(input, false));
+            });
+
+            const handleServiceSelection = () => {
+                const serviceId = String(modalServiceItemIds.value || '');
+                if (!serviceId) {
+                    return;
+                }
+
+                addBookingLine(serviceId);
+                setSelectValue(modalServiceItemIds, '');
+            };
+
+            if (hasJquery) {
+                window.jQuery(modalServiceItemIds).on('change', handleServiceSelection);
+            } else {
+                modalServiceItemIds.addEventListener('change', handleServiceSelection);
+            }
+            statusPickerButton.addEventListener('click', () => setStatusInvalid(false));
+
+            document.getElementById('openQuickContactBtn').addEventListener('click', () => {
+                resetQuickContactForm();
+                quickContactModal.show();
+            });
+
+            document.getElementById('addQuickContactPhoneBtn').addEventListener('click', () => {
+                appendQuickCollectionInput(quickContactPhonesContainer, 'phones', 'text', '+7...');
+            });
+
+            document.getElementById('addQuickContactEmailBtn').addEventListener('click', () => {
+                appendQuickCollectionInput(quickContactEmailsContainer, 'emails', 'email', 'user@example.com');
+            });
+
+            quickContactModalEl.addEventListener('hidden.bs.modal', () => {
+                if (bookingModalEl.classList.contains('show')) {
+                    document.body.classList.add('modal-open');
+                }
+            });
+
+            document.getElementById('saveQuickContactBtn').addEventListener('click', async () => {
+                const lastName = (quickContactLastName.value || '').trim();
+                const firstName = (quickContactFirstName.value || '').trim();
+
+                if (!lastName || !firstName) {
+                    quickContactResult.innerHTML = '<span class="text-danger">Заполните фамилию и имя контакта.</span>';
+                    return;
+                }
+
+                quickContactResult.innerHTML = '';
+                const formData = new FormData(quickContactForm);
+
+                try {
+                    const response = await fetch('/Schedule/CreateQuickContact', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    const result = await response.json();
+                    if (!result.success) {
+                        quickContactResult.innerHTML = `<span class="text-danger">${result.message || 'Не удалось создать контакт.'}</span>`;
+                        return;
+                    }
+
+                    upsertContactOption(result.id, result.name);
+                    quickContactModal.hide();
+                } catch {
+                    quickContactResult.innerHTML = '<span class="text-danger">Ошибка сети при создании контакта.</span>';
+                }
+            });
+
+            if (!window.FullCalendar || !window.FullCalendar.Calendar) {
+                document.getElementById('bookingCalendar').innerHTML =
+                    '<div class="alert alert-warning mb-0">Не удалось загрузить календарь. Обновите страницу или проверьте доступ к CDN fullcalendar.</div>';
+                return;
+            }
+
+            calendar = new FullCalendar.Calendar(document.getElementById('bookingCalendar'), {
+                initialView: 'timeGridWeek',
+                locale: 'ru',
+                firstDay: 1,
+                slotMinTime: '@ViewBag.MinTime',
+                slotMaxTime: '@ViewBag.MaxTime',
+                slotDuration: '00:15:00',
+                snapDuration: '00:15:00',
+                allDaySlot: false,
+                selectable: true,
+                editable: false,
+                selectMirror: true,
+
+                headerToolbar: {
+                    left: 'prev,next today',
+                    center: 'title',
+                    right: 'dayGridMonth,timeGridWeek,timeGridDay'
+                },
+                buttonText: { today: 'Сегодня', month: 'Месяц', week: 'Неделя', day: 'День' },
+
+                events: function(info, successCallback, failureCallback) {
+                    const params = buildFilterParams(info);
+                    fetch(`/Schedule/GetEvents?${params.toString()}`)
+                        .then(resp => resp.json())
+                        .then(data => {
+                            const slotRange = resolveCalendarSlotRange(data);
+                            if (slotRange.minTime !== currentSlotMinTime) {
+                                currentSlotMinTime = slotRange.minTime;
+                                calendar.setOption('slotMinTime', slotRange.minTime);
+                            }
+
+                            if (slotRange.maxTime !== currentSlotMaxTime) {
+                                currentSlotMaxTime = slotRange.maxTime;
+                                calendar.setOption('slotMaxTime', slotRange.maxTime);
+                            }
+
+                            successCallback(data);
+                        })
+                        .catch(err => failureCallback(err));
+                },
+
+                select: function(info) {
+                    resetBookingModalForCreate(info.start, info.end, 'calendar');
+                    bookingModal.show();
+                    calendar.unselect();
+                },
+
+                eventClick: function(info) {
+                    openBookingForEdit(info.event.id);
+                }
+            });
+
+            calendar.render();
+
+            addBookingBtn.addEventListener('click', () => {
+                const range = getCreateRangeFromButton();
+                resetBookingModalForCreate(range.start, range.end, 'button');
+                bookingModal.show();
+            });
+
+            document.getElementById('applyFiltersBtn').addEventListener('click', () => {
+                calendar.refetchEvents();
+            });
+
+            document.getElementById('resetFiltersBtn').addEventListener('click', () => {
+                filterForm.reset();
+                filterForm.querySelectorAll('select').forEach(select => {
+                    setSelectValue(select, '');
+                });
+                calendar.refetchEvents();
+            });
+
+            document.getElementById('saveCurrentFilterBtn').addEventListener('click', async () => {
+                const name = prompt('Название фильтра:');
+                if (!name || name.trim().length === 0) {
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('__RequestVerificationToken', getAntiForgeryToken());
+                formData.append('name', name.trim());
+
+                const values = getFilterValues();
+                Object.keys(values).forEach(key => {
+                    formData.append(`values[${key}]`, values[key] || '');
+                });
+
+                try {
+                    const response = await fetch('/Schedule/SaveFilterPreset', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    const result = await response.json();
+                    if (!result.success) {
+                        alert(result.message || 'Не удалось сохранить фильтр.');
+                        return;
+                    }
+
+                    await reloadFilterPresets(result.id);
+                } catch {
+                    alert('Ошибка сети при сохранении фильтра.');
+                }
+            });
+
+            document.getElementById('applySavedFilterBtn').addEventListener('click', () => {
+                const selectedId = savedFilterSelect.value;
+                if (!selectedId) {
+                    return;
+                }
+
+                const preset = presetCache.find(x => String(x.id) === selectedId);
+                if (!preset) {
+                    return;
+                }
+
+                applyFilterValues(preset.values || {});
+                const collapse = bootstrap.Collapse.getOrCreateInstance(document.getElementById('scheduleFilterCollapse'));
+                collapse.show();
+                calendar.refetchEvents();
+            });
+
+            document.getElementById('deleteSavedFilterBtn').addEventListener('click', async () => {
+                const selectedId = savedFilterSelect.value;
+                if (!selectedId) {
+                    return;
+                }
+
+                if (!confirm('Удалить выбранный пресет фильтра?')) {
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('__RequestVerificationToken', getAntiForgeryToken());
+                formData.append('id', selectedId);
+
+                try {
+                    const response = await fetch('/Schedule/DeleteFilterPreset', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    const result = await response.json();
+                    if (!result.success) {
+                        alert(result.message || 'Не удалось удалить пресет.');
+                        return;
+                    }
+
+                    await reloadFilterPresets();
+                } catch {
+                    alert('Ошибка сети при удалении пресета.');
+                }
+            });
+
+            saveBookingBtn.addEventListener('click', async () => {
+                if (!validateRequiredFields()) {
+                    return;
+                }
+
+                let allowOutOfHours = false;
+                const startValue = parseDate(modalStart.value);
+                const endValue = parseDate(modalEnd.value);
+                if (startValue && endValue) {
+                    const outsideWorkHours = isOutsideCompanyWorkHours(startValue, endValue);
+                    if (!isEditMode && outsideWorkHours && createSource !== 'button') {
+                        modalResult.innerHTML = '<span class="text-danger">Запись вне рабочего времени можно создать только через кнопку "Добавить запись".</span>';
+                        return;
+                    }
+
+                    if (outsideWorkHours) {
+                        const accepted = confirm('Время записи выходит за рамки рабочего графика компании. Сохранить такую запись?');
+                        if (!accepted) {
+                            return;
+                        }
+
+                        allowOutOfHours = true;
+                    }
+                }
+
+                const url = isEditMode ? '/Schedule/UpdateBooking' : '/Schedule/CreateBooking';
+
+                try {
+                    const submitBooking = async (allowOutOfHoursFlag) => {
+                        const formData = buildBookingFormData({ allowOutOfHours: allowOutOfHoursFlag });
+                        const response = await fetch(url, {
+                            method: 'POST',
+                            body: formData
+                        });
+                        return response.json();
+                    };
+
+                    let result = await submitBooking(allowOutOfHours);
+
+                    const needsOutOfHoursConfirmation = !result.success &&
+                        !allowOutOfHours &&
+                        String(result.message || '').toLowerCase().includes('подтвердите') &&
+                        String(result.message || '').toLowerCase().includes('вне рабочего времени');
+
+                    if (needsOutOfHoursConfirmation) {
+                        const accepted = confirm('Время записи выходит за рамки рабочего графика компании. Сохранить такую запись?');
+                        if (!accepted) {
+                            return;
+                        }
+
+                        result = await submitBooking(true);
+                    }
+
+                    if (result.success) {
+                        bookingModal.hide();
+                        calendar.refetchEvents();
+                    } else {
+                        modalResult.innerHTML = `<span class="text-danger">${result.message || 'Не удалось сохранить запись.'}</span>`;
+                    }
+                } catch {
+                    modalResult.innerHTML = '<span class="text-danger">Ошибка сети при сохранении.</span>';
+                }
+            });
+
+            deleteBookingBtn.addEventListener('click', async () => {
+                if (!activeBookingId) {
+                    return;
+                }
+
+                if (!confirm('Удалить запись из расписания?')) {
+                    return;
+                }
+
+                const formData = new FormData();
+                formData.append('__RequestVerificationToken', getAntiForgeryToken());
+                formData.append('id', activeBookingId);
+
+                try {
+                    const response = await fetch('/Schedule/DeleteBooking', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    const result = await response.json();
+                    if (result.success) {
+                        bookingModal.hide();
+                        calendar.refetchEvents();
+                    } else {
+                        modalResult.innerHTML = `<span class="text-danger">${result.message || 'Не удалось удалить запись.'}</span>`;
+                    }
+                } catch {
+                    modalResult.innerHTML = '<span class="text-danger">Ошибка сети при удалении записи.</span>';
+                }
+            });
+
+            bookingModalEl.addEventListener('hidden.bs.modal', () => {
+                isEditMode = false;
+                activeBookingId = null;
+                createSource = 'calendar';
+                modalBookingId.value = '';
+            });
+
+            reloadFilterPresets();
+        } catch (error) {
+            const target = document.getElementById('bookingCalendar');
+            if (target) {
+                target.innerHTML = '<div class="alert alert-danger mb-0">Ошибка инициализации расписания. Откройте консоль браузера для деталей.</div>';
+            }
+            console.error(error);
+        }
+    });
+</script>
+}

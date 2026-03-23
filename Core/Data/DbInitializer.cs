@@ -1,6 +1,8 @@
-﻿using Core.Entities.Platform;
+using Core.Entities.Platform;
 using Core.Entities.CRM;
 using Core.Entities.Company;
+using Core.Entities.System;
+using Core.Constants;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -9,6 +11,8 @@ namespace Core.Data
 {
     public static class DbInitializer
     {
+        private const string BookingEntityCode = "ResourceBooking";
+
         public static async Task Initialize(AppDbContext context, UserManager<Employee> userManager, IConfiguration configuration)
         {
             // --- ШАГ 1: Категории меню ---
@@ -17,19 +21,25 @@ namespace Core.Data
             // --- ШАГ 2: Системные приложения (Определения) ---
             await EnsureAppDefinitionsAsync(context, catCRM);
 
-            // --- ШАГ 3: Обязательное системное поле "Название" для пользовательских сущностей ---
+            // --- ШАГ 3: Переключатели модулей (под тарифы) ---
+            await EnsureFeatureTogglesAsync(context);
+
+            // --- ШАГ 4: Глобальная политика бронирования ---
+            await EnsureBookingPolicyAsync(context);
+
+            // --- ШАГ 5: Обязательное системное поле "Название" для пользовательских сущностей ---
             await EnsureNameFieldsAsync(context);
 
-            // --- ШАГ 4: Базовые формы (Create/Edit/View) с полем "Название" ---
+            // --- ШАГ 6: Базовые формы (Create/Edit/View) с полем "Название" ---
             await EnsureDefaultFormsAsync(context);
 
-            // --- ШАГ 5: Специфические поля для CRM ---
+            // --- ШАГ 7: Специфические поля для CRM ---
             await EnsureCrmFieldsAsync(context);
 
-            // --- ШАГ 6: Базовые воронки и этапы ---
+            // --- ШАГ 8: Базовые воронки и этапы ---
             await EnsureDefaultPipelinesAsync(context);
 
-            // --- ШАГ 7: Создание администратора из конфигурации ---
+            // --- ШАГ 9: Создание администратора из конфигурации ---
             await EnsureAdminAsync(userManager, configuration);
         }
 
@@ -103,6 +113,7 @@ namespace Core.Data
                 new AppDefinition { Name = "Сотрудники", EntityCode = "Employee", Icon = "person-badge", IsSystem = true, AppCategoryId = catCompany?.Id },
                 new AppDefinition { Name = "Должности", EntityCode = "Position", Icon = "briefcase", IsSystem = true, AppCategoryId = catCompany?.Id },
                 new AppDefinition { Name = "Подразделения", EntityCode = "Department", Icon = "diagram-3", IsSystem = true, AppCategoryId = catCompany?.Id },
+                new AppDefinition { Name = "Бронирования", EntityCode = BookingEntityCode, Icon = "calendar2-check", IsSystem = true, AppCategoryId = catCompany?.Id },
                 new AppDefinition { Name = "Услуги", EntityCode = "ServiceItem", Icon = "cart-check", IsSystem = true, AppCategoryId = catCompany?.Id },
                 new AppDefinition { Name = "Категории услуг", EntityCode = "ServiceCategory", Icon = "folder2", IsSystem = true, AppCategoryId = catCompany?.Id },
                 new AppDefinition { Name = "Все задачи", EntityCode = "TASK", Icon = "check2-all", IsSystem = true, AppCategoryId = catTasks?.Id }
@@ -127,10 +138,71 @@ namespace Core.Data
             await context.SaveChangesAsync();
         }
 
+        private static async Task EnsureFeatureTogglesAsync(AppDbContext context)
+        {
+            var defaults = new List<FeatureToggle>
+            {
+                new()
+                {
+                    Id = Guid.NewGuid(),
+                    FeatureCode = PlatformFeatures.Crm,
+                    IsEnabled = true,
+                    Description = "Базовые CRM-сценарии (контакты, лиды, сделки).",
+                    UpdatedAt = DateTime.UtcNow
+                },
+                new()
+                {
+                    Id = Guid.NewGuid(),
+                    FeatureCode = PlatformFeatures.Booking,
+                    IsEnabled = true,
+                    Description = "Блок бронирования ресурсов.",
+                    UpdatedAt = DateTime.UtcNow
+                }
+            };
+
+            foreach (var item in defaults)
+            {
+                var existing = await context.FeatureToggles
+                    .FirstOrDefaultAsync(x => x.FeatureCode == item.FeatureCode);
+
+                if (existing == null)
+                {
+                    context.FeatureToggles.Add(item);
+                }
+                else if (string.IsNullOrWhiteSpace(existing.Description))
+                {
+                    existing.Description = item.Description;
+                    existing.UpdatedAt = DateTime.UtcNow;
+                }
+            }
+
+            await context.SaveChangesAsync();
+        }
+
+        private static async Task EnsureBookingPolicyAsync(AppDbContext context)
+        {
+            var existing = await context.BookingPolicySettings.FirstOrDefaultAsync();
+            if (existing != null)
+            {
+                return;
+            }
+
+            context.BookingPolicySettings.Add(new BookingPolicySettings
+            {
+                Id = Guid.NewGuid(),
+                AllowOverbooking = false,
+                MaxParallelBookings = 2,
+                AllowManualItemPriceChange = false,
+                UpdatedAt = DateTime.UtcNow
+            });
+
+            await context.SaveChangesAsync();
+        }
+
         private static async Task EnsureNameFieldsAsync(AppDbContext context)
         {
             var appIds = await context.AppDefinitions
-                .Where(a => !a.IsSystem)
+                .Where(a => !a.IsSystem || a.EntityCode == BookingEntityCode)
                 .Select(a => a.Id)
                 .ToListAsync();
 

@@ -1,8 +1,15 @@
 ﻿@using Core.Entities.Company
+@using Core.Entities.CRM
+@using Core.Entities.System
 @model List<CompanyWorkMode>
 @{
     ViewData["Title"] = "Режим работы";
     var holidays = ViewBag.Holidays as List<CompanyHoliday> ?? new List<CompanyHoliday>();
+    var resources = ViewBag.Resources as List<CrmResource> ?? new List<CrmResource>();
+    var bookingPolicy = ViewBag.BookingPolicy as BookingPolicySettings ?? new BookingPolicySettings();
+    var bookingStatuses = ViewBag.BookingStatuses as List<BookingStatus> ?? new List<BookingStatus>();
+    var crmFeatureEnabled = ViewBag.CrmFeatureEnabled is bool crmEnabled && crmEnabled;
+    var bookingFeatureEnabled = ViewBag.BookingFeatureEnabled is bool bookingEnabled && bookingEnabled;
     
     string GetDayName(DayOfWeek day) => day switch {
         DayOfWeek.Monday => "Понедельник",
@@ -14,9 +21,36 @@
         DayOfWeek.Sunday => "Воскресенье",
         _ => day.ToString()
     };
+
+    string GetStatusCategoryName(BookingStatusCategory category) => category switch
+    {
+        BookingStatusCategory.New => "Новая запись (1)",
+        BookingStatusCategory.Intermediate => "Промежуточный (много)",
+        BookingStatusCategory.SuccessFinal => "Завершён успешно (1)",
+        BookingStatusCategory.FailedFinal => "Завершён неуспешно (много)",
+        _ => category.ToString()
+    };
+
+    string GetStatusColorClass(BookingStatusCategory category) => category switch
+    {
+        BookingStatusCategory.New => "warning",
+        BookingStatusCategory.Intermediate => "info",
+        BookingStatusCategory.SuccessFinal => "success",
+        BookingStatusCategory.FailedFinal => "danger",
+        _ => "secondary"
+    };
 }
 
 <div class="container-fluid">
+    @if (TempData["Success"] != null)
+    {
+        <div class="alert alert-success py-2">@TempData["Success"]</div>
+    }
+    @if (TempData["Error"] != null)
+    {
+        <div class="alert alert-danger py-2">@TempData["Error"]</div>
+    }
+
     <div class="row">
         <div class="col-md-8">
             <div class="card shadow-sm border-0 mb-4">
@@ -76,10 +110,93 @@
                     </form>
                 </div>
             </div>
+
+            <div id="booking-resources-settings" class="card shadow-sm border-0">
+                <div class="card-header bg-transparent border-bottom-0 py-3">
+                    <h5 class="mb-0"><i class="bi bi-diagram-3 me-2"></i> Ресурсы для расписания</h5>
+                </div>
+                <div class="card-body">
+                    <form asp-action="CreateBookingResource" method="post" class="row g-2 mb-4">
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted">Название</label>
+                            <input class="form-control form-control-sm" name="name" required />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label small text-muted">Лимит параллельных записей (локально)</label>
+                            <input type="number" class="form-control form-control-sm" min="2" name="maxParallelBookings" value="2" />
+                        </div>
+                        <div class="col-md-12">
+                            <label class="form-label small text-muted">Описание</label>
+                            <input class="form-control form-control-sm" name="description" />
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-check form-switch pt-4">
+                                <input class="form-check-input" type="checkbox" id="allowResourceOverbooking" name="allowOverbooking" value="true" />
+                                <label class="form-check-label" for="allowResourceOverbooking">Разрешить овербукинг только для этого ресурса</label>
+                            </div>
+                        </div>
+                        <div class="col-md-6 text-end pt-4">
+                            <button type="submit" class="btn btn-sm btn-primary">Добавить ресурс</button>
+                        </div>
+                    </form>
+
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Ресурс</th>
+                                    <th>Статус</th>
+                                    <th class="text-end">Действие</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @if (!resources.Any())
+                                {
+                                    <tr><td colspan="3" class="text-muted text-center py-3">Ресурсов пока нет</td></tr>
+                                }
+                                else
+                                {
+                                    @foreach (var resource in resources)
+                                    {
+                                        <tr>
+                                            <td>
+                                                <div class="fw-semibold">@resource.Name</div>
+                                                @if (!string.IsNullOrWhiteSpace(resource.Description))
+                                                {
+                                                    <div class="small text-muted">@resource.Description</div>
+                                                }
+                                            </td>
+                                            <td>
+                                                @if (resource.IsActive)
+                                                {
+                                                    <span class="badge bg-success">Активен</span>
+                                                }
+                                                else
+                                                {
+                                                    <span class="badge bg-secondary">Выключен</span>
+                                                }
+                                            </td>
+                                            <td class="text-end">
+                                                <form asp-action="SetBookingResourceActive" method="post" class="d-inline">
+                                                    <input type="hidden" name="id" value="@resource.Id" />
+                                                    <input type="hidden" name="isActive" value="@(resource.IsActive ? "false" : "true")" />
+                                                    <button type="submit" class="btn btn-sm @(resource.IsActive ? "btn-outline-danger" : "btn-outline-success")">
+                                                        @(resource.IsActive ? "Выключить" : "Включить")
+                                                    </button>
+                                                </form>
+                                            </td>
+                                        </tr>
+                                    }
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <div class="col-md-4">
-            <div class="card shadow-sm border-0">
+            <div class="card shadow-sm border-0 mb-4">
                 @* ИСПРАВЛЕНО: bg-transparent убирает белый фон, border-bottom-0 убирает линию *@
                 <div class="card-header bg-transparent border-bottom-0 py-3">
                     <h5 class="mb-0"><i class="bi bi-calendar-event me-2"></i> Выходные года</h5>
@@ -109,6 +226,151 @@
                             </div>
                         }
                     </div>
+                </div>
+            </div>
+
+            <div id="booking-policy-settings" class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-transparent border-bottom-0 py-3">
+                    <h5 class="mb-0"><i class="bi bi-calendar2-check me-2"></i> Политика бронирования</h5>
+                </div>
+                <div class="card-body">
+                    <form asp-action="SaveBookingPolicy" method="post">
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" id="allowOverbooking" name="allowOverbooking" value="true" @(bookingPolicy.AllowOverbooking ? "checked" : "") />
+                            <input type="hidden" name="allowOverbooking" value="false" />
+                            <label class="form-check-label" for="allowOverbooking">
+                                Разрешить овербукинг на пересекающиеся интервалы
+                            </label>
+                        </div>
+
+                        <label class="form-label small text-muted">Максимум параллельных записей на один ресурс</label>
+                        <input type="number"
+                               class="form-control form-control-sm mb-3"
+                               name="maxParallelBookings"
+                               min="2"
+                               value="@Math.Max(2, bookingPolicy.MaxParallelBookings)" />
+
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" id="allowManualItemPriceChange" name="allowManualItemPriceChange" value="true" @(bookingPolicy.AllowManualItemPriceChange ? "checked" : "") />
+                            <input type="hidden" name="allowManualItemPriceChange" value="false" />
+                            <label class="form-check-label" for="allowManualItemPriceChange">
+                                Разрешить менять цену на товар
+                            </label>
+                        </div>
+
+                        <div class="text-end">
+                            <button type="submit" class="btn btn-sm btn-primary">Сохранить политику</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <div id="booking-status-settings" class="card shadow-sm border-0 mb-4">
+                <div class="card-header bg-transparent border-bottom-0 py-3">
+                    <h5 class="mb-0"><i class="bi bi-flag me-2"></i> Статусы записей</h5>
+                </div>
+                <div class="card-body">
+                    <div class="small text-muted mb-3">
+                        Цвет записи в календаре зависит от категории статуса: новая — жёлтый, промежуточные — голубой, успешный финал — зелёный, неуспешные финалы — красный.
+                    </div>
+
+                    <form asp-action="CreateBookingStatus" method="post" class="row g-2 mb-3">
+                        <div class="col-md-5">
+                            <label class="form-label small text-muted">Название</label>
+                            <input class="form-control form-control-sm" name="name" required />
+                        </div>
+                        <div class="col-md-5">
+                            <label class="form-label small text-muted">Категория</label>
+                            <select class="form-select form-select-sm" name="category">
+                                <option value="@BookingStatusCategory.New">@GetStatusCategoryName(BookingStatusCategory.New)</option>
+                                <option value="@BookingStatusCategory.Intermediate">@GetStatusCategoryName(BookingStatusCategory.Intermediate)</option>
+                                <option value="@BookingStatusCategory.SuccessFinal">@GetStatusCategoryName(BookingStatusCategory.SuccessFinal)</option>
+                                <option value="@BookingStatusCategory.FailedFinal">@GetStatusCategoryName(BookingStatusCategory.FailedFinal)</option>
+                            </select>
+                        </div>
+                        <div class="col-md-2 d-grid">
+                            <label class="form-label small text-muted">&nbsp;</label>
+                            <button type="submit" class="btn btn-sm btn-primary">Добавить</button>
+                        </div>
+                    </form>
+
+                    @if (!bookingStatuses.Any())
+                    {
+                        <div class="text-muted small">Статусы пока не созданы.</div>
+                    }
+                    else
+                    {
+                        @foreach (var status in bookingStatuses.OrderBy(s => s.Category).ThenBy(s => s.SortOrder).ThenBy(s => s.Name))
+                        {
+                            <form asp-action="UpdateBookingStatus" method="post" class="border rounded p-2 mb-2">
+                                <input type="hidden" name="id" value="@status.Id" />
+
+                                <div class="d-flex justify-content-between align-items-center mb-2">
+                                    <span class="badge bg-@GetStatusColorClass(status.Category)">@GetStatusCategoryName(status.Category)</span>
+                                    <div class="form-check form-switch m-0">
+                                        <input class="form-check-input" type="checkbox" name="isActive" value="true" @(status.IsActive ? "checked" : "") />
+                                        <input type="hidden" name="isActive" value="false" />
+                                    </div>
+                                </div>
+
+                                <div class="row g-2 align-items-end">
+                                    <div class="col-md-5">
+                                        <label class="form-label small text-muted">Название</label>
+                                        <input class="form-control form-control-sm" name="name" value="@status.Name" required />
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="form-label small text-muted">Категория</label>
+                                        <select class="form-select form-select-sm" name="category">
+                                            <option value="@BookingStatusCategory.New" selected="@(status.Category == BookingStatusCategory.New ? "selected" : null)">@GetStatusCategoryName(BookingStatusCategory.New)</option>
+                                            <option value="@BookingStatusCategory.Intermediate" selected="@(status.Category == BookingStatusCategory.Intermediate ? "selected" : null)">@GetStatusCategoryName(BookingStatusCategory.Intermediate)</option>
+                                            <option value="@BookingStatusCategory.SuccessFinal" selected="@(status.Category == BookingStatusCategory.SuccessFinal ? "selected" : null)">@GetStatusCategoryName(BookingStatusCategory.SuccessFinal)</option>
+                                            <option value="@BookingStatusCategory.FailedFinal" selected="@(status.Category == BookingStatusCategory.FailedFinal ? "selected" : null)">@GetStatusCategoryName(BookingStatusCategory.FailedFinal)</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <label class="form-label small text-muted">Порядок</label>
+                                        <input type="number" class="form-control form-control-sm" name="sortOrder" value="@status.SortOrder" />
+                                    </div>
+                                </div>
+
+                                <div class="text-end mt-2 d-flex justify-content-end gap-2">
+                                    <button type="submit" class="btn btn-sm btn-outline-primary">Сохранить</button>
+                                    <button type="submit"
+                                            class="btn btn-sm btn-outline-danger"
+                                            formaction="@Url.Action("DeleteBookingStatus", "CompanySettings")"
+                                            formnovalidate
+                                            onclick="return confirm('Удалить этот статус?');">
+                                        Удалить
+                                    </button>
+                                </div>
+                            </form>
+                        }
+                    }
+                </div>
+            </div>
+
+            <div class="card shadow-sm border-0">
+                <div class="card-header bg-transparent border-bottom-0 py-3">
+                    <h5 class="mb-0"><i class="bi bi-grid me-2"></i> Модули по тарифу</h5>
+                </div>
+                <div class="card-body">
+                    <form asp-action="SaveModuleSettings" method="post">
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" id="crmEnabled" name="crmEnabled" value="true" @(crmFeatureEnabled ? "checked" : "") />
+                            <input type="hidden" name="crmEnabled" value="false" />
+                            <label class="form-check-label" for="crmEnabled">CRM (контакты, лиды, сделки)</label>
+                        </div>
+
+                        <div class="form-check form-switch mb-3">
+                            <input class="form-check-input" type="checkbox" id="bookingEnabled" name="bookingEnabled" value="true" @(bookingFeatureEnabled ? "checked" : "") />
+                            <input type="hidden" name="bookingEnabled" value="false" />
+                            <label class="form-check-label" for="bookingEnabled">Бронирование ресурсов</label>
+                        </div>
+
+                        <div class="text-end">
+                            <button type="submit" class="btn btn-sm btn-primary">Сохранить модули</button>
+                        </div>
+                    </form>
                 </div>
             </div>
         </div>

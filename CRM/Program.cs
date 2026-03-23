@@ -9,6 +9,9 @@ using Core.Interfaces.CRM;
 using Core.Services.CRM;
 using Core.Interfaces;
 using Core.Services;
+using Core.Interfaces.Platform;
+using Core.Services.Platform;
+using CRM.Infrastructure;
 
 #pragma warning disable CS0618
 // Поддержка работы с jsonb в PostgreSQL
@@ -24,6 +27,7 @@ builder.Services.AddControllersWithViews(options =>
         .RequireAuthenticatedUser()
         .Build();
     options.Filters.Add(new AuthorizeFilter(policy));
+    options.Filters.AddService<FeatureGateFilter>();
 });
 
 // 1.1. Сервисы платформы
@@ -63,6 +67,11 @@ builder.Services.ConfigureApplicationCookie(options =>
 builder.Services.AddHttpContextAccessor();
 
 builder.Services.AddScoped<IContactService, ContactService>();
+builder.Services.AddScoped<ICrmService, CrmService>();
+builder.Services.AddScoped<ICrmResourceManager, CrmResourceManager>();
+builder.Services.AddScoped<IBookingPolicyService, BookingPolicyService>();
+builder.Services.AddScoped<IFeatureToggleService, FeatureToggleService>();
+builder.Services.AddScoped<FeatureGateFilter>();
 
 builder.Services.AddScoped<Core.Services.ICrmStyleService, Core.Services.CrmStyleService>();
 

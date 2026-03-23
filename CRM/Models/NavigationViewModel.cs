@@ -12,7 +12,10 @@ namespace CRM.Models
         public string EntityCode { get; set; }
 
         // Состояния активности разделов
+        public bool IsCrmModuleEnabled { get; set; } = true;
+        public bool IsBookingModuleEnabled { get; set; } = true;
         public bool IsCRMActive { get; set; }
+        public bool IsScheduleActive { get; set; }
         public bool IsCompanyActive { get; set; }
         public bool IsTasksActive { get; set; }
         public bool IsSettingsActive { get; set; }

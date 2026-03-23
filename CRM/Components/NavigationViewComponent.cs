@@ -1,4 +1,6 @@
 ﻿using Core.Data;
+using Core.Constants;
+using Core.Interfaces.Platform;
 using CRM.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -10,10 +12,14 @@ namespace CRM.Components
     public class NavigationViewComponent : ViewComponent
     {
         private readonly AppDbContext _context;
+        private readonly IFeatureToggleService _featureToggleService;
 
-        public NavigationViewComponent(AppDbContext context)
+        public NavigationViewComponent(
+            AppDbContext context,
+            IFeatureToggleService featureToggleService)
         {
             _context = context;
+            _featureToggleService = featureToggleService;
         }
 
         public async Task<IViewComponentResult> InvokeAsync()
@@ -29,6 +35,13 @@ namespace CRM.Components
                 .ToListAsync();
 
             var crmCategory = categories.FirstOrDefault(c => c.Name == "CRM");
+            var crmModuleEnabled = await _featureToggleService.IsEnabledAsync(PlatformFeatures.Crm);
+            var bookingModuleEnabled = await _featureToggleService.IsEnabledAsync(PlatformFeatures.Booking);
+
+            if (!crmModuleEnabled)
+            {
+                crmCategory = null;
+            }
 
             var model = new NavigationViewModel
             {
@@ -37,9 +50,15 @@ namespace CRM.Components
                 Controller = controller,
                 Action = action,
                 EntityCode = entityCode,
+                IsCrmModuleEnabled = crmModuleEnabled,
+                IsBookingModuleEnabled = bookingModuleEnabled,
 
-                IsCRMActive = controller == "Contacts" || 
-                              categories.Any(c => c.IsSystem && c.Name == "CRM" && c.Apps.Any(a => a.EntityCode == entityCode)),
+                IsCRMActive = crmModuleEnabled &&
+                              (controller == "Contacts" ||
+                               categories.Any(c => c.IsSystem && c.Name == "CRM" && c.Apps.Any(a => a.EntityCode == entityCode))),
+
+                IsScheduleActive = bookingModuleEnabled &&
+                                   controller == "Schedule",
 
                 IsCompanyActive = (new[] { "Positions", "Departments", "Employees", "EmployeeSchedule", "CompanySettings", "Services" }).Contains(controller) ||
                                   categories.Any(c => c.IsSystem && c.Name == "Компания" && c.Apps.Any(a => a.EntityCode == entityCode)),
