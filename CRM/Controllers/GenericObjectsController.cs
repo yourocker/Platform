@@ -49,8 +49,6 @@ public class GenericObjectsController(AppDbContext context, IWebHostEnvironment 
                         items = await _context.Employees.Select(e => new SelectListItem { Value = e.Id.ToString(), Text = e.FullName }).ToListAsync();
                     else if (field.TargetEntityCode == "Departments")
                         items = await _context.Departments.Select(d => new SelectListItem { Value = d.Id.ToString(), Text = d.Name }).ToListAsync();
-                    else if (field.TargetEntityCode == "Patients")
-                        items = await _context.Patients.Select(p => new SelectListItem { Value = p.Id.ToString(), Text = p.FullName }).ToListAsync();
                 }
                 lookupData[field.SystemName] = items;
             }
@@ -200,9 +198,6 @@ public class GenericObjectsController(AppDbContext context, IWebHostEnvironment 
         {
             var genericNames = await _context.GenericObjects.Where(g => allGuids.Contains(g.Id)).Select(g => new { g.Id, g.Name }).ToListAsync();
             foreach (var n in genericNames) namesMap[n.Id] = n.Name;
-
-            var patientNames = await _context.Patients.Where(p => allGuids.Contains(p.Id)).Select(p => new { p.Id, Name = p.FullName }).ToListAsync();
-            foreach (var n in patientNames) namesMap[n.Id] = n.Name;
 
             var employeeNames = await _context.Employees.Where(e => allGuids.Contains(e.Id)).Select(e => new { e.Id, Name = e.FullName }).ToListAsync();
             foreach (var n in employeeNames) namesMap[n.Id] = n.Name;

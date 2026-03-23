@@ -1,7 +1,5 @@
 ﻿using System;
-using Core.Entities;
 using Core.Entities.Company;
-using Core.Entities.ol;
 using Core.Entities.Platform;
 using Core.Entities.Tasks;
 using Core.Entities.CRM;
@@ -10,7 +8,6 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Core.Entities.System;
 using Core.Data.Interceptors;
-using Core.Entities.CRM;
 using Core.Data.Extensions;
 using Core.Entities.Platform.Form;
 
@@ -37,12 +34,6 @@ namespace Core.Data
         public DbSet<ContactPhone> ContactPhones { get; set; }
         public DbSet<ContactEmail> ContactEmails { get; set; }
         
-        // --- Медицинский блок ---
-        public DbSet<Patient> Patients { get; set; }
-        public DbSet<Doctor> Doctors { get; set; }
-        public DbSet<Visit> Visits { get; set; }
-        public DbSet<Appointment> Appointments { get; set; } 
-
         // --- Оргструктура ---
         public DbSet<Employee> Employees { get; set; }
         public DbSet<Position> Positions { get; set; }
@@ -167,15 +158,7 @@ namespace Core.Data
                     .OnDelete(DeleteBehavior.Restrict);
             });
 
-            // 6. Пациенты
-            modelBuilder.Entity<Patient>(entity =>
-            {
-                entity.ToTable("Patients");
-                entity.Property(p => p.Properties).HasColumnType("jsonb");
-                entity.HasIndex(p => p.NormalizedName);
-            });
-
-            // 7. Оргструктура
+            // 6. Оргструктура
             modelBuilder.Entity<Department>(entity =>
             {
                 entity.HasOne(d => d.Parent)
@@ -183,13 +166,13 @@ namespace Core.Data
                     .HasForeignKey(d => d.ParentId);
             });
 
-            // 8. Уникальный индекс для метаданных полей
+            // 7. Уникальный индекс для метаданных полей
             modelBuilder.Entity<AppFieldDefinition>(entity =>
             {
                 entity.HasIndex(f => new { f.AppDefinitionId, f.SystemName }).IsUnique();
             });
             
-            // 9. Рабочие графики
+            // 8. Рабочие графики
             modelBuilder.Entity<CompanyWorkMode>().ToTable("CompanyWorkModes");
             modelBuilder.Entity<CompanyHoliday>().ToTable("CompanyHolidays");
             modelBuilder.Entity<EmployeeSchedule>().ToTable("EmployeeSchedules");
@@ -199,7 +182,7 @@ namespace Core.Data
                 .WithMany()
                 .HasForeignKey(s => s.EmployeeId);
             
-            // 10. Справочник услуг (Прайс-лист)
+            // 9. Справочник услуг (Прайс-лист)
             modelBuilder.Entity<ServiceCategory>(entity =>
             {
                 entity.ToTable("ServiceCategories");
@@ -227,14 +210,14 @@ namespace Core.Data
                     .OnDelete(DeleteBehavior.Cascade);
             });
             
-            // 11. Таблица настроек интерфейса
+            // 10. Таблица настроек интерфейса
             modelBuilder.Entity<UiSettings>(entity =>
             {
                 entity.ToTable("UiSettings");
                 entity.HasIndex(e => e.EmployeeId);
             });
             
-            // 12. Настройка CRM: Воронки и Этапы
+            // 11. Настройка CRM: Воронки и Этапы
             modelBuilder.Entity<CrmPipeline>(entity =>
             {
                 entity.ToTable("CrmPipelines");

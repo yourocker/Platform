@@ -23,40 +23,6 @@ namespace Core.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
-            modelBuilder.Entity("Core.Entities.Appointment", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<DateTime>("DateAndTime")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.Property<string>("DoctorName")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("PatientName")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("PhoneNumber")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("Procedure")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("SourceFile")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("Appointments");
-                });
-
             modelBuilder.Entity("Core.Entities.CRM.ContactEmail", b =>
                 {
                     b.Property<int>("Id")
@@ -896,93 +862,6 @@ namespace Core.Migrations
                     b.ToTable("TaskEntityRelations");
                 });
 
-            modelBuilder.Entity("Core.Entities.ol.Doctor", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("FullName")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("Doctors");
-                });
-
-            modelBuilder.Entity("Core.Entities.ol.Patient", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("CardNumber")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Comment")
-                        .HasColumnType("text");
-
-                    b.Property<string>("FullName")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("NormalizedName")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<string>("PhoneNumber")
-                        .HasColumnType("text");
-
-                    b.Property<string>("Properties")
-                        .HasColumnType("jsonb");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("NormalizedName");
-
-                    b.ToTable("Patients", (string)null);
-                });
-
-            modelBuilder.Entity("Core.Entities.ol.Visit", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid");
-
-                    b.Property<decimal>("AmountCash")
-                        .HasColumnType("numeric");
-
-                    b.Property<decimal>("AmountCashless")
-                        .HasColumnType("numeric");
-
-                    b.Property<DateTime>("Date")
-                        .HasColumnType("timestamp without time zone");
-
-                    b.Property<int?>("DoctorId")
-                        .HasColumnType("integer");
-
-                    b.Property<Guid>("PatientId")
-                        .HasColumnType("uuid");
-
-                    b.Property<string>("ServiceName")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<decimal>("TotalCost")
-                        .HasColumnType("numeric");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("DoctorId");
-
-                    b.HasIndex("PatientId");
-
-                    b.ToTable("Visits");
-                });
-
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRole<System.Guid>", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1498,21 +1377,6 @@ namespace Core.Migrations
                     b.Navigation("Task");
                 });
 
-            modelBuilder.Entity("Core.Entities.ol.Visit", b =>
-                {
-                    b.HasOne("Core.Entities.ol.Doctor", null)
-                        .WithMany("Visits")
-                        .HasForeignKey("DoctorId");
-
-                    b.HasOne("Core.Entities.ol.Patient", "Patient")
-                        .WithMany("Visits")
-                        .HasForeignKey("PatientId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Patient");
-                });
-
             modelBuilder.Entity("Microsoft.AspNetCore.Identity.IdentityRoleClaim<System.Guid>", b =>
                 {
                     b.HasOne("Microsoft.AspNetCore.Identity.IdentityRole<System.Guid>", null)
@@ -1735,16 +1599,6 @@ namespace Core.Migrations
             modelBuilder.Entity("Core.Entities.Platform.AppDefinition", b =>
                 {
                     b.Navigation("Fields");
-                });
-
-            modelBuilder.Entity("Core.Entities.ol.Doctor", b =>
-                {
-                    b.Navigation("Visits");
-                });
-
-            modelBuilder.Entity("Core.Entities.ol.Patient", b =>
-                {
-                    b.Navigation("Visits");
                 });
 
             modelBuilder.Entity("Core.Entities.CRM.Contact", b =>
