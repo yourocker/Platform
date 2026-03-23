@@ -338,23 +338,48 @@ string currentSystemFilter = ViewBag.SystemFilter ?? "all";
 
 <div id="formBuilderModalContainer"></div>
 
-<link rel="stylesheet" href="~/css/form-builder.css" />
+<link rel="stylesheet" href="~/css/form-builder.css" asp-append-version="true" />
 
 <script>
     function openFormBuilder(appId) {
         // Загружаем PartialView конструктора
         $.get('/AppDefinitions/FormBuilder/' + appId, function(html) {
             $('#formBuilderModalContainer').html(html);
-            
-            // Инициализируем и открываем модальное окно Bootstrap
+
             const modalElement = document.getElementById('builderModal');
-            const modal = new bootstrap.Modal(modalElement);
-            modal.show();
-            
-            // Очистка DOM после закрытия (чтобы не дублировать ID при повторном открытии)
-            modalElement.addEventListener('hidden.bs.modal', function () {
-                $('#formBuilderModalContainer').empty();
-            });
+            const payloadEl = document.getElementById('formBuilderPayload');
+            let payload = { appId: appId, initialMode: 'Create', forms: [] };
+
+            if (payloadEl && payloadEl.textContent) {
+                try {
+                    payload = JSON.parse(payloadEl.textContent);
+                } catch (e) {
+                    console.error('Ошибка JSON payload конструктора:', e);
+                }
+            }
+
+            const initBuilder = () => {
+                if (window.formBuilder) {
+                    window.formBuilder.init(payload.appId || appId, payload.forms || [], payload.initialMode || 'Create');
+                }
+                const modal = new bootstrap.Modal(modalElement);
+                modal.show();
+
+                modalElement.addEventListener('hidden.bs.modal', function () {
+                    $('#formBuilderModalContainer').empty();
+                });
+            };
+
+            if (window.formBuilder) {
+                initBuilder();
+            } else {
+                import('/js/form-builder/index.js?v=20260319a')
+                    .then(initBuilder)
+                    .catch(err => {
+                        console.error(err);
+                        alert('Ошибка загрузки конструктора. Проверьте консоль.');
+                    });
+            }
         }).fail(function() {
             alert('Ошибка загрузки интерфейса конструктора. Проверьте консоль.');
         });

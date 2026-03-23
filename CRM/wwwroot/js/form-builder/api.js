@@ -32,6 +32,50 @@
         return response;
     },
 
+    async createForm(data) {
+        const response = await fetch(`${this.baseUrl}/CreateForm`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        if (!response.ok) {
+            const err = await response.text();
+            throw new Error(err || 'Ошибка создания формы');
+        }
+        return await response.json();
+    },
+
+    async deleteForm(id) {
+        const response = await fetch(`${this.baseUrl}/DeleteForm?id=${id}`, { method: 'POST' });
+        if (!response.ok) {
+            const err = await response.text();
+            throw new Error(err || 'Ошибка удаления формы');
+        }
+        return response;
+    },
+
+    async renameForm(data) {
+        const response = await fetch(`${this.baseUrl}/RenameForm`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        if (!response.ok) {
+            const err = await response.text();
+            throw new Error(err || 'Ошибка переименования формы');
+        }
+        return response;
+    },
+
+    async setDefaultForm(id) {
+        const response = await fetch(`${this.baseUrl}/SetDefaultForm?id=${id}`, { method: 'POST' });
+        if (!response.ok) {
+            const err = await response.text();
+            throw new Error(err || 'Ошибка назначения основной формы');
+        }
+        return response;
+    },
+
     async saveLayout({ formId, layoutJson, forceSave = false, appDefinitionId, formType }) {
         return await fetch(`${this.baseUrl}/SaveLayout`, {
             method: 'POST',

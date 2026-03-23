@@ -1,4 +1,4 @@
-﻿import { FormApiClient } from './api.js';
+﻿import { FormApiClient } from './api.js?v=20260319a';
 
 export const fieldManager = {
     appId: null,

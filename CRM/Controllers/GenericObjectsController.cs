@@ -72,13 +72,13 @@ public class GenericObjectsController(AppDbContext context, IWebHostEnvironment 
 
     private static bool LayoutContainsField(IEnumerable<LayoutNode> nodes, Guid fieldId)
     {
-        foreach (var node in nodes)
+        foreach (var node in nodes ?? Array.Empty<LayoutNode>())
         {
             if (node is FieldNode fn && fn.FieldId == fieldId) return true;
-            if (node is TabControlNode tcn && tcn.Tabs.Any(t => LayoutContainsField(t.Children, fieldId))) return true;
+            if (node is TabControlNode tcn && (tcn.Tabs ?? new List<TabNode>()).Any(t => LayoutContainsField(t.Children, fieldId))) return true;
             if (node is TabNode tn && LayoutContainsField(tn.Children, fieldId)) return true;
             if (node is GroupNode gn && LayoutContainsField(gn.Children, fieldId)) return true;
-            if (node is RowNode rn && rn.Columns.Any(c => LayoutContainsField(c.Children, fieldId))) return true;
+            if (node is RowNode rn && (rn.Columns ?? new List<ColumnNode>()).Any(c => LayoutContainsField(c.Children, fieldId))) return true;
             if (node is ColumnNode cn && LayoutContainsField(cn.Children, fieldId)) return true;
         }
         return false;
@@ -86,25 +86,44 @@ public class GenericObjectsController(AppDbContext context, IWebHostEnvironment 
 
     private async Task<FormLayoutSchema?> LoadDefaultFormLayout(Guid appDefinitionId, FormType formType)
     {
-        var formDefinition = await _context.AppFormDefinitions
+        var forms = await _context.AppFormDefinitions
             .AsNoTracking()
-                        .Where(f => f.AppDefinitionId == appDefinitionId && f.Type == formType && f.IsDefault)
-            .OrderBy(f => f.Name)
-            .FirstOrDefaultAsync();
+            .Where(f => f.AppDefinitionId == appDefinitionId && f.Type == formType)
+            .OrderByDescending(f => f.IsDefault)
+            .ThenBy(f => f.Name)
+            .ToListAsync();
 
-        if (formDefinition == null || string.IsNullOrWhiteSpace(formDefinition.Layout))
-            return null;
+        if (!forms.Any()) return null;
 
-        try
+        foreach (var form in forms)
         {
-            return JsonSerializer.Deserialize<FormLayoutSchema>(
-                formDefinition.Layout,
-                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            if (string.IsNullOrWhiteSpace(form.Layout)) continue;
+
+            try
+            {
+                var layout = FormLayoutSchema.TryParse(form.Layout);
+
+                if (layout?.Nodes != null && layout.Nodes.Any())
+                {
+                    if (!form.IsDefault)
+                    {
+                        var tracked = await _context.AppFormDefinitions.FindAsync(form.Id);
+                        if (tracked != null && !tracked.IsDefault)
+                        {
+                            tracked.IsDefault = true;
+                            await _context.SaveChangesAsync();
+                        }
+                    }
+                    return layout;
+                }
+            }
+            catch
+            {
+                // пропускаем некорректные макеты
+            }
         }
-        catch
-        {
-            return null;
-        }
+
+        return null;
     }
 
     // Маршрут: /Data/{entityCode} (например /Data/Sklad)

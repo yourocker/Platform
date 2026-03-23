@@ -125,7 +125,12 @@ public class FormConfigController : ControllerBase
     public async Task<IActionResult> CreateForm([FromBody] CreateFormRequest request)
     {
         bool isFirst = !await _context.AppFormDefinitions.AnyAsync(f => f.AppDefinitionId == request.AppDefinitionId && f.Type == request.Type);
-        
+        var nameFieldId = await _context.AppFieldDefinitions
+            .Where(f => f.AppDefinitionId == request.AppDefinitionId)
+            .Where(f => f.SystemName.ToLower() == "name")
+            .Select(f => f.Id)
+            .FirstOrDefaultAsync();
+
         var form = new AppFormDefinition
         {
             Id = Guid.NewGuid(),
@@ -133,12 +138,39 @@ public class FormConfigController : ControllerBase
             Name = request.Name,
             Type = request.Type,
             IsDefault = isFirst,
-            Layout = "{ \"Nodes\": [] }"
+            Layout = nameFieldId == Guid.Empty
+                ? "{ \"nodes\": [] }"
+                : BuildNameOnlyLayout(nameFieldId)
         };
 
         _context.AppFormDefinitions.Add(form);
-        await _context.SaveChangesAsync();
+        try
+        {
+            await _context.SaveChangesAsync();
+        }
+        catch (DbUpdateException)
+        {
+            return BadRequest("Форма с таким названием уже существует.");
+        }
         return Ok(new { success = true, id = form.Id });
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> RenameForm([FromBody] RenameFormRequest request)
+    {
+        var form = await _context.AppFormDefinitions.FindAsync(request.Id);
+        if (form == null) return NotFound();
+
+        form.Name = request.Name;
+        try
+        {
+            await _context.SaveChangesAsync();
+        }
+        catch (DbUpdateException)
+        {
+            return BadRequest("Форма с таким названием уже существует.");
+        }
+        return Ok(new { success = true });
     }
 
     [HttpPost]
@@ -149,6 +181,25 @@ public class FormConfigController : ControllerBase
         if (form.IsDefault) return BadRequest("Нельзя удалить форму по умолчанию.");
 
         _context.AppFormDefinitions.Remove(form);
+        await _context.SaveChangesAsync();
+        return Ok(new { success = true });
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> SetDefaultForm(Guid id)
+    {
+        var form = await _context.AppFormDefinitions.FindAsync(id);
+        if (form == null) return NotFound();
+
+        var forms = await _context.AppFormDefinitions
+            .Where(f => f.AppDefinitionId == form.AppDefinitionId && f.Type == form.Type)
+            .ToListAsync();
+
+        foreach (var item in forms)
+        {
+            item.IsDefault = item.Id == form.Id;
+        }
+
         await _context.SaveChangesAsync();
         return Ok(new { success = true });
     }
@@ -176,7 +227,7 @@ public class FormConfigController : ControllerBase
 
         try 
         {
-            var layoutSchema = JsonSerializer.Deserialize<FormLayoutSchema>(request.LayoutJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            var layoutSchema = FormLayoutSchema.TryParse(request.LayoutJson);
             if (layoutSchema == null) return BadRequest("Некорректный JSON.");
 
             // Валидация на пропущенные обязательные поля
@@ -204,6 +255,9 @@ public class FormConfigController : ControllerBase
                     bool isFirst = !await _context.AppFormDefinitions
                         .AnyAsync(f => f.AppDefinitionId == appDef!.Id && f.Type == request.FormType);
 
+                    var nameFieldId = appDef!.Fields
+                        .FirstOrDefault(f => f.SystemName.ToLower() == "name")?.Id ?? Guid.Empty;
+
                     form = new AppFormDefinition
                     {
                         Id = Guid.NewGuid(),
@@ -211,13 +265,33 @@ public class FormConfigController : ControllerBase
                         Name = "Основная форма",
                         Type = request.FormType,
                         IsDefault = isFirst,
-                        Layout = "{ \"nodes\": [] }"
+                        Layout = nameFieldId == Guid.Empty
+                            ? "{ \"nodes\": [] }"
+                            : BuildNameOnlyLayout(nameFieldId)
                     };
                     _context.AppFormDefinitions.Add(form);
                 }
             }
 
             form.Layout = request.LayoutJson;
+            if (layoutSchema.Nodes != null && layoutSchema.Nodes.Any())
+            {
+                var sameType = await _context.AppFormDefinitions
+                    .Where(f => f.AppDefinitionId == appDef!.Id && f.Type == request.FormType)
+                    .ToListAsync();
+
+                var currentDefault = sameType.FirstOrDefault(f => f.IsDefault);
+                var shouldPromote = currentDefault == null
+                                    || (currentDefault.Id != form.Id && IsLayoutEmpty(currentDefault.Layout));
+
+                if (shouldPromote)
+                {
+                    foreach (var item in sameType)
+                    {
+                        item.IsDefault = item.Id == form.Id;
+                    }
+                }
+            }
             await _context.SaveChangesAsync();
             return Ok(new { success = true, formId = form.Id });
         }
@@ -227,16 +301,36 @@ public class FormConfigController : ControllerBase
     private List<Guid> ExtractFieldIds(List<LayoutNode> nodes)
     {
         var ids = new List<Guid>();
-        foreach (var node in nodes)
+        foreach (var node in nodes ?? new List<LayoutNode>())
         {
             if (node is FieldNode fn) ids.Add(fn.FieldId);
-            else if (node is TabControlNode tcn) foreach (var tab in tcn.Tabs) ids.AddRange(ExtractFieldIds(tab.Children));
-            else if (node is TabNode tn) ids.AddRange(ExtractFieldIds(tn.Children));
-            else if (node is GroupNode gn) ids.AddRange(ExtractFieldIds(gn.Children));
-            else if (node is RowNode rn) foreach (var col in rn.Columns) ids.AddRange(ExtractFieldIds(col.Children));
-            else if (node is ColumnNode cn) ids.AddRange(ExtractFieldIds(cn.Children));
+            else if (node is TabControlNode tcn)
+            {
+                foreach (var tab in tcn.Tabs ?? new List<TabNode>())
+                    ids.AddRange(ExtractFieldIds(tab.Children ?? new List<LayoutNode>()));
+            }
+            else if (node is TabNode tn) ids.AddRange(ExtractFieldIds(tn.Children ?? new List<LayoutNode>()));
+            else if (node is GroupNode gn) ids.AddRange(ExtractFieldIds(gn.Children ?? new List<LayoutNode>()));
+            else if (node is RowNode rn)
+            {
+                foreach (var col in rn.Columns ?? new List<ColumnNode>())
+                    ids.AddRange(ExtractFieldIds(col.Children ?? new List<LayoutNode>()));
+            }
+            else if (node is ColumnNode cn) ids.AddRange(ExtractFieldIds(cn.Children ?? new List<LayoutNode>()));
         }
         return ids;
+    }
+
+    private static bool IsLayoutEmpty(string? layoutJson)
+    {
+        if (string.IsNullOrWhiteSpace(layoutJson)) return true;
+        var layout = FormLayoutSchema.TryParse(layoutJson);
+        return layout?.Nodes == null || !layout.Nodes.Any();
+    }
+
+    private static string BuildNameOnlyLayout(Guid nameFieldId)
+    {
+        return $"{{\"nodes\":[{{\"type\":\"field\",\"FieldId\":\"{nameFieldId}\"}}]}}";
     }
 
     #endregion

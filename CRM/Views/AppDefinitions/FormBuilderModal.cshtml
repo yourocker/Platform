@@ -1,11 +1,12 @@
 ﻿@using Core.Entities.Platform.Form
 @using CRM.ViewModels.FormConfig
 @using System.Text.Json
+@using System.Collections.Generic
 @model FormBuilderViewModel
 
 <div class="modal fade" id="builderModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static" data-app-id="@Model.AppDefinitionId">
-    <div class="modal-dialog modal-xl modal-dialog-centered">
-        <div class="modal-content border-0 shadow-lg" style="height: 92vh; background-color: var(--main-bg);">
+    <div class="modal-dialog modal-xl modal-dialog-centered" style="width: 90vw; max-width: 90vw; height: 90vh; margin: 5vh auto;">
+        <div class="modal-content border-0 shadow-lg" style="height: 90vh; background-color: var(--main-bg);">
             
             <div class="modal-header border-bottom px-4 py-2 bg-white">
                 <div class="d-flex align-items-center w-100">
@@ -17,12 +18,20 @@
                     </div>
 
                     <div class="d-flex align-items-center gap-2 me-4">
-                        <select id="formSelector" class="form-select form-select-sm border-primary-subtle" style="width: 220px;" onchange="formBuilder.switchForm(this.value)">
-                            @foreach (var form in Model.FormIds)
-                            {
-                                <option value="@(form.Value?.ToString() ?? string.Empty)" data-mode="@form.Key">@form.Key</option>
-                            }
-                        </select>
+                        <div class="input-group input-group-sm" style="width: 340px;">
+                            <span class="input-group-text">Форма</span>
+                            <select id="formSelector" class="form-select" onchange="formBuilder.switchForm(this.value)"></select>
+                            <button class="btn btn-outline-primary" type="button" onclick="formBuilder.openCreateFormModal()" title="Новая форма">
+                                <i class="bi bi-plus"></i>
+                            </button>
+                            <button class="btn btn-outline-secondary" type="button" onclick="formBuilder.openRenameFormModal()" id="renameFormBtn" title="Переименовать">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <button class="btn btn-outline-danger" type="button" onclick="formBuilder.deleteCurrentForm()" id="deleteFormBtn" title="Удалить форму">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                        <button type="button" class="btn btn-outline-secondary btn-sm" id="setDefaultBtn" onclick="formBuilder.setDefaultCurrentForm()">Сделать основной</button>
                         <div class="btn-group btn-group-sm">
                             <input type="radio" class="btn-check" name="formMode" id="modeCreate" value="Create" checked onchange="formBuilder.switchMode('Create')">
                             <label class="btn btn-outline-primary" for="modeCreate">Создание</label>
@@ -65,7 +74,7 @@
                     </div>
                 </div>
 
-                <div class="flex-grow-1 p-4 overflow-auto builder-canvas-wrapper" style="background-color: #f0f2f5;">
+                <div class="flex-grow-1 p-4 overflow-auto builder-canvas-wrapper">
                     <div id="formCanvas" class="mx-auto bg-white rounded shadow-sm p-4 border" style="max-width: 850px; min-height: 100%;">
                         </div>
                 </div>
@@ -151,35 +160,68 @@
     </div>
 </div>
 
+<div class="modal fade" id="createFormModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header border-bottom">
+                <h5 class="modal-title fw-bold">Новая форма</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body bg-light">
+                <form id="createFormForm">
+                    <div crm-card class="p-3 mb-0">
+                        <div class="mb-3">
+                            <crm-input label="Название формы" name="name" placeholder="Например: Для менеджеров" required="true" />
+                        </div>
+                    </div>
+                    <div class="mt-4 d-flex gap-2">
+                        <button type="button" crm-button variant="light" class="flex-grow-1" data-bs-dismiss="modal">Отмена</button>
+                        <button type="submit" crm-button variant="primary" class="flex-grow-1">Создать</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="renameFormModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header border-bottom">
+                <h5 class="modal-title fw-bold">Переименование формы</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body bg-light">
+                <form id="renameFormForm">
+                    <div crm-card class="p-3 mb-0">
+                        <div class="mb-3">
+                            <crm-input label="Название формы" name="name" placeholder="Введите название..." required="true" />
+                        </div>
+                    </div>
+                    <div class="mt-4 d-flex gap-2">
+                        <button type="button" crm-button variant="light" class="flex-grow-1" data-bs-dismiss="modal">Отмена</button>
+                        <button type="submit" crm-button variant="primary" class="flex-grow-1">Сохранить</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
 <script src="~/lib/sortablejs/Sortable.min.js"></script>
 
-<script type="module">
-    // Импортируем точку входа. Это выполнит код в index.js, 
-    // который пропишет window.formBuilder и window.fieldManager.
-    import '/js/form-builder/index.js';
-
-    // Ждем загрузки DOM и инициализируем конструктор
-    $(document).ready(function() {
-        const appId = '@Model.AppDefinitionId';
-        const formsByMode = @Html.Raw(JsonSerializer.Serialize(
-            Enum.GetValues<FormType>().ToDictionary(
-                mode => mode.ToString(),
-                mode => new
-                {
-                    formId = Model.FormIds.TryGetValue(mode, out var id) ? id : null,
-                    layoutJson = Model.FormLayouts.TryGetValue(mode, out var layout)
-                        ? layout
-                        : "{\"nodes\":[]}"
-                }
-            )));
-        const initialMode = 'Create';
-
-        // Запуск
-        if (window.formBuilder) {
-            window.formBuilder.init(appId, formsByMode, initialMode);
-        } else {
-            // Если модуль еще не загрузился (редкий случай), пробуем через мгновение
-            setTimeout(() => window.formBuilder.init(appId, formsByMode, initialMode), 100);
-        }
-    });
+<script type="application/json" id="formBuilderPayload">
+@Html.Raw(JsonSerializer.Serialize(new
+{
+    appId = Model.AppDefinitionId,
+    initialMode = "Create",
+    forms = (Model.Forms ?? new List<FormBuilderFormDto>()).Select(f => new
+    {
+        id = f.Id,
+        name = f.Name,
+        type = f.Type.ToString(),
+        isDefault = f.IsDefault,
+        layoutJson = f.LayoutJson
+    })
+}))
 </script>

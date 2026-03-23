@@ -90,6 +90,19 @@ public class CreateFormRequest
 }
 
 /// <summary>
+/// Запрос на переименование формы.
+/// </summary>
+public class RenameFormRequest
+{
+    [Required]
+    public Guid Id { get; set; }
+
+    [Required]
+    [MaxLength(100)]
+    public string Name { get; set; } = string.Empty;
+}
+
+/// <summary>
 /// Запрос на сохранение структуры макета.
 /// </summary>
 public class SaveLayoutRequest

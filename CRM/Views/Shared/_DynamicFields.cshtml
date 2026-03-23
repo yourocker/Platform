@@ -1,8 +1,11 @@
+@using System
+@using Core.Entities
 @using Core.Entities.Platform
 @using Core.Entities.Platform.Form
+@using Core.DTOs.Interfaces
 @using System.Text.Json
 @using Microsoft.AspNetCore.Html
-@model Core.DTOs.Interfaces.IDynamicValues
+@model object
 
 @{
     var fields = ViewBag.DynamicFields as List<AppFieldDefinition>;
@@ -11,7 +14,22 @@
     var formLayout = ViewBag.FormLayout as FormLayoutSchema;
     var hasNameInLayout = ViewBag.HasNameInLayout as bool? ?? false;
 
-    var values = Model?.DynamicValues ?? new Dictionary<string, object>();
+    var values = new Dictionary<string, object>();
+    if (Model is IDynamicValues dynValues && dynValues.DynamicValues != null)
+    {
+        values = dynValues.DynamicValues;
+    }
+    else if (Model is IHasDynamicProperties hasProps && !string.IsNullOrWhiteSpace(hasProps.Properties))
+    {
+        try
+        {
+            values = JsonSerializer.Deserialize<Dictionary<string, object>>(hasProps.Properties) ?? new Dictionary<string, object>();
+        }
+        catch
+        {
+            values = new Dictionary<string, object>();
+        }
+    }
 
     var action = ViewContext.RouteData.Values["action"]?.ToString();
     bool isEditMode = action == "Create" || action == "Edit";
@@ -19,7 +37,7 @@
 
     var hasValidLayout = formLayout?.Nodes != null && formLayout.Nodes.Any();
 
-    void RenderFieldBlock(AppFieldDefinition field, bool isReadOnly, bool isRequiredOverride, bool canCreate, bool canView)
+    void RenderFieldBlock(AppFieldDefinition field, bool isReadOnly, bool isRequiredOverride, bool canCreate, bool canView, bool useTopLabel)
     {
         if (string.Equals(field.SystemName, "Name", StringComparison.OrdinalIgnoreCase))
         {
@@ -28,16 +46,17 @@
             var nameShowAsReadOnly = !isEditMode || isReadOnly;
             var nameIsRequired = isRequiredOverride || field.IsRequired;
             
-            <div class="row mb-3 align-items-start">
-                <label class="col-sm-3 col-lg-2 col-form-label text-muted text-sm-end fw-bold">
-                    @field.Label
-                    @if (nameIsRequired && isEditMode && !isReadOnly)
-                    {
-                        <span class="text-danger">*</span>
-                    }
-                </label>
+            if (useTopLabel)
+            {
+                <div class="mb-3">
+                    <label class="form-label text-muted fw-bold">
+                        @field.Label
+                        @if (nameIsRequired && isEditMode && !isReadOnly)
+                        {
+                            <span class="text-danger">*</span>
+                        }
+                    </label>
 
-                <div class="col-sm-9 col-lg-10">
                     @if (!nameShowAsReadOnly)
                     {
                         <input type="text" name="Name" value="@nameValue" class="form-control @(hasNameError ? "is-invalid" : "")" @(nameIsRequired ? "required" : "") />
@@ -57,7 +76,40 @@
                         </div>
                     }
                 </div>
-            </div>
+            }
+            else
+            {
+                <div class="row mb-3 align-items-start">
+                    <label class="col-sm-3 col-lg-2 col-form-label text-muted text-sm-end fw-bold">
+                        @field.Label
+                        @if (nameIsRequired && isEditMode && !isReadOnly)
+                        {
+                            <span class="text-danger">*</span>
+                        }
+                    </label>
+
+                    <div class="col-sm-9 col-lg-10">
+                        @if (!nameShowAsReadOnly)
+                        {
+                            <input type="text" name="Name" value="@nameValue" class="form-control @(hasNameError ? "is-invalid" : "")" @(nameIsRequired ? "required" : "") />
+                        }
+                        else
+                        {
+                            <div class="form-control-plaintext">@(string.IsNullOrEmpty(nameValue) ? "—" : nameValue)</div>
+                        }
+
+                        @if (hasNameError && isEditMode)
+                        {
+                            <div class="text-danger small mt-1">
+                                @foreach (var error in ViewData.ModelState["Name"].Errors)
+                                {
+                                    <div><i class="bi bi-exclamation-circle"></i> @error.ErrorMessage</div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            }
             return;
         }
 
@@ -93,16 +145,17 @@
         var showAsReadOnly = !isEditMode || isReadOnly;
         var isRequired = isRequiredOverride || field.IsRequired;
 
-        <div class="row mb-3 align-items-start">
-            <label class="col-sm-3 col-lg-2 col-form-label text-muted text-sm-end fw-bold">
-                @field.Label
-                @if (isRequired && isEditMode && !isReadOnly)
-                {
-                    <span class="text-danger">*</span>
-                }
-            </label>
+        if (useTopLabel)
+        {
+            <div class="mb-3">
+                <label class="form-label text-muted fw-bold">
+                    @field.Label
+                    @if (isRequired && isEditMode && !isReadOnly)
+                    {
+                        <span class="text-danger">*</span>
+                    }
+                </label>
 
-            <div class="col-sm-9 col-lg-10">
                 <div id="container_@field.SystemName" class="dynamic-field-container">
                     @foreach (var val in currentValues)
                     {
@@ -217,52 +270,210 @@
                     </button>
                 }
             </div>
-        </div>
+        }
+        else
+        {
+            <div class="row mb-3 align-items-start">
+                <label class="col-sm-3 col-lg-2 col-form-label text-muted text-sm-end fw-bold">
+                    @field.Label
+                    @if (isRequired && isEditMode && !isReadOnly)
+                    {
+                        <span class="text-danger">*</span>
+                    }
+                </label>
+
+                <div class="col-sm-9 col-lg-10">
+                    <div id="container_@field.SystemName" class="dynamic-field-container">
+                        @foreach (var val in currentValues)
+                        {
+                            var wrapperId = "wrapper_" + Guid.NewGuid().ToString("N");
+
+                            <div class="input-group mb-2 dynamic-field-item flex-column" id="@wrapperId">
+                                @if (field.DataType == FieldDataType.File && !string.IsNullOrWhiteSpace(val) && !val.Contains("/uploads/temp/"))
+                                {
+                                    <div class="mb-1 d-flex align-items-center">
+                                        <a href="@val" target="_blank" class="text-decoration-none small">
+                                            <i class="bi bi-paperclip"></i> Текущий файл: @System.IO.Path.GetFileName(val)
+                                        </a>
+                                        @if (isEditMode && !showAsReadOnly && !string.IsNullOrEmpty(recordId))
+                                        {
+                                            <button type="button" class="btn btn-link text-danger p-0 ms-2" title="Удалить файл"
+                                                    onclick="deleteExistingFile('@recordId', '@ViewBag.EntityCode', '@field.SystemName', '@val', '@wrapperId')">
+                                                <i class="bi bi-x-circle-fill"></i>
+                                            </button>
+                                        }
+                                    </div>
+                                }
+
+                                <div class="d-flex w-100">
+                                    @if (!showAsReadOnly)
+                                    {
+                                        @renderField(field, val, hasError, lookupData, isRequired)
+
+                                        @if (field.DataType == FieldDataType.EntityLink && canCreate && !string.IsNullOrEmpty(field.TargetEntityCode))
+                                        {
+                                            <a href="/Data/@field.TargetEntityCode/Create" class="btn btn-outline-secondary ms-2" title="Создать связанный объект">
+                                                <i class="bi bi-plus-lg"></i>
+                                            </a>
+                                        }
+
+                                        @if (field.IsArray)
+                                        {
+                                            <button type="button" class="btn btn-outline-danger" onclick="this.closest('.dynamic-field-item').remove()">
+                                                <i class="bi bi-x"></i>
+                                            </button>
+                                        }
+                                    }
+                                    else
+                                    {
+                                        @if (field.DataType == FieldDataType.EntityLink)
+                                        {
+                                            var displayName = val;
+                                            if (lookupData.ContainsKey(field.SystemName))
+                                            {
+                                                var found = lookupData[field.SystemName].FirstOrDefault(x => x.Value == val);
+                                                if (found != null) displayName = found.Text;
+                                            }
+
+                                            if (!string.IsNullOrEmpty(val))
+                                            {
+                                                if (canView && !string.IsNullOrEmpty(field.TargetEntityCode))
+                                                {
+                                                    var href = $"/Data/Details/{val}";
+                                                    <a href="@href" class="btn btn-outline-primary btn-sm">
+                                                        <i class="bi bi-link-45deg"></i> @displayName
+                                                    </a>
+                                                }
+                                                else
+                                                {
+                                                    <div class="form-control-plaintext">@displayName</div>
+                                                }
+                                            }
+                                            else { <span class="text-muted small">Не указано</span> }
+                                        }
+                                        else if (field.DataType == FieldDataType.Boolean)
+                                        {
+                                            var isTrue = (val ?? "").ToLower() == "true";
+                                            <div class="form-control-plaintext">
+                                                <i class="bi @(isTrue ? "bi-check-circle-fill text-success" : "bi-circle text-muted")"></i>
+                                                @(isTrue ? "Да" : "Нет")
+                                            </div>
+                                        }
+                                        else if (field.DataType == FieldDataType.File)
+                                        {
+                                            if (!string.IsNullOrEmpty(val))
+                                            {
+                                                <a href="@val" target="_blank" class="btn btn-sm btn-light border">
+                                                    <i class="bi bi-file-earmark"></i> Скачать
+                                                </a>
+                                            }
+                                            else { <div class="text-muted">Нет файла</div> }
+                                        }
+                                        else
+                                        {
+                                            <div class="form-control-plaintext">@(string.IsNullOrEmpty(val) ? "—" : val)</div>
+                                        }
+                                    }
+                                </div>
+                            </div>
+                        }
+                    </div>
+
+                    @if (hasError && isEditMode)
+                    {
+                        <div class="text-danger small mt-1">
+                            @foreach (var error in ViewData.ModelState[formKey].Errors)
+                            {
+                                <div><i class="bi bi-exclamation-circle"></i> @error.ErrorMessage</div>
+                            }
+                        </div>
+                    }
+
+                    @if (field.IsArray && isEditMode && !isReadOnly)
+                    {
+                        <button type="button" class="btn btn-sm btn-outline-secondary mt-1"
+                                onclick="addDynamicField('@field.SystemName', '@field.DataType')">
+                            <i class="bi bi-plus-lg"></i> Добавить еще
+                        </button>
+                    }
+                </div>
+            </div>
+        }
     }
 
-    void RenderNodes(IEnumerable<LayoutNode> nodes)
+    void RenderNodes(IEnumerable<LayoutNode> nodes, bool useTopLabel = false)
     {
         foreach (var node in nodes)
         {
             switch (node)
             {
                 case FieldNode fieldNode when fieldsById.TryGetValue(fieldNode.FieldId, out var field):
-                    RenderFieldBlock(field, fieldNode.IsReadOnly, fieldNode.IsRequiredOverride, fieldNode.CanCreate, fieldNode.CanView);
+                    RenderFieldBlock(field, fieldNode.IsReadOnly, fieldNode.IsRequiredOverride, fieldNode.CanCreate, fieldNode.CanView, useTopLabel);
                     break;
                 case GroupNode groupNode:
                     <div class="card mb-3">
                         <div class="card-header fw-semibold">@(groupNode.Title ?? groupNode.CustomLabel ?? "Группа")</div>
                         <div class="card-body">
-                            @{ RenderNodes(groupNode.Children); }
+                            @{ RenderNodes(groupNode.Children, useTopLabel); }
                         </div>
                     </div>
                     break;
                 case TabControlNode tabControlNode:
-                    <div class="mb-3">
-                        @foreach (var tab in tabControlNode.Tabs)
-                        {
-                            <div class="card mb-3">
-                                <div class="card-header fw-semibold">@(tab.Title ?? tab.CustomLabel ?? "Вкладка")</div>
-                                <div class="card-body">
-                                    @{ RenderNodes(tab.Children); }
-                                </div>
+                    {
+                        var tabs = tabControlNode.Tabs ?? new List<TabNode>();
+                        var controlId = $"tabctl_{Guid.NewGuid():N}";
+                        <div class="mb-3">
+                            <ul class="nav nav-tabs" role="tablist">
+                                @for (var i = 0; i < tabs.Count; i++)
+                                {
+                                    var tab = tabs[i];
+                                    var tabId = $"{controlId}_tab_{i}";
+                                    var isActive = i == 0 ? "active" : "";
+                                    var isSelected = i == 0 ? "true" : "false";
+                                    <li class="nav-item" role="presentation">
+                                        <button class="nav-link @isActive" id="@($"{tabId}_btn")" data-bs-toggle="tab" data-bs-target="#@tabId" type="button" role="tab" aria-controls="@tabId" aria-selected="@isSelected">
+                                            @(tab.Title ?? tab.CustomLabel ?? "Вкладка")
+                                        </button>
+                                    </li>
+                                }
+                            </ul>
+                            <div class="tab-content border border-top-0 p-3">
+                                @for (var i = 0; i < tabs.Count; i++)
+                                {
+                                    var tab = tabs[i];
+                                    var tabId = $"{controlId}_tab_{i}";
+                                    var isActive = i == 0 ? "show active" : "";
+                                    <div class="tab-pane fade @isActive" id="@tabId" role="tabpanel" aria-labelledby="@($"{tabId}_btn")">
+                                        @{ RenderNodes(tab.Children, useTopLabel); }
+                                    </div>
+                                }
                             </div>
-                        }
-                    </div>
+                        </div>
+                    }
                     break;
                 case RowNode rowNode:
-                    <div class="row">
-                        @foreach (var column in rowNode.Columns)
-                        {
-                            <div class="col-md-@Math.Clamp(column.Width, 1, 12)">
-                                @{ RenderNodes(column.Children); }
+                    {
+                        var rowTitle = rowNode.CustomLabel;
+                        var hasRowTitle = !string.IsNullOrWhiteSpace(rowTitle);
+                        <div class="border-top pt-3 mt-3">
+                            @if (hasRowTitle)
+                            {
+                                <div class="fw-semibold text-muted small mb-2">@rowTitle</div>
+                            }
+                            <div class="row">
+                                @foreach (var column in rowNode.Columns)
+                                {
+                                    <div class="col-md-@Math.Clamp(column.Width, 1, 12)">
+                                        @{ RenderNodes(column.Children, true); }
+                                    </div>
+                                }
                             </div>
-                        }
-                    </div>
+                        </div>
+                    }
                     break;
                 case ColumnNode columnNode:
                     <div class="col-md-@Math.Clamp(columnNode.Width, 1, 12)">
-                        @{ RenderNodes(columnNode.Children); }
+                        @{ RenderNodes(columnNode.Children, true); }
                     </div>
                     break;
             }
@@ -286,7 +497,7 @@
             {
                 if (!hasNameInLayout && string.Equals(field.SystemName, "Name", StringComparison.OrdinalIgnoreCase))
                     continue;
-                RenderFieldBlock(field, false, false, true, true);
+                RenderFieldBlock(field, false, false, true, true, false);
             }
         }
     </div>

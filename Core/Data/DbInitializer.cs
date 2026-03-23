@@ -20,13 +20,16 @@ namespace Core.Data
             // --- ШАГ 3: Обязательное системное поле "Название" для пользовательских сущностей ---
             await EnsureNameFieldsAsync(context);
 
-            // --- ШАГ 4: Специфические поля для CRM ---
+            // --- ШАГ 4: Базовые формы (Create/Edit/View) с полем "Название" ---
+            await EnsureDefaultFormsAsync(context);
+
+            // --- ШАГ 5: Специфические поля для CRM ---
             await EnsureCrmFieldsAsync(context);
 
-            // --- ШАГ 5: Базовые воронки и этапы ---
+            // --- ШАГ 6: Базовые воронки и этапы ---
             await EnsureDefaultPipelinesAsync(context);
 
-            // --- ШАГ 6: Создание администратора из конфигурации ---
+            // --- ШАГ 7: Создание администратора из конфигурации ---
             await EnsureAdminAsync(userManager, configuration);
         }
 
@@ -169,6 +172,70 @@ namespace Core.Data
             }
 
             await context.SaveChangesAsync();
+        }
+
+        private static async Task EnsureDefaultFormsAsync(AppDbContext context)
+        {
+            var appIds = await context.AppDefinitions
+                .Select(a => a.Id)
+                .ToListAsync();
+
+            if (!appIds.Any()) return;
+
+            var nameFieldMap = await context.AppFieldDefinitions
+                .Where(f => appIds.Contains(f.AppDefinitionId))
+                .Where(f => f.SystemName.ToLower() == "name")
+                .Select(f => new { f.AppDefinitionId, f.Id })
+                .ToListAsync();
+
+            var nameFieldByApp = nameFieldMap
+                .GroupBy(x => x.AppDefinitionId)
+                .ToDictionary(g => g.Key, g => g.First().Id);
+
+            var existingForms = await context.AppFormDefinitions
+                .Where(f => appIds.Contains(f.AppDefinitionId))
+                .ToListAsync();
+
+            bool changed = false;
+            foreach (var appId in appIds)
+            {
+                if (!nameFieldByApp.TryGetValue(appId, out var nameFieldId)) continue;
+
+                foreach (var type in Enum.GetValues<Core.Entities.Platform.Form.FormType>())
+                {
+                    var formsOfType = existingForms.Where(f => f.AppDefinitionId == appId && f.Type == type).ToList();
+                    if (!formsOfType.Any())
+                    {
+                        context.AppFormDefinitions.Add(new Core.Entities.Platform.Form.AppFormDefinition
+                        {
+                            Id = Guid.NewGuid(),
+                            AppDefinitionId = appId,
+                            Name = "Основная форма",
+                            Type = type,
+                            IsDefault = true,
+                            Layout = BuildNameOnlyLayout(nameFieldId)
+                        });
+                        changed = true;
+                        continue;
+                    }
+
+                    if (!formsOfType.Any(f => f.IsDefault))
+                    {
+                        formsOfType.First().IsDefault = true;
+                        changed = true;
+                    }
+                }
+            }
+
+            if (changed)
+            {
+                await context.SaveChangesAsync();
+            }
+        }
+
+        private static string BuildNameOnlyLayout(Guid nameFieldId)
+        {
+            return $"{{\"nodes\":[{{\"type\":\"field\",\"FieldId\":\"{nameFieldId}\"}}]}}";
         }
 
         private static async Task EnsureCrmFieldsAsync(AppDbContext context)

@@ -4,6 +4,7 @@ using System.Threading.Tasks;
 using System.Text.RegularExpressions;
 using Core.Data;
 using Core.Entities.Platform;
+using Core.Entities.Platform.Form;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
@@ -86,6 +87,7 @@ public class AppDefinitionsController(AppDbContext context) : Controller
             if (!app.IsSystem)
             {
                 await EnsureNameFieldAsync(app.Id);
+                await EnsureDefaultFormsAsync(app.Id);
             }
             return RedirectToAction(nameof(Index));
         }
@@ -257,6 +259,57 @@ public class AppDefinitionsController(AppDbContext context) : Controller
         });
         await _context.SaveChangesAsync();
     }
+
+    private async Task EnsureDefaultFormsAsync(Guid appDefinitionId)
+    {
+        var nameFieldId = await _context.AppFieldDefinitions
+            .Where(f => f.AppDefinitionId == appDefinitionId)
+            .Where(f => f.SystemName.ToLower() == "name")
+            .Select(f => f.Id)
+            .FirstOrDefaultAsync();
+
+        if (nameFieldId == Guid.Empty) return;
+
+        var existing = await _context.AppFormDefinitions
+            .Where(f => f.AppDefinitionId == appDefinitionId)
+            .ToListAsync();
+
+        bool changed = false;
+        foreach (var type in Enum.GetValues<Core.Entities.Platform.Form.FormType>())
+        {
+            var formsOfType = existing.Where(f => f.Type == type).ToList();
+            if (!formsOfType.Any())
+            {
+                _context.AppFormDefinitions.Add(new AppFormDefinition
+                {
+                    Id = Guid.NewGuid(),
+                    AppDefinitionId = appDefinitionId,
+                    Name = "Основная форма",
+                    Type = type,
+                    IsDefault = true,
+                    Layout = BuildNameOnlyLayout(nameFieldId)
+                });
+                changed = true;
+                continue;
+            }
+
+            if (!formsOfType.Any(f => f.IsDefault))
+            {
+                formsOfType.First().IsDefault = true;
+                changed = true;
+            }
+        }
+
+        if (changed)
+        {
+            await _context.SaveChangesAsync();
+        }
+    }
+
+    private static string BuildNameOnlyLayout(Guid nameFieldId)
+    {
+        return $"{{\"nodes\":[{{\"type\":\"field\",\"FieldId\":\"{nameFieldId}\"}}]}}";
+    }
     
     // GET: AppDefinitions/FormBuilder/{id}
     // Единственная точка входа конструктора форм: возвращаем modal-версию.
@@ -269,9 +322,14 @@ public class AppDefinitionsController(AppDbContext context) : Controller
 
         if (appDef == null) return NotFound();
 
+        await EnsureDefaultFormsAsync(id);
+
         // 1. Загружаем все существующие конфигурации форм для этой сущности
         var existingForms = await _context.AppFormDefinitions
             .Where(f => f.AppDefinitionId == id)
+            .OrderBy(f => f.Type)
+            .ThenByDescending(f => f.IsDefault)
+            .ThenBy(f => f.Name)
             .ToListAsync();
 
         // 2. Готовим ViewModel
@@ -282,15 +340,15 @@ public class AppDefinitionsController(AppDbContext context) : Controller
             EntityCode = appDef.EntityCode
         };
 
-        // 3. Заполняем словарь для каждого типа формы (Create, Edit, View)
-        foreach (var type in Enum.GetValues<Core.Entities.Platform.Form.FormType>())
+        // 3. Передаем все формы (для выбора/редактирования)
+        viewModel.Forms = existingForms.Select(f => new CRM.ViewModels.FormConfig.FormBuilderFormDto
         {
-            var existingForm = existingForms.FirstOrDefault(f => f.Type == type && f.IsDefault); // Пока работаем с IsDefault=true
-            
-            // Если формы нет в БД, отдаем пустой валидный Layout
-            viewModel.FormLayouts[type] = existingForm?.Layout ?? "{\"nodes\": []}";
-            viewModel.FormIds[type] = existingForm?.Id;
-        }
+            Id = f.Id,
+            Name = f.Name,
+            Type = f.Type,
+            IsDefault = f.IsDefault,
+            LayoutJson = string.IsNullOrWhiteSpace(f.Layout) ? "{\"nodes\":[]}" : f.Layout
+        }).ToList();
 
         // Возвращаем только modal-версию конструктора (single source of truth)
         return PartialView("FormBuilderModal", viewModel);

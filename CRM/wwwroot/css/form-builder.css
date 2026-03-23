@@ -4,9 +4,66 @@
 
 /* Канвас */
 .builder-canvas-wrapper {
-    background-image: radial-gradient(var(--primary-color) 0.5px, transparent 0.5px);
-    background-size: 24px 24px;
-    opacity: 0.8;
+    background-color: #fff !important;
+    background-image: none;
+    opacity: 1;
+}
+
+#formCanvas {
+    background: #fff !important;
+}
+
+.tab-designer-header {
+    border-bottom: 1px solid #e6e9ef;
+    padding: 6px 10px;
+    background: #fff;
+    gap: 8px;
+}
+
+.tab-strip {
+    display: flex !important;
+    align-items: center;
+    gap: 6px;
+    flex-wrap: nowrap;
+    padding: 4px 0;
+    overflow-x: auto;
+}
+
+.tab-header {
+    display: inline-flex !important;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 10px;
+    border: 1px solid transparent;
+    border-radius: 6px 6px 0 0;
+    background: transparent;
+    cursor: grab;
+    font-size: 13px;
+    flex: 0 0 auto;
+    width: auto;
+}
+
+.tab-header.is-active {
+    background: #fff;
+    border-color: #e2e6ea;
+    color: var(--primary-color);
+    box-shadow: 0 -1px 0 #e2e6ea inset;
+}
+
+.tab-header .tab-title {
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.tab-designer-body {
+    background: #fff;
+    border: 1px solid #e2e6ea;
+    border-radius: 0 6px 6px 6px;
+    padding: 12px;
+}
+
+.tab-content-zone {
+    min-height: 60px;
 }
 
 /* Поля в палитре */

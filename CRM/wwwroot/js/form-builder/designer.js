@@ -1,5 +1,5 @@
-﻿import { FormApiClient } from './api.js';
-import { fieldManager } from './field-manager.js';
+﻿import { FormApiClient } from './api.js?v=20260319a';
+import { fieldManager } from './field-manager.js?v=20260319a';
 
 export const layoutDesigner = {
     layout: { nodes: [] },
@@ -8,6 +8,7 @@ export const layoutDesigner = {
     formType: null,
     canvas: null,
     selectedPath: null,
+    activeTabs: {},
 
     init(formId, layout, appDefinitionId, formType) {
         this.formId = formId || null;
@@ -16,6 +17,7 @@ export const layoutDesigner = {
         this.layout = this.normalizeLayout(layout || { nodes: [] });
         this.canvas = document.getElementById('formCanvas');
         this.selectedPath = null;
+        if (!this.activeTabs) this.activeTabs = {};
         this.render();
         this.initSortable();
     },
@@ -115,8 +117,9 @@ export const layoutDesigner = {
             zone._sortable = Sortable.create(zone, {
                 group: 'canvasTree',
                 animation: 150,
-                draggable: ':scope > .canvas-node',
-                handle: '.node-drag-handle',
+                draggable: '.canvas-node',
+                filter: '.btn, .btn *, .tab-title, .tab-title *',
+                preventOnFilter: false,
                 onAdd: (e) => {
                     const path = this.parsePath(e.to.dataset.path);
                     const targetList = this.getListByPath(path);
@@ -188,7 +191,7 @@ export const layoutDesigner = {
 
     render() {
         this.canvas.innerHTML = `
-            <div class="drop-zone border rounded p-3 bg-light-subtle" data-path="nodes">
+            <div class="drop-zone border rounded p-3 bg-white" data-path="nodes">
                 ${this.renderNodes(this.layout.nodes, ['nodes'])}
             </div>`;
 
@@ -238,12 +241,13 @@ export const layoutDesigner = {
 
         if (node.type === 'column') {
             const colWidth = Math.min(Math.max(Number(node.Width) || 12, 1), 12);
+            const columnTitle = (node.CustomLabel && String(node.CustomLabel).trim()) || `Колонка ${colWidth}/12`;
             return `
                 <div class="canvas-node column-node col-${colWidth} p-1" data-type="column" data-path="${pathValue}">
                     <div class="border rounded bg-white h-100 ${selectedClass}">
                         <div class="p-2 border-bottom d-flex align-items-center">
                             <i class="bi bi-grip-vertical me-2 text-muted node-drag-handle"></i>
-                            <span class="small flex-grow-1" onclick="layoutDesigner.selectNode('${pathValue}')">Колонка ${colWidth}/12</span>
+                            <span class="small flex-grow-1" onclick="layoutDesigner.selectNode('${pathValue}')">${columnTitle}</span>
                             <button class="btn btn-sm btn-link text-secondary p-0 me-2" onclick="layoutDesigner.selectNode('${pathValue}')"><i class="bi bi-sliders"></i></button>
                             <button class="btn btn-sm btn-link text-danger p-0" onclick="layoutDesigner.removeByPath('${pathValue}')"><i class="bi bi-x-lg"></i></button>
                         </div>
@@ -258,11 +262,12 @@ export const layoutDesigner = {
 
         if (node.type === 'row') {
             const columns = node.Columns || [];
+            const rowTitle = (node.CustomLabel && String(node.CustomLabel).trim()) || 'Строка';
             return `
                 <div class="canvas-node row-node border rounded bg-light p-2 mb-3 ${selectedClass}" data-type="row" data-path="${pathValue}">
                     <div class="d-flex align-items-center mb-2">
                         <i class="bi bi-grip-vertical me-2 text-muted node-drag-handle"></i>
-                        <strong class="flex-grow-1" onclick="layoutDesigner.selectNode('${pathValue}')">Строка</strong>
+                        <strong class="flex-grow-1" onclick="layoutDesigner.selectNode('${pathValue}')">${rowTitle}</strong>
                         <button class="btn btn-sm btn-link text-secondary p-0 me-2" onclick="layoutDesigner.selectNode('${pathValue}')"><i class="bi bi-sliders"></i></button>
                         <button class="btn btn-sm btn-link text-danger p-0" onclick="layoutDesigner.removeByPath('${pathValue}')"><i class="bi bi-x-lg"></i></button>
                     </div>
@@ -291,17 +296,24 @@ export const layoutDesigner = {
 
         if (node.type === 'tabControl') {
             const tabs = node.Tabs || [];
+            const activeIndex = this.getActiveTabIndex(pathValue, tabs);
+            const activeTab = tabs[activeIndex] || null;
             return `
-                <div class="canvas-node tab-control-node border rounded bg-white mb-3 ${selectedClass}" data-type="tabControl" data-path="${pathValue}">
-                    <div class="p-2 border-bottom d-flex align-items-center bg-primary-subtle">
+                <div class="canvas-node tab-control-node mb-3 ${selectedClass}" data-type="tabControl" data-path="${pathValue}">
+                    <div class="tab-designer-header d-flex align-items-center">
                         <i class="bi bi-grip-vertical me-2 text-muted node-drag-handle"></i>
-                        <strong class="flex-grow-1" onclick="layoutDesigner.selectNode('${pathValue}')">Контейнер вкладок</strong>
-                        <button class="btn btn-sm btn-link text-secondary p-0 me-2" onclick="layoutDesigner.selectNode('${pathValue}')"><i class="bi bi-sliders"></i></button>
-                        <button class="btn btn-sm btn-link text-danger p-0" onclick="layoutDesigner.removeByPath('${pathValue}')"><i class="bi bi-x-lg"></i></button>
+                        <div class="drop-zone tab-strip flex-grow-1" data-path="${pathValue}.Tabs">
+                            ${tabs.map((tab, index) => this.renderTabHeader(tab, pathValue, index, index === activeIndex)).join('')}
+                        </div>
+                        <button class="btn btn-sm btn-outline-primary ms-2" onclick="layoutDesigner.addTab('${pathValue}')" title="Добавить вкладку">+</button>
+                        <button class="btn btn-sm btn-link text-danger ms-1" onclick="layoutDesigner.removeByPath('${pathValue}')" title="Удалить блок вкладок">
+                            <i class="bi bi-x-lg"></i>
+                        </button>
                     </div>
-                    <div class="p-2">
-                        <div class="drop-zone border rounded p-2" data-path="${pathValue}.Tabs">
-                            ${tabs.map((tab, index) => this.renderNode(tab, [...path, 'Tabs', index])).join('')}
+                    <div class="tab-designer-body">
+                        <div class="drop-zone tab-content-zone" data-path="${pathValue}.Tabs.${activeIndex}.Children">
+                            ${activeTab ? this.renderNodes(activeTab.Children, [...path, 'Tabs', activeIndex, 'Children']) : ''}
+                            ${!activeTab ? '<div class="text-muted small">Добавьте вкладку</div>' : ''}
                         </div>
                     </div>
                 </div>`;
@@ -360,7 +372,7 @@ export const layoutDesigner = {
                 type,
                 Title: existing.Title || 'Новая вкладка',
                 CustomLabel: existing.CustomLabel || '',
-                Children: zone ? this.syncZone(zone) : []
+                Children: zone ? this.syncZone(zone) : (existing.Children || [])
             };
         }
 
@@ -370,7 +382,7 @@ export const layoutDesigner = {
             return {
                 type,
                 CustomLabel: existing.CustomLabel || '',
-                Tabs: zone ? this.syncZone(zone).map((tab) => ({ ...tab, type: 'tab' })) : []
+                Tabs: zone ? this.syncZone(zone).map((tab) => ({ ...tab, type: 'tab' })) : (existing.Tabs || [])
             };
         }
 
@@ -454,6 +466,52 @@ export const layoutDesigner = {
         this.render();
     },
 
+    renderTabHeader(tab, controlPath, index, isActive) {
+        const title = tab.Title || tab.CustomLabel || 'Вкладка';
+        const activeClass = isActive ? 'is-active' : '';
+        return `
+            <div class="canvas-node tab-header ${activeClass}" data-type="tab" data-path="${controlPath}.Tabs.${index}">
+                <span class="tab-title" onclick="layoutDesigner.selectTab('${controlPath}', ${index})">${title}</span>
+                <button class="btn btn-sm btn-link text-danger p-0 ms-2" onclick="layoutDesigner.removeTab('${controlPath}', ${index})">
+                    <i class="bi bi-x"></i>
+                </button>
+            </div>`;
+    },
+
+    getActiveTabIndex(controlPath, tabs) {
+        const idx = this.activeTabs?.[controlPath];
+        if (typeof idx === 'number' && idx >= 0 && idx < (tabs?.length || 0)) return idx;
+        return 0;
+    },
+
+    selectTab(controlPath, index) {
+        this.activeTabs[controlPath] = index;
+        this.selectedPath = `${controlPath}.Tabs.${index}`;
+        this.render();
+    },
+
+    addTab(controlPath) {
+        const node = this.getNodeByPath(controlPath);
+        if (!node || node.type !== 'tabControl') return;
+        if (!node.Tabs) node.Tabs = [];
+        node.Tabs.push({ type: 'tab', Title: 'Новая вкладка', CustomLabel: '', Children: [] });
+        const newIndex = node.Tabs.length - 1;
+        this.activeTabs[controlPath] = newIndex;
+        this.selectedPath = `${controlPath}.Tabs.${newIndex}`;
+        this.render();
+    },
+
+    removeTab(controlPath, index) {
+        const node = this.getNodeByPath(controlPath);
+        if (!node || node.type !== 'tabControl' || !Array.isArray(node.Tabs)) return;
+        if (node.Tabs.length <= 1) return;
+        node.Tabs.splice(index, 1);
+        const nextIndex = Math.min(index, node.Tabs.length - 1);
+        this.activeTabs[controlPath] = nextIndex;
+        this.selectedPath = `${controlPath}.Tabs.${nextIndex}`;
+        this.render();
+    },
+
     renderSettingsPanel() {
         const panel = document.getElementById('nodeSettingsPanel');
         if (!panel) return;
@@ -482,6 +540,14 @@ export const layoutDesigner = {
                 </div>`);
         }
 
+        if (['row', 'column'].includes(node.type)) {
+            lines.push(`
+                <div class="mb-2">
+                    <label class="form-label form-label-sm">Заголовок</label>
+                    <input class="form-control form-control-sm" value="${node.CustomLabel || ''}" onchange="layoutDesigner.updateNodeSetting('CustomLabel', this.value)">
+                </div>`);
+        }
+
         if (node.type === 'column') {
             lines.push(`
                 <div class="mb-2">
@@ -490,11 +556,13 @@ export const layoutDesigner = {
                 </div>`);
         }
 
-        lines.push(`
-            <div class="mb-2">
-                <label class="form-label form-label-sm">CustomLabel</label>
-                <input class="form-control form-control-sm" value="${node.CustomLabel || ''}" onchange="layoutDesigner.updateNodeSetting('CustomLabel', this.value)">
-            </div>`);
+        if (!['row', 'column'].includes(node.type)) {
+            lines.push(`
+                <div class="mb-2">
+                    <label class="form-label form-label-sm">CustomLabel</label>
+                    <input class="form-control form-control-sm" value="${node.CustomLabel || ''}" onchange="layoutDesigner.updateNodeSetting('CustomLabel', this.value)">
+                </div>`);
+        }
 
         panel.innerHTML = lines.join('');
     },
@@ -534,6 +602,19 @@ export const layoutDesigner = {
 
             const result = await response.json();
 
+            const finalizeSave = (newFormId) => {
+                if (newFormId && !this.formId) {
+                    this.formId = newFormId;
+                }
+                if (window.formBuilder?.onLayoutSaved) {
+                    window.formBuilder.onLayoutSaved({
+                        formId: this.formId,
+                        formType,
+                        layoutJson: JSON.stringify(this.layout)
+                    });
+                }
+            };
+
             if (result.warning) {
                 const shouldForceSave = confirm(`${result.message}\n\nСохранить форму принудительно?`);
                 if (!shouldForceSave) return;
@@ -556,14 +637,7 @@ export const layoutDesigner = {
                     throw new Error(forceResult.message || 'Ошибка принудительного сохранения макета');
                 }
 
-                if (forceResult.formId && !this.formId) {
-                    this.formId = forceResult.formId;
-                    const modeKey = typeof formType === 'string' ? formType : this.formType;
-                    if (window.formBuilder?.formsByMode?.[modeKey]) {
-                        window.formBuilder.formsByMode[modeKey].formId = forceResult.formId;
-                    }
-                }
-
+                finalizeSave(forceResult.formId);
                 alert(forceResult.message || 'Макет сохранен успешно');
                 return;
             }
@@ -572,14 +646,7 @@ export const layoutDesigner = {
                 throw new Error(result.message || 'Ошибка сохранения макета');
             }
 
-            if (result.formId && !this.formId) {
-                this.formId = result.formId;
-                const modeKey = typeof formType === 'string' ? formType : this.formType;
-                if (window.formBuilder?.formsByMode?.[modeKey]) {
-                    window.formBuilder.formsByMode[modeKey].formId = result.formId;
-                }
-            }
-
+            finalizeSave(result.formId);
             alert(result.message || 'Макет сохранен успешно');
         } catch (e) {
             alert(e.message);
