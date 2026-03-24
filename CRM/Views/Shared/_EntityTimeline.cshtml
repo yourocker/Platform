@@ -1,0 +1,69 @@
+@using System.Linq
+@using Core.Entities.CRM
+@model IEnumerable<CrmEvent>
+
+@{
+    var eventsList = (Model ?? Enumerable.Empty<CrmEvent>()).ToList();
+
+    (string Icon, string BadgeClass) ResolveVisual(CrmEventType type) => type switch
+    {
+        CrmEventType.System => ("bi-lightning-charge", "text-primary"),
+        CrmEventType.Comment => ("bi-chat-left-text", "text-info"),
+        CrmEventType.FieldChange => ("bi-pencil-square", "text-warning"),
+        CrmEventType.TaskLink => ("bi-link-45deg", "text-success"),
+        CrmEventType.View => ("bi-eye", "text-muted"),
+        _ => ("bi-clock-history", "text-muted")
+    };
+}
+
+@if (!eventsList.Any())
+{
+    <div class="text-center text-muted py-5">
+        <div class="mb-3">
+            <i class="bi bi-clock-history fs-1 opacity-50"></i>
+        </div>
+        <div class="fw-semibold">Событий пока нет</div>
+        <div class="small">Здесь будет отображаться история изменений и системных действий.</div>
+    </div>
+}
+else
+{
+    <div class="d-flex flex-column gap-3">
+        @foreach (var entityEvent in eventsList)
+        {
+            var visual = ResolveVisual(entityEvent.Type);
+            var actorName = entityEvent.Employee?.FullName ?? "Система";
+
+            <div class="border rounded-3 p-3 bg-light">
+                <div class="d-flex align-items-start gap-3">
+                    <div class="pt-1">
+                        <span class="@visual.BadgeClass">
+                            <i class="bi @visual.Icon fs-5"></i>
+                        </span>
+                    </div>
+
+                    <div class="flex-grow-1">
+                        <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+                            <span class="fw-semibold">@entityEvent.Title</span>
+                            @if (entityEvent.IsPinned)
+                            {
+                                <span class="badge bg-warning text-dark">Закреплено</span>
+                            }
+                        </div>
+
+                        <div class="small text-muted mb-2">
+                            @actorName
+                            <span class="mx-1">•</span>
+                            @entityEvent.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")
+                        </div>
+
+                        @if (!string.IsNullOrWhiteSpace(entityEvent.Content))
+                        {
+                            <div class="small" style="white-space: pre-line;">@entityEvent.Content</div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}

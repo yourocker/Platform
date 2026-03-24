@@ -1,5 +1,27 @@
+@using System.Collections.Generic
+@using System.Linq
+@using Core.Entities.CRM
+@using CRM.ViewModels.Shared
 @model Core.Entities.Platform.GenericObject
-@{ ViewData["Title"] = "Просмотр: " + Model.Name; }
+@{
+    ViewData["Title"] = "Просмотр: " + Model.Name;
+
+    var tabsModel = new EntityDetailsTabsViewModel
+    {
+        MainPartialViewName = "~/Views/GenericObjects/_DetailsMain.cshtml",
+        MainModel = Model,
+        AdditionalTabs = new List<EntityDetailsTabDefinition>
+        {
+            new()
+            {
+                Key = "events",
+                Title = "События",
+                PartialViewName = "~/Views/Shared/_EntityTimeline.cshtml",
+                Model = ViewBag.TimelineEvents as IEnumerable<CrmEvent> ?? Enumerable.Empty<CrmEvent>()
+            }
+        }
+    };
+}
 
 <div class="container-fluid px-4">
     <crm-page-header title="" icon="" subtitle=""></crm-page-header>
@@ -12,14 +34,7 @@
                     <div class="text-muted small">Тип: @ViewBag.DefinitionName</div>
                 </div>
                 <div class="card-body p-4">
-                    @if (!(ViewBag.HasNameInLayout ?? false))
-                    {
-                    <crm-input label="Наименование" asp-for="Name" readonly="readonly"></crm-input>
-                    }
-
-                    <div class="mt-4 pt-4 border-top">
-                        <partial name="_DynamicFields" model="Model" />
-                    </div>
+                    <partial name="_EntityDetailsTabs" model="tabsModel" />
                 </div>
             </div>
 

@@ -12,13 +12,21 @@ using System.Collections.Generic;
 using System.Text.RegularExpressions;
 using Core.Entities.Platform.Form;
 using System.Text.Json;
+using Core.Entities.CRM;
+using Core.Interfaces.Platform;
+using CRM.Infrastructure;
 
 namespace CRM.Controllers;
 
 // Устанавливаем базовый маршрут для всех действий контроллера
 [Route("Data")]
-public class GenericObjectsController(AppDbContext context, IWebHostEnvironment hostingEnvironment) : BasePlatformController(context, hostingEnvironment)
+public class GenericObjectsController(
+    AppDbContext context,
+    IWebHostEnvironment hostingEnvironment,
+    IEntityTimelineService timelineService) : BasePlatformController(context, hostingEnvironment)
 {
+    private readonly IEntityTimelineService _timelineService = timelineService;
+
     private async Task LoadDefinitionWithFields(string entityCode, FormType? formType = null)
     {
         var definition = await _context.AppDefinitions
@@ -221,6 +229,14 @@ public class GenericObjectsController(AppDbContext context, IWebHostEnvironment 
             FinalizeDynamicFilePaths(obj, obj.EntityCode, obj.Id.ToString());
             await _context.SaveChangesAsync();
 
+            await _timelineService.LogEventAsync(
+                obj.Id,
+                obj.EntityCode,
+                CrmEventType.System,
+                "Объект создан",
+                $"Создан объект \"{obj.Name}\".",
+                TryGetCurrentEmployeeId());
+
             if (modal)
             {
                 return BuildModalCreatedContentResult(obj.EntityCode, obj.Id, obj.Name);
@@ -252,6 +268,10 @@ public class GenericObjectsController(AppDbContext context, IWebHostEnvironment 
         if (id != incomingObj.Id) return NotFound();
         var dbObj = await _context.GenericObjects.FindAsync(id);
         if (dbObj == null) return NotFound();
+
+        var beforeName = dbObj.Name;
+        var beforeProps = TimelineChangeFormatter.ParseDynamicProperties(dbObj.Properties);
+
         dbObj.Name = incomingObj.Name;
         await SaveDynamicProperties(dbObj, form, dbObj.EntityCode);
         if (ModelState.IsValid)
@@ -261,6 +281,18 @@ public class GenericObjectsController(AppDbContext context, IWebHostEnvironment 
                 FinalizeDynamicFilePaths(dbObj, dbObj.EntityCode, dbObj.Id.ToString());
                 _context.Update(dbObj);
                 await _context.SaveChangesAsync();
+
+                var fieldLabels = await LoadFieldLabelMapAsync(dbObj.EntityCode);
+                var afterProps = TimelineChangeFormatter.ParseDynamicProperties(dbObj.Properties);
+                var changeSummary = BuildGenericObjectChangeSummary(beforeName, dbObj.Name, beforeProps, afterProps, fieldLabels);
+
+                await _timelineService.LogEventAsync(
+                    dbObj.Id,
+                    dbObj.EntityCode,
+                    CrmEventType.FieldChange,
+                    "Объект обновлён",
+                    changeSummary,
+                    TryGetCurrentEmployeeId());
             }
             catch (DbUpdateConcurrencyException)
             {
@@ -281,6 +313,7 @@ public class GenericObjectsController(AppDbContext context, IWebHostEnvironment 
         if (obj == null) return NotFound();
 
         await LoadDefinitionWithFields(obj.EntityCode, FormType.View);
+        ViewBag.TimelineEvents = await _timelineService.GetEventsAsync(obj.Id, obj.EntityCode);
         ViewBag.EntityCode = obj.EntityCode;
         return View(obj);
     }
@@ -293,8 +326,37 @@ public class GenericObjectsController(AppDbContext context, IWebHostEnvironment 
         var obj = await _context.GenericObjects.FindAsync(id);
         if (obj == null) return NotFound();
         var entityCode = obj.EntityCode;
+        var objectName = obj.Name;
         _context.GenericObjects.Remove(obj);
         await _context.SaveChangesAsync();
+
+        await _timelineService.LogEventAsync(
+            id,
+            entityCode,
+            CrmEventType.System,
+            "Объект удалён",
+            $"Удалён объект \"{objectName}\".",
+            TryGetCurrentEmployeeId());
+
         return Redirect($"/Data/{entityCode}");
+    }
+
+    private static string? BuildGenericObjectChangeSummary(
+        string? beforeName,
+        string? afterName,
+        IReadOnlyDictionary<string, string> beforeProps,
+        IReadOnlyDictionary<string, string> afterProps,
+        IReadOnlyDictionary<string, string> fieldLabels)
+    {
+        var changes = new List<string>();
+
+        TimelineChangeFormatter.AddScalarChange(changes, "Наименование", beforeName, afterName);
+        TimelineChangeFormatter.AddDictionaryChanges(
+            changes,
+            beforeProps,
+            afterProps,
+            key => fieldLabels.TryGetValue(key, out var label) ? label : key);
+
+        return TimelineChangeFormatter.BuildSummary(changes);
     }
 }

@@ -15,6 +15,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Core.Entities.Tasks;
 using CRM.Infrastructure;
+using System.Security.Claims;
 
 namespace CRM.Controllers
 {
@@ -219,6 +220,21 @@ namespace CRM.Controllers
             }
 
             return $"/Data/{resolvedCode}/Create?modal=true";
+        }
+
+        protected Guid? TryGetCurrentEmployeeId()
+        {
+            var employeeIdRaw = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            return Guid.TryParse(employeeIdRaw, out var employeeId) ? employeeId : null;
+        }
+
+        protected async Task<Dictionary<string, string>> LoadFieldLabelMapAsync(string entityCode)
+        {
+            return await _context.AppDefinitions
+                .AsNoTracking()
+                .Where(d => d.EntityCode == entityCode)
+                .SelectMany(d => d.Fields.Where(f => !f.IsDeleted))
+                .ToDictionaryAsync(f => f.SystemName, f => f.Label, StringComparer.OrdinalIgnoreCase);
         }
 
         protected ContentResult BuildModalCreatedContentResult(string entityCode, Guid id, string? name)

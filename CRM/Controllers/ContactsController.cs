@@ -14,17 +14,26 @@ using Core.DTOs.CRM;
 using Core.Services.CRM;
 using Core.UI.Grid;
 using Microsoft.AspNetCore.Hosting;
+using System.Text.Json;
+using Core.Interfaces.Platform;
+using CRM.Infrastructure;
 
 namespace CRM.Controllers
 {
     public class ContactsController : BasePlatformController
     {
         private readonly IContactService _contactService;
+        private readonly IEntityTimelineService _timelineService;
 
-        public ContactsController(AppDbContext context, IContactService contactService, IWebHostEnvironment hostingEnvironment)
+        public ContactsController(
+            AppDbContext context,
+            IContactService contactService,
+            IWebHostEnvironment hostingEnvironment,
+            IEntityTimelineService timelineService)
             : base(context, hostingEnvironment)
         {
             _contactService = contactService;
+            _timelineService = timelineService;
         }
 
         // --- ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ---
@@ -175,6 +184,7 @@ namespace CRM.Controllers
             await LoadViewData();
             
             var dto = ContactMapper.ToDetailsDto(contact);
+            ViewBag.TimelineEvents = await _timelineService.GetEventsAsync(contact.Id, "Contact");
             return View(dto);
         }
 
@@ -196,6 +206,14 @@ namespace CRM.Controllers
                 var contact = ContactMapper.ToEntity(dto);
                 var dynamicProps = ExtractDynamicProps();
                 var createdContact = await _contactService.CreateContactAsync(contact, dto.PhoneNumbers, dto.EmailAddresses, dynamicProps);
+
+                await _timelineService.LogEventAsync(
+                    createdContact.Id,
+                    "Contact",
+                    CrmEventType.System,
+                    "Контакт создан",
+                    $"Создан контакт \"{createdContact.FullName}\".",
+                    TryGetCurrentEmployeeId());
 
                 if (modal)
                 {
@@ -237,12 +255,33 @@ namespace CRM.Controllers
 
             if (ModelState.IsValid)
             {
+                var beforeContact = await _context.Contacts
+                    .Include(c => c.Phones)
+                    .Include(c => c.Emails)
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(c => c.Id == id);
+                if (beforeContact == null)
+                {
+                    return NotFound();
+                }
+
                 try
                 {
                     var contact = new Contact(); 
                     ContactMapper.UpdateEntity(contact, dto); 
                     var dynamicProps = ExtractDynamicProps(); 
                     await _contactService.UpdateContactAsync(id, contact, dto.PhoneNumbers, dto.EmailAddresses, dynamicProps);
+
+                    var fieldLabels = await LoadFieldLabelMapAsync("Contact");
+                    var summary = BuildContactChangeSummary(beforeContact, dto, dynamicProps, fieldLabels);
+
+                    await _timelineService.LogEventAsync(
+                        id,
+                        "Contact",
+                        CrmEventType.FieldChange,
+                        "Контакт обновлён",
+                        summary,
+                        TryGetCurrentEmployeeId());
                 }
                 catch (KeyNotFoundException)
                 {
@@ -274,10 +313,55 @@ namespace CRM.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteConfirmed(Guid id)
         {
+            var contact = await _context.Contacts
+                .AsNoTracking()
+                .FirstOrDefaultAsync(c => c.Id == id);
+
             await _contactService.DeleteContactAsync(id);
+
+            if (contact != null)
+            {
+                await _timelineService.LogEventAsync(
+                    id,
+                    "Contact",
+                    CrmEventType.System,
+                    "Контакт удалён",
+                    $"Удалён контакт \"{contact.FullName}\".",
+                    TryGetCurrentEmployeeId());
+            }
+
             return RedirectToAction(nameof(Index));
         }
 
         private bool ContactExists(Guid id) => _context.Contacts.Any(e => e.Id == id);
+
+        private static string? BuildContactChangeSummary(
+            Contact beforeContact,
+            ContactEditDto dto,
+            Dictionary<string, object> dynamicProps,
+            IReadOnlyDictionary<string, string> fieldLabels)
+        {
+            var changes = new List<string>();
+
+            TimelineChangeFormatter.AddScalarChange(changes, "Фамилия", beforeContact.LastName, dto.LastName);
+            TimelineChangeFormatter.AddScalarChange(changes, "Имя", beforeContact.FirstName, dto.FirstName);
+            TimelineChangeFormatter.AddScalarChange(changes, "Отчество", beforeContact.MiddleName, dto.MiddleName);
+            TimelineChangeFormatter.AddCollectionChange(changes, "Телефоны", beforeContact.Phones.Select(p => p.Number), dto.PhoneNumbers);
+            TimelineChangeFormatter.AddCollectionChange(changes, "Email", beforeContact.Emails.Select(e => e.Email), dto.EmailAddresses);
+
+            var beforeProps = TimelineChangeFormatter.ParseDynamicProperties(beforeContact.Properties);
+            var afterProps = TimelineChangeFormatter.ParseDynamicProperties(
+                dynamicProps != null && dynamicProps.Any()
+                    ? JsonSerializer.Serialize(dynamicProps)
+                    : null);
+
+            TimelineChangeFormatter.AddDictionaryChanges(
+                changes,
+                beforeProps,
+                afterProps,
+                key => fieldLabels.TryGetValue(key, out var label) ? label : key);
+
+            return TimelineChangeFormatter.BuildSummary(changes);
+        }
     }
 }

@@ -1,83 +1,44 @@
-﻿@model Core.DTOs.CRM.ContactDetailsDto
+﻿@using System.Collections.Generic
+@using System.Linq
+@using Core.Entities.CRM
+@using CRM.ViewModels.Shared
+@model Core.DTOs.CRM.ContactDetailsDto
 @{
     ViewData["Title"] = Model.FullName;
+
+    var tabsModel = new EntityDetailsTabsViewModel
+    {
+        MainPartialViewName = "~/Views/Contacts/_DetailsMain.cshtml",
+        MainModel = Model,
+        AdditionalTabs = new List<EntityDetailsTabDefinition>
+        {
+            new()
+            {
+                Key = "events",
+                Title = "События",
+                PartialViewName = "~/Views/Shared/_EntityTimeline.cshtml",
+                Model = ViewBag.TimelineEvents as IEnumerable<CrmEvent> ?? Enumerable.Empty<CrmEvent>()
+            }
+        }
+    };
 }
 
 <div class="container-fluid px-4">
-    @* --- УНИФИЦИРОВАННЫЙ ХЕДЕР СТРАНИЦЫ (БЕЗ ДУБЛИРОВАНИЯ) --- *@
     <crm-page-header title="" icon="" subtitle="">
     </crm-page-header>
 
-    <div class="row">
-        <div class="col-lg-8">
+    <div class="row justify-content-center">
+        <div class="col-lg-9">
             <div crm-card>
+                <div class="card-header bg-transparent border-0 pt-4 px-4">
+                    <h5 class="fw-bold mb-0">Просмотр контакта</h5>
+                    <div class="text-muted small">Карточка клиента</div>
+                </div>
                 <div class="card-body p-4">
-                    @* Блок 1: ФИО *@
-                    <div class="row g-4">
-                        <div class="col-md-4">
-                            <label class="form-label small fw-bold text-muted text-uppercase d-block">Фамилия</label>
-                            <span class="fs-5">@Model.LastName</span>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label small fw-bold text-muted text-uppercase d-block">Имя</label>
-                            <span class="fs-5">@Model.FirstName</span>
-                        </div>
-                        <div class="col-md-4">
-                            <label class="form-label small fw-bold text-muted text-uppercase d-block">Отчество</label>
-                            <span class="fs-5">@(Model.MiddleName ?? "—")</span>
-                        </div>
-                    </div>
-
-                    @* Блок 2: Контакты *@
-                    <div class="row g-4 mt-2">
-                        <div class="col-md-6">
-                            <label class="form-label small fw-bold text-muted text-uppercase d-block mb-2">Телефоны</label>
-                            @if (Model.PhoneNumbers.Any())
-                            {
-                                <div class="d-flex flex-column gap-2">
-                                    @foreach (var phone in Model.PhoneNumbers)
-                                    {
-                                        <div class="d-flex align-items-center bg-light rounded px-3 py-2">
-                                            <i class="bi bi-telephone text-primary me-3 opacity-75"></i>
-                                            <span class="fw-medium">@phone</span>
-                                        </div>
-                                    }
-                                </div>
-                            }
-                            else
-                            {
-                                <span class="text-muted">Нет данных</span>
-                            }
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label small fw-bold text-muted text-uppercase d-block mb-2">Email</label>
-                            @if (Model.EmailAddresses.Any())
-                            {
-                                <div class="d-flex flex-column gap-2">
-                                    @foreach (var email in Model.EmailAddresses)
-                                    {
-                                        <div class="d-flex align-items-center bg-light rounded px-3 py-2">
-                                            <i class="bi bi-envelope text-primary me-3 opacity-75"></i>
-                                            <a href="mailto:@email" class="text-decoration-none text-dark fw-medium">@email</a>
-                                        </div>
-                                    }
-                                </div>
-                            }
-                            else
-                            {
-                                <span class="text-muted">Нет данных</span>
-                            }
-                        </div>
-                    </div>
-
-                    @* Блок 3: Динамические поля *@
-                    <div class="mt-4 pt-4 border-top">
-                        <partial name="_DynamicFields" model="Model" />
-                    </div>
+                    <partial name="_EntityDetailsTabs" model="tabsModel" />
                 </div>
             </div>
 
-            @* --- БЛОК КНОПОК УПРАВЛЕНИЯ (ПЕРЕНЕСЕНО СЮДА) --- *@
             <div class="mt-4 d-flex gap-2">
                 <a asp-action="Edit" asp-route-id="@Model.Id" crm-button variant="primary" icon="pencil-square" class="px-5 py-2 fs-6 shadow">
                     Изменить
@@ -93,16 +54,6 @@
                 <a asp-action="Delete" asp-route-id="@Model.Id" class="text-danger small text-decoration-none opacity-75">
                     <i class="bi bi-trash me-1"></i> Удалить запись
                 </a>
-            </div>
-        </div>
-
-        @* Правая колонка: История/Активности (заглушка) *@
-        <div class="col-lg-4">
-            <div crm-card class="h-100 bg-light border-0">
-                <div class="card-body p-4 text-center text-muted">
-                    <i class="bi bi-clock-history display-4 opacity-25 mb-3"></i>
-                    <p class="small">История взаимодействий будет здесь</p>
-                </div>
             </div>
         </div>
     </div>

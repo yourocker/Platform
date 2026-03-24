@@ -1,0 +1,61 @@
+@model Core.DTOs.CRM.ContactDetailsDto
+
+<div class="row g-4">
+    <div class="col-md-4">
+        <label class="form-label small fw-bold text-muted text-uppercase d-block">Фамилия</label>
+        <span class="fs-5">@Model.LastName</span>
+    </div>
+    <div class="col-md-4">
+        <label class="form-label small fw-bold text-muted text-uppercase d-block">Имя</label>
+        <span class="fs-5">@Model.FirstName</span>
+    </div>
+    <div class="col-md-4">
+        <label class="form-label small fw-bold text-muted text-uppercase d-block">Отчество</label>
+        <span class="fs-5">@(Model.MiddleName ?? "—")</span>
+    </div>
+</div>
+
+<div class="row g-4 mt-2">
+    <div class="col-md-6">
+        <label class="form-label small fw-bold text-muted text-uppercase d-block mb-2">Телефоны</label>
+        @if (Model.PhoneNumbers.Any())
+        {
+            <div class="d-flex flex-column gap-2">
+                @foreach (var phone in Model.PhoneNumbers)
+                {
+                    <div class="d-flex align-items-center bg-light rounded px-3 py-2">
+                        <i class="bi bi-telephone text-primary me-3 opacity-75"></i>
+                        <span class="fw-medium">@phone</span>
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <span class="text-muted">Нет данных</span>
+        }
+    </div>
+    <div class="col-md-6">
+        <label class="form-label small fw-bold text-muted text-uppercase d-block mb-2">Email</label>
+        @if (Model.EmailAddresses.Any())
+        {
+            <div class="d-flex flex-column gap-2">
+                @foreach (var email in Model.EmailAddresses)
+                {
+                    <div class="d-flex align-items-center bg-light rounded px-3 py-2">
+                        <i class="bi bi-envelope text-primary me-3 opacity-75"></i>
+                        <a href="mailto:@email" class="text-decoration-none text-dark fw-medium">@email</a>
+                    </div>
+                }
+            </div>
+        }
+        else
+        {
+            <span class="text-muted">Нет данных</span>
+        }
+    </div>
+</div>
+
+<div class="mt-4 pt-4 border-top">
+    <partial name="_DynamicFields" model="Model" />
+</div>

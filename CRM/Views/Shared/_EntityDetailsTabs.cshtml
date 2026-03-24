@@ -1,0 +1,59 @@
+@using System.Collections.Generic
+@using CRM.ViewModels.Shared
+@model EntityDetailsTabsViewModel
+
+@{
+    var controlId = $"entity_tabs_{Guid.NewGuid():N}";
+    var additionalTabs = Model.AdditionalTabs ?? new List<EntityDetailsTabDefinition>();
+}
+
+<div class="entity-details-tabs">
+    <ul class="nav nav-tabs" id="@($"{controlId}_nav")" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active"
+                    id="@($"{controlId}_main_tab")"
+                    data-bs-toggle="tab"
+                    data-bs-target="#@($"{controlId}_main")"
+                    type="button"
+                    role="tab"
+                    aria-controls="@($"{controlId}_main")"
+                    aria-selected="true">
+                @Model.MainTabTitle
+            </button>
+        </li>
+        @foreach (var tab in additionalTabs)
+        {
+            <li class="nav-item" role="presentation">
+                <button class="nav-link"
+                        id="@($"{controlId}_{tab.Key}_tab")"
+                        data-bs-toggle="tab"
+                        data-bs-target="#@($"{controlId}_{tab.Key}")"
+                        type="button"
+                        role="tab"
+                        aria-controls="@($"{controlId}_{tab.Key}")"
+                        aria-selected="false">
+                    @tab.Title
+                </button>
+            </li>
+        }
+    </ul>
+
+    <div class="tab-content border border-top-0 rounded-bottom p-4 bg-white">
+        <div class="tab-pane fade show active"
+             id="@($"{controlId}_main")"
+             role="tabpanel"
+             aria-labelledby="@($"{controlId}_main_tab")">
+            <partial name="@Model.MainPartialViewName" model="@Model.MainModel" />
+        </div>
+
+        @foreach (var tab in additionalTabs)
+        {
+            <div class="tab-pane fade"
+                 id="@($"{controlId}_{tab.Key}")"
+                 role="tabpanel"
+                 aria-labelledby="@($"{controlId}_{tab.Key}_tab")">
+                <partial name="@tab.PartialViewName" model="@tab.Model" />
+            </div>
+        }
+    </div>
+</div>

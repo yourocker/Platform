@@ -73,6 +73,7 @@ builder.Services.AddScoped<ICrmResourceManager, CrmResourceManager>();
 builder.Services.AddScoped<IBookingPolicyService, BookingPolicyService>();
 builder.Services.AddScoped<IBookingCalendarDecorationService, BookingCalendarDecorationService>();
 builder.Services.AddScoped<IFeatureToggleService, FeatureToggleService>();
+builder.Services.AddScoped<IEntityTimelineService, EntityTimelineService>();
 builder.Services.AddScoped<FeatureGateFilter>();
 builder.Services.AddScoped<ModalRedirectFilter>();
 

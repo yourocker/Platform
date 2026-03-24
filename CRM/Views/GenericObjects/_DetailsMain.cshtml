@@ -1,0 +1,10 @@
+@model Core.Entities.Platform.GenericObject
+
+@if (!(ViewBag.HasNameInLayout ?? false))
+{
+    <crm-input label="Наименование" asp-for="Name" readonly="readonly"></crm-input>
+}
+
+<div class="mt-4 pt-4 border-top">
+    <partial name="_DynamicFields" model="Model" />
+</div>

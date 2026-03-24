@@ -26,18 +26,21 @@ namespace CRM.Controllers
         private readonly ICrmResourceManager _resourceManager;
         private readonly IBookingPolicyService _bookingPolicyService;
         private readonly IBookingCalendarDecorationService _calendarDecorationService;
+        private readonly IEntityTimelineService _timelineService;
 
         public ScheduleController(
             AppDbContext context,
             IWebHostEnvironment hostingEnvironment,
             ICrmResourceManager resourceManager,
             IBookingPolicyService bookingPolicyService,
-            IBookingCalendarDecorationService calendarDecorationService)
+            IBookingCalendarDecorationService calendarDecorationService,
+            IEntityTimelineService timelineService)
             : base(context, hostingEnvironment)
         {
             _resourceManager = resourceManager;
             _bookingPolicyService = bookingPolicyService;
             _calendarDecorationService = calendarDecorationService;
+            _timelineService = timelineService;
         }
 
         public async Task<IActionResult> Index()
@@ -501,6 +504,7 @@ namespace CRM.Controllers
             try
             {
                 await _resourceManager.BookResourceAsync(booking, isOutsideCompanyWorkHours && allowOutOfHours);
+                await LogBookingCreatedAsync(booking, currentEmployeeId);
                 return Json(new { success = true });
             }
             catch (Exception ex)
@@ -602,6 +606,8 @@ namespace CRM.Controllers
 
             var existing = await _context.CrmResourceBookings
                 .AsNoTracking()
+                .Include(b => b.BookingItems)
+                .Include(b => b.BookingContacts)
                 .FirstOrDefaultAsync(b => b.Id == bookingId);
             if (existing == null)
             {
@@ -732,6 +738,7 @@ namespace CRM.Controllers
             try
             {
                 await _resourceManager.UpdateBookingAsync(booking, canBypassCompanyWorkHours);
+                await LogBookingUpdatedAsync(existing, booking, currentEmployeeId, "Запись обновлена");
                 return Json(new { success = true });
             }
             catch (Exception ex)
@@ -818,6 +825,7 @@ namespace CRM.Controllers
             try
             {
                 await _resourceManager.UpdateBookingAsync(booking, canBypassCompanyWorkHours);
+                await LogBookingUpdatedAsync(existing, booking, currentEmployeeId, "Время записи изменено");
                 return Json(new
                 {
                     success = true,
@@ -900,6 +908,14 @@ namespace CRM.Controllers
             _context.Contacts.Add(contact);
             await _context.SaveChangesAsync();
 
+            await _timelineService.LogEventAsync(
+                contact.Id,
+                "Contact",
+                CrmEventType.System,
+                "Контакт создан",
+                $"Контакт создан из формы бронирования: \"{contact.FullName}\".",
+                GetCurrentEmployeeId());
+
             return Json(new
             {
                 success = true,
@@ -912,7 +928,11 @@ namespace CRM.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteBooking(Guid id)
         {
-            var booking = await _context.CrmResourceBookings.FindAsync(id);
+            var booking = await _context.CrmResourceBookings
+                .AsNoTracking()
+                .Include(b => b.BookingItems)
+                .Include(b => b.BookingContacts)
+                .FirstOrDefaultAsync(b => b.Id == id);
             if (booking == null)
             {
                 return Json(new { success = false, message = "Бронирование не найдено." });
@@ -920,6 +940,8 @@ namespace CRM.Controllers
 
             _context.CrmResourceBookings.Remove(booking);
             await _context.SaveChangesAsync();
+
+            await LogBookingDeletedAsync(booking, GetCurrentEmployeeId());
 
             return Json(new { success = true });
         }
@@ -1477,6 +1499,202 @@ namespace CRM.Controllers
             return rawTitle.Trim();
         }
 
+        private async Task LogBookingCreatedAsync(CrmResourceBooking booking, Guid? actorId)
+        {
+            var snapshot = await BuildBookingTimelineSnapshotAsync(booking);
+            await _timelineService.LogEventAsync(
+                booking.Id,
+                BookingEntityCode,
+                CrmEventType.System,
+                "Запись создана",
+                BuildBookingCreatedSummary(snapshot),
+                actorId);
+        }
+
+        private async Task LogBookingUpdatedAsync(
+            CrmResourceBooking before,
+            CrmResourceBooking after,
+            Guid? actorId,
+            string title)
+        {
+            var fieldLabels = await LoadFieldLabelMapAsync(BookingEntityCode);
+            var beforeSnapshot = await BuildBookingTimelineSnapshotAsync(before);
+            var afterSnapshot = await BuildBookingTimelineSnapshotAsync(after);
+
+            await _timelineService.LogEventAsync(
+                after.Id,
+                BookingEntityCode,
+                CrmEventType.FieldChange,
+                title,
+                BuildBookingChangeSummary(beforeSnapshot, afterSnapshot, fieldLabels),
+                actorId);
+        }
+
+        private async Task LogBookingDeletedAsync(CrmResourceBooking booking, Guid? actorId)
+        {
+            var snapshot = await BuildBookingTimelineSnapshotAsync(booking);
+            var lines = new List<string>
+            {
+                $"Заголовок: {DisplayOrPlaceholder(snapshot.Title)}",
+                $"Период: {FormatBookingPeriod(snapshot.Start, snapshot.End)}"
+            };
+
+            await _timelineService.LogEventAsync(
+                booking.Id,
+                BookingEntityCode,
+                CrmEventType.System,
+                "Запись удалена",
+                string.Join(Environment.NewLine, lines),
+                actorId);
+        }
+
+        private async Task<BookingTimelineSnapshot> BuildBookingTimelineSnapshotAsync(CrmResourceBooking booking)
+        {
+            var performerName = booking.PerformerEmployee?.FullName;
+            if (string.IsNullOrWhiteSpace(performerName) && booking.PerformerEmployeeId.HasValue)
+            {
+                performerName = await _context.Employees
+                    .AsNoTracking()
+                    .Where(e => e.Id == booking.PerformerEmployeeId.Value)
+                    .Select(e => e.FullName)
+                    .FirstOrDefaultAsync();
+            }
+
+            var resourceName = booking.Resource?.Name;
+            if (string.IsNullOrWhiteSpace(resourceName))
+            {
+                resourceName = await _context.CrmResources
+                    .AsNoTracking()
+                    .Where(r => r.Id == booking.ResourceId)
+                    .Select(r => r.Name)
+                    .FirstOrDefaultAsync();
+            }
+
+            var statusName = booking.Status?.Name;
+            if (string.IsNullOrWhiteSpace(statusName) && booking.StatusId.HasValue)
+            {
+                statusName = await _context.BookingStatuses
+                    .AsNoTracking()
+                    .Where(s => s.Id == booking.StatusId.Value)
+                    .Select(s => s.Name)
+                    .FirstOrDefaultAsync();
+            }
+
+            var serviceIds = booking.BookingItems
+                .Select(i => i.ServiceItemId)
+                .Where(id => id != Guid.Empty)
+                .Distinct()
+                .ToList();
+            if (!serviceIds.Any() && booking.ServiceItemId.HasValue && booking.ServiceItemId.Value != Guid.Empty)
+            {
+                serviceIds.Add(booking.ServiceItemId.Value);
+            }
+
+            var serviceNames = serviceIds.Any()
+                ? await _context.ServiceItems
+                    .AsNoTracking()
+                    .Where(s => serviceIds.Contains(s.Id))
+                    .OrderBy(s => s.Name)
+                    .Select(s => s.Name)
+                    .ToListAsync()
+                : new List<string>();
+
+            var contactIds = booking.BookingContacts
+                .Select(c => c.ContactId)
+                .Distinct()
+                .ToList();
+
+            var contactNames = contactIds.Any()
+                ? await _context.Contacts
+                    .AsNoTracking()
+                    .Where(c => contactIds.Contains(c.Id))
+                    .OrderBy(c => c.FullName)
+                    .Select(c => c.FullName)
+                    .ToListAsync()
+                : new List<string>();
+
+            return new BookingTimelineSnapshot(
+                booking.Title,
+                performerName,
+                resourceName,
+                statusName,
+                booking.StartTime,
+                booking.EndTime,
+                booking.Amount,
+                booking.Comment,
+                booking.DiscountReason,
+                serviceNames,
+                contactNames,
+                TimelineChangeFormatter.ParseDynamicProperties(booking.Properties));
+        }
+
+        private static string BuildBookingCreatedSummary(BookingTimelineSnapshot snapshot)
+        {
+            var lines = new List<string>
+            {
+                $"Заголовок: {DisplayOrPlaceholder(snapshot.Title)}",
+                $"Исполнитель: {DisplayOrPlaceholder(snapshot.PerformerName)}",
+                $"Ресурс: {DisplayOrPlaceholder(snapshot.ResourceName)}",
+                $"Период: {FormatBookingPeriod(snapshot.Start, snapshot.End)}"
+            };
+
+            if (snapshot.ServiceNames.Any())
+            {
+                lines.Add($"Услуги: {string.Join(", ", snapshot.ServiceNames)}");
+            }
+
+            if (!string.IsNullOrWhiteSpace(snapshot.StatusName))
+            {
+                lines.Add($"Статус: {snapshot.StatusName}");
+            }
+
+            return string.Join(Environment.NewLine, lines);
+        }
+
+        private static string? BuildBookingChangeSummary(
+            BookingTimelineSnapshot before,
+            BookingTimelineSnapshot after,
+            IReadOnlyDictionary<string, string> fieldLabels)
+        {
+            var changes = new List<string>();
+
+            TimelineChangeFormatter.AddScalarChange(changes, "Заголовок", before.Title, after.Title);
+            TimelineChangeFormatter.AddScalarChange(changes, "Исполнитель", before.PerformerName, after.PerformerName);
+            TimelineChangeFormatter.AddScalarChange(changes, "Ресурс", before.ResourceName, after.ResourceName);
+            TimelineChangeFormatter.AddScalarChange(changes, "Статус", before.StatusName, after.StatusName);
+            TimelineChangeFormatter.AddScalarChange(changes, "Начало", FormatDateTime(before.Start), FormatDateTime(after.Start));
+            TimelineChangeFormatter.AddScalarChange(changes, "Окончание", FormatDateTime(before.End), FormatDateTime(after.End));
+            TimelineChangeFormatter.AddScalarChange(changes, "Сумма", FormatMoney(before.Amount), FormatMoney(after.Amount));
+            TimelineChangeFormatter.AddScalarChange(changes, "Комментарий", before.Comment, after.Comment);
+            TimelineChangeFormatter.AddScalarChange(changes, "Обоснование скидки", before.DiscountReason, after.DiscountReason);
+            TimelineChangeFormatter.AddCollectionChange(changes, "Услуги", before.ServiceNames, after.ServiceNames);
+            TimelineChangeFormatter.AddCollectionChange(changes, "Контакты", before.ContactNames, after.ContactNames);
+            TimelineChangeFormatter.AddDictionaryChanges(
+                changes,
+                before.DynamicProps,
+                after.DynamicProps,
+                key => fieldLabels.TryGetValue(key, out var label) ? label : key);
+
+            return TimelineChangeFormatter.BuildSummary(changes);
+        }
+
+        private static string FormatBookingPeriod(DateTime start, DateTime end)
+        {
+            if (start.Date == end.Date)
+            {
+                return $"{start:dd.MM.yyyy HH:mm} - {end:HH:mm}";
+            }
+
+            return $"{start:dd.MM.yyyy HH:mm} - {end:dd.MM.yyyy HH:mm}";
+        }
+
+        private static string FormatDateTime(DateTime value) => value.ToString("dd.MM.yyyy HH:mm");
+
+        private static string FormatMoney(decimal value) => value.ToString("0.##", CultureInfo.InvariantCulture);
+
+        private static string DisplayOrPlaceholder(string? value) =>
+            string.IsNullOrWhiteSpace(value) ? "не заполнено" : value.Trim();
+
         private static Dictionary<string, string> ReadFilterValuesFromForm(IFormCollection form)
         {
             var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -1746,5 +1964,19 @@ namespace CRM.Controllers
             bool RequiresConfirmation,
             bool IsOverbooking,
             string Message);
+
+        private sealed record BookingTimelineSnapshot(
+            string? Title,
+            string? PerformerName,
+            string? ResourceName,
+            string? StatusName,
+            DateTime Start,
+            DateTime End,
+            decimal Amount,
+            string? Comment,
+            string? DiscountReason,
+            IReadOnlyList<string> ServiceNames,
+            IReadOnlyList<string> ContactNames,
+            IReadOnlyDictionary<string, string> DynamicProps);
     }
 }
