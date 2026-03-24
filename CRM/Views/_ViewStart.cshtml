@@ -1,3 +1,20 @@
-﻿@{
-    Layout = "_LayoutV2";
+﻿@using System
+@{
+    bool isModalRequest = false;
+
+    var queryModal = Context.Request.Query["modal"].ToString();
+    if (string.Equals(queryModal, "true", StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(queryModal, "1", StringComparison.OrdinalIgnoreCase))
+    {
+        isModalRequest = true;
+    }
+    else if (Context.Request.HasFormContentType)
+    {
+        var formModal = Context.Request.Form["modal"].ToString();
+        isModalRequest =
+            string.Equals(formModal, "true", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(formModal, "1", StringComparison.OrdinalIgnoreCase);
+    }
+
+    Layout = isModalRequest ? "_LayoutModal" : "_LayoutV2";
 }

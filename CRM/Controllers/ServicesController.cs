@@ -439,15 +439,16 @@ public async Task<IActionResult> ExecuteImport(string fileName, Dictionary<strin
             }
         }
 
-        public async Task<IActionResult> Create()
+        public async Task<IActionResult> Create(bool modal = false)
         {
             await LoadViewData("ServiceItem");
+            ViewBag.IsModal = modal;
             return View(new ServiceItem { Id = Guid.NewGuid(), EntityCode = "ServiceItem" });
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create(ServiceItem service)
+        public async Task<IActionResult> Create(ServiceItem service, bool modal = false)
         {
             var dynamicData = ExtractDynamicProps();
             if (dynamicData.Any()) service.Properties = JsonSerializer.Serialize(dynamicData);
@@ -460,9 +461,16 @@ public async Task<IActionResult> ExecuteImport(string fileName, Dictionary<strin
             {
                 _context.Add(service);
                 await _context.SaveChangesAsync();
+
+                if (modal)
+                {
+                    return BuildModalCreatedContentResult("ServiceItem", service.Id, service.Name);
+                }
+
                 return RedirectToAction(nameof(Index));
             }
             await LoadViewData("ServiceItem");
+            ViewBag.IsModal = modal;
             return View(service);
         }
 
@@ -605,5 +613,33 @@ public async Task<IActionResult> ExecuteImport(string fileName, Dictionary<strin
         }
 
         private bool CategoryExists(Guid id) => _context.ServiceCategories.Any(e => e.Id == id);
+
+        private ContentResult BuildModalCreatedContentResult(string entityCode, Guid id, string? name)
+        {
+            var payloadJson = JsonSerializer.Serialize(new
+            {
+                type = "crm-entity-created",
+                entityCode,
+                id,
+                name = name ?? string.Empty
+            });
+
+            var html = $"""
+                        <!DOCTYPE html>
+                        <html lang="ru">
+                        <head>
+                            <meta charset="utf-8" />
+                            <title>Создано</title>
+                        </head>
+                        <body>
+                            <script>
+                                window.parent.postMessage({payloadJson}, window.location.origin);
+                            </script>
+                        </body>
+                        </html>
+                        """;
+
+            return Content(html, "text/html; charset=utf-8");
+        }
     }
 }

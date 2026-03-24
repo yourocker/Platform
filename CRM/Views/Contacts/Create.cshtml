@@ -1,6 +1,11 @@
 ﻿@model Core.DTOs.CRM.ContactCreateDto
 @{
     ViewData["Title"] = "Новый контакт";
+    var isModal = ViewBag.IsModal as bool? ?? false;
+    if (isModal)
+    {
+        Layout = "_LayoutModal";
+    }
 }
 
 <div class="container-fluid px-4">
@@ -9,6 +14,10 @@
     </crm-page-header>
 
     <form asp-action="Create" method="post" enctype="multipart/form-data">
+        @if (isModal)
+        {
+            <input type="hidden" name="modal" value="true" />
+        }
         
         <div class="row">
             <div class="col-lg-8">
@@ -103,9 +112,19 @@
                     <button type="submit" crm-button variant="primary" icon="check-lg" class="px-5 py-2 fs-6 shadow">
                         Создать контакт
                     </button>
-                    <a asp-action="Index" crm-button variant="outline-secondary" icon="x-lg" class="px-4 py-2 fs-6 shadow-none">
-                        Отмена
-                    </a>
+                    @if (isModal)
+                    {
+                        <button type="button" crm-button variant="outline-secondary" icon="x-lg" class="px-4 py-2 fs-6 shadow-none"
+                                onclick="window.parent.postMessage({ type: 'crm-modal-close' }, window.location.origin)">
+                            Отмена
+                        </button>
+                    }
+                    else
+                    {
+                        <a asp-action="Index" crm-button variant="outline-secondary" icon="x-lg" class="px-4 py-2 fs-6 shadow-none">
+                            Отмена
+                        </a>
+                    }
                 </div>
             </div>
         </div>

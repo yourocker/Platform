@@ -8,7 +8,6 @@ using Core.Entities.System;
 using Core.Interfaces.CRM;
 using Core.Interfaces.Platform;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Primitives;
 
@@ -108,7 +107,8 @@ namespace CRM.Controllers
                 .OrderBy(f => f.SortOrder)
                 .ToList() ?? new List<AppFieldDefinition>();
 
-            var lookupData = await BuildLookupDataAsync(customFields);
+            var lookupData = await BuildEntityLinkLookupDataAsync(customFields);
+            var bookingQuickCreatableEntityCodes = await BuildQuickCreatableEntityCodeSetAsync(customFields);
 
             ViewBag.BookingCustomFieldsJson = JsonSerializer.Serialize(customFields.Select(f => new
             {
@@ -117,44 +117,13 @@ namespace CRM.Controllers
                 DataType = f.DataType.ToString(),
                 f.IsRequired,
                 f.IsArray,
-                f.TargetEntityCode
+                f.TargetEntityCode,
+                CanQuickCreate = CanQuickCreateEntity(f.TargetEntityCode, bookingQuickCreatableEntityCodes),
+                ModalCreateUrl = BuildModalCreateUrl(f.TargetEntityCode, bookingQuickCreatableEntityCodes)
             }));
 
             ViewBag.BookingLookupDataJson = JsonSerializer.Serialize(
                 lookupData.ToDictionary(
-                    x => x.Key,
-                    x => x.Value.Select(v => new { v.Value, v.Text })));
-
-            var contactDefinition = await _context.AppDefinitions
-                .AsNoTracking()
-                .Include(d => d.Fields)
-                .FirstOrDefaultAsync(d => d.EntityCode == "Contact");
-
-            var contactCustomFields = contactDefinition?.Fields
-                .Where(f =>
-                    !f.IsDeleted &&
-                    !string.Equals(f.SystemName, "Name", StringComparison.OrdinalIgnoreCase) &&
-                    !string.Equals(f.SystemName, "FullName", StringComparison.OrdinalIgnoreCase) &&
-                    !string.Equals(f.SystemName, "LastName", StringComparison.OrdinalIgnoreCase) &&
-                    !string.Equals(f.SystemName, "FirstName", StringComparison.OrdinalIgnoreCase) &&
-                    !string.Equals(f.SystemName, "MiddleName", StringComparison.OrdinalIgnoreCase))
-                .OrderBy(f => f.SortOrder)
-                .ToList() ?? new List<AppFieldDefinition>();
-
-            var contactLookupData = await BuildLookupDataAsync(contactCustomFields);
-
-            ViewBag.ContactCustomFieldsJson = JsonSerializer.Serialize(contactCustomFields.Select(f => new
-            {
-                f.Label,
-                f.SystemName,
-                DataType = f.DataType.ToString(),
-                f.IsRequired,
-                f.IsArray,
-                f.TargetEntityCode
-            }));
-
-            ViewBag.ContactLookupDataJson = JsonSerializer.Serialize(
-                contactLookupData.ToDictionary(
                     x => x.Key,
                     x => x.Value.Select(v => new { v.Value, v.Text })));
 
@@ -265,6 +234,7 @@ namespace CRM.Controllers
                 search = search.Trim();
 
                 query = query.Where(b =>
+                    (b.Title != null && EF.Functions.ILike(b.Title, $"%{search}%")) ||
                     EF.Functions.ILike(b.Resource.Name, $"%{search}%") ||
                     (b.ServiceItem != null && EF.Functions.ILike(b.ServiceItem.Name, $"%{search}%")) ||
                     b.BookingItems.Any(i => EF.Functions.ILike(i.ServiceItem.Name, $"%{search}%")) ||
@@ -303,9 +273,14 @@ namespace CRM.Controllers
                             .ToList()
                         : new List<string> { b.ServiceItem?.Name ?? "Без услуги" };
 
-                    var titleService = serviceList.FirstOrDefault() ?? "Без услуги";
-                    var extraCount = Math.Max(0, serviceList.Count - 1);
                     var performerName = b.PerformerEmployee?.FullName ?? "Без исполнителя";
+                    var primaryServiceName = b.ServiceItem?.Name ??
+                                             b.BookingItems
+                                                 .Select(i => i.ServiceItem.Name)
+                                                 .OrderBy(name => name)
+                                                 .FirstOrDefault() ??
+                                             "Без услуги";
+                    var resolvedTitle = BuildBookingTitle(b.Title, performerName, b.Resource?.Name, primaryServiceName);
                     var backgroundColor = b.Status != null
                         ? GetColorByStatusCategory(b.Status.Category)
                         : (b.IsOverbooking ? "#f59f00" : "#198754");
@@ -316,9 +291,7 @@ namespace CRM.Controllers
                     return new
                     {
                         id = b.Id,
-                        title = extraCount > 0
-                            ? $"{titleService} +{extraCount} · {performerName}"
-                            : $"{titleService} · {performerName}",
+                        title = resolvedTitle,
                         start = b.StartTime.ToString("yyyy-MM-ddTHH:mm:ss"),
                         end = b.EndTime.ToString("yyyy-MM-ddTHH:mm:ss"),
                         backgroundColor,
@@ -326,6 +299,7 @@ namespace CRM.Controllers
                         textColor = "#ffffff",
                         extendedProps = new
                         {
+                            title = resolvedTitle,
                             resource = b.Resource.Name,
                             services = serviceList,
                             contacts = b.BookingContacts.Select(c => c.Contact.FullName).OrderBy(x => x).ToList(),
@@ -432,6 +406,12 @@ namespace CRM.Controllers
                 contactIds = existingContactIds;
             }
 
+            var title = await ResolveBookingTitleAsync(
+                form["title"],
+                performerEmployeeId,
+                resourceId,
+                bookingItems.First().ServiceItemId);
+
             var bookingContacts = contactIds
                 .Select(contactId => new CrmResourceBookingContact
                 {
@@ -448,6 +428,7 @@ namespace CRM.Controllers
                 CreatedByEmployeeId = currentEmployeeId.Value,
                 ServiceItemId = bookingItems.First().ServiceItemId,
                 StatusId = statusId,
+                Title = title,
                 StartTime = start,
                 EndTime = end,
                 Amount = amount,
@@ -510,6 +491,16 @@ namespace CRM.Controllers
                     statusId = booking.StatusId,
                     start = booking.StartTime.ToString("yyyy-MM-ddTHH:mm:ss"),
                     end = booking.EndTime.ToString("yyyy-MM-ddTHH:mm:ss"),
+                    title = BuildBookingTitle(
+                        booking.Title,
+                        booking.PerformerEmployee?.FullName,
+                        booking.Resource?.Name,
+                        booking.ServiceItem?.Name ??
+                        booking.BookingItems
+                            .Select(i => i.ServiceItem.Name)
+                            .OrderBy(name => name)
+                            .FirstOrDefault()),
+                    createdAt = booking.CreatedAt.ToString("O"),
                     amount = booking.Amount,
                     discountReason = booking.DiscountReason,
                     comment = booking.Comment,
@@ -645,6 +636,12 @@ namespace CRM.Controllers
                 contactIds = existingContactIds;
             }
 
+            var title = await ResolveBookingTitleAsync(
+                form["title"],
+                performerEmployeeId,
+                resourceId,
+                bookingItems.First().ServiceItemId);
+
             var bookingContacts = contactIds
                 .Select(contactId => new CrmResourceBookingContact
                 {
@@ -661,6 +658,7 @@ namespace CRM.Controllers
                 CreatedByEmployeeId = existing.CreatedByEmployeeId ?? currentEmployeeId.Value,
                 ServiceItemId = bookingItems.First().ServiceItemId,
                 StatusId = statusId,
+                Title = title,
                 StartTime = start,
                 EndTime = end,
                 Amount = amount,
@@ -1210,6 +1208,99 @@ namespace CRM.Controllers
             };
         }
 
+        private async Task<string> ResolveBookingTitleAsync(
+            string? rawTitle,
+            Guid performerEmployeeId,
+            Guid resourceId,
+            Guid? serviceItemId)
+        {
+            var normalizedTitle = NormalizeBookingTitle(rawTitle);
+            if (!string.IsNullOrWhiteSpace(normalizedTitle))
+            {
+                return normalizedTitle;
+            }
+
+            var performerFullName = await _context.Employees
+                .AsNoTracking()
+                .Where(e => e.Id == performerEmployeeId)
+                .Select(e => (e.LastName + " " + e.FirstName + " " + e.MiddleName).Trim())
+                .FirstOrDefaultAsync();
+
+            var resourceName = await _context.CrmResources
+                .AsNoTracking()
+                .Where(r => r.Id == resourceId)
+                .Select(r => r.Name)
+                .FirstOrDefaultAsync();
+
+            string? serviceName = null;
+            if (serviceItemId.HasValue && serviceItemId.Value != Guid.Empty)
+            {
+                serviceName = await _context.ServiceItems
+                    .AsNoTracking()
+                    .Where(s => s.Id == serviceItemId.Value)
+                    .Select(s => s.Name)
+                    .FirstOrDefaultAsync();
+            }
+
+            return BuildBookingTitle(
+                null,
+                performerFullName,
+                resourceName,
+                serviceName);
+        }
+
+        private static string BuildBookingTitle(
+            string? customTitle,
+            string? performerFullName,
+            string? resourceName,
+            string? serviceName)
+        {
+            var normalizedTitle = NormalizeBookingTitle(customTitle);
+            if (!string.IsNullOrWhiteSpace(normalizedTitle))
+            {
+                return normalizedTitle;
+            }
+
+            var performerPart = FormatEmployeeShortName(performerFullName);
+            var resourcePart = string.IsNullOrWhiteSpace(resourceName) ? "Без ресурса" : resourceName.Trim();
+            var servicePart = string.IsNullOrWhiteSpace(serviceName) ? "Без услуги" : serviceName.Trim();
+
+            return $"{performerPart}, {resourcePart}, {servicePart}";
+        }
+
+        private static string FormatEmployeeShortName(string? performerFullName)
+        {
+            var parts = (performerFullName ?? string.Empty)
+                .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+            if (parts.Length == 0)
+            {
+                return "Без исполнителя";
+            }
+
+            var lastName = parts[0];
+            var initials = parts
+                .Skip(1)
+                .Where(part => part.Length > 0)
+                .Take(2)
+                .Select(part => $"{char.ToUpperInvariant(part[0])}.")
+                .ToList();
+
+            return initials.Count > 0
+                ? $"{lastName} {string.Join(" ", initials)}"
+                : lastName;
+        }
+
+        private static string? NormalizeBookingTitle(string? rawTitle)
+        {
+            if (string.IsNullOrWhiteSpace(rawTitle))
+            {
+                return null;
+            }
+
+            return rawTitle.Trim();
+        }
+
         private static Dictionary<string, string> ReadFilterValuesFromForm(IFormCollection form)
         {
             var values = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -1301,53 +1392,6 @@ namespace CRM.Controllers
                 .FirstOrDefaultAsync(e => e.Id == employeeId.Value);
 
             return employee?.FullName ?? "Неизвестный пользователь";
-        }
-
-        private async Task<Dictionary<string, List<SelectListItem>>> BuildLookupDataAsync(List<AppFieldDefinition> fields)
-        {
-            var lookupData = new Dictionary<string, List<SelectListItem>>();
-
-            foreach (var field in fields.Where(f => f.DataType == FieldDataType.EntityLink && !string.IsNullOrWhiteSpace(f.TargetEntityCode)))
-            {
-                var items = await _context.GenericObjects
-                    .AsNoTracking()
-                    .Where(g => g.EntityCode == field.TargetEntityCode)
-                    .OrderBy(g => g.Name)
-                    .Select(g => new SelectListItem { Value = g.Id.ToString(), Text = g.Name })
-                    .ToListAsync();
-
-                if (!items.Any() &&
-                    (string.Equals(field.TargetEntityCode, "Employees", StringComparison.OrdinalIgnoreCase) ||
-                     string.Equals(field.TargetEntityCode, "Employee", StringComparison.OrdinalIgnoreCase)))
-                {
-                    items = await _context.Employees
-                        .AsNoTracking()
-                        .Where(e => !e.IsDismissed)
-                        .OrderBy(e => e.LastName)
-                        .ThenBy(e => e.FirstName)
-                        .Select(e => new SelectListItem
-                        {
-                            Value = e.Id.ToString(),
-                            Text = (e.LastName + " " + e.FirstName + " " + e.MiddleName).Trim()
-                        })
-                        .ToListAsync();
-                }
-
-                if (!items.Any() &&
-                    (string.Equals(field.TargetEntityCode, "Departments", StringComparison.OrdinalIgnoreCase) ||
-                     string.Equals(field.TargetEntityCode, "Department", StringComparison.OrdinalIgnoreCase)))
-                {
-                    items = await _context.Departments
-                        .AsNoTracking()
-                        .OrderBy(d => d.Name)
-                        .Select(d => new SelectListItem { Value = d.Id.ToString(), Text = d.Name })
-                        .ToListAsync();
-                }
-
-                lookupData[field.SystemName] = items;
-            }
-
-            return lookupData;
         }
 
         private static int ParsePositiveIntOrDefault(string? raw, int fallback)

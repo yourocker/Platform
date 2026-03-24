@@ -50,19 +50,30 @@ namespace CRM.Controllers
             return View(categories);
         }
 
-        public IActionResult Create() => View();
+        public IActionResult Create(bool modal = false)
+        {
+            ViewBag.IsModal = modal;
+            return View();
+        }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create(AppCategory category)
+        public async Task<IActionResult> Create(AppCategory category, bool modal = false)
         {
             if (ModelState.IsValid)
             {
                 category.Id = Guid.NewGuid();
                 _context.Add(category);
                 await _context.SaveChangesAsync();
+
+                if (modal)
+                {
+                    return BuildModalCreatedContentResult("AppCategory", category.Id, category.Name);
+                }
+
                 return RedirectToAction(nameof(Index));
             }
+            ViewBag.IsModal = modal;
             return View(category);
         }
 

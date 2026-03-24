@@ -253,6 +253,9 @@ namespace Core.Migrations
                     b.Property<Guid?>("StatusId")
                         .HasColumnType("uuid");
 
+                    b.Property<string>("Title")
+                        .HasColumnType("text");
+
                     b.HasKey("Id");
 
                     b.HasIndex("CreatedAt");

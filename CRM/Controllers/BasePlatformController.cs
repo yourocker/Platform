@@ -43,28 +43,209 @@ namespace CRM.Controllers
                 .ToListAsync();
 
             ViewBag.DynamicFields = fields;
+            ViewBag.LookupData = await BuildEntityLinkLookupDataAsync(fields);
+        }
 
-            // Подготовка данных для полей типа EntityLink (Связь с объектом)
+        protected async Task<Dictionary<string, List<SelectListItem>>> BuildEntityLinkLookupDataAsync(IEnumerable<AppFieldDefinition> fields)
+        {
             var lookupData = new Dictionary<string, List<SelectListItem>>();
-            foreach (var field in fields.Where(f => f.DataType == FieldDataType.EntityLink))
+
+            foreach (var field in (fields ?? Enumerable.Empty<AppFieldDefinition>())
+                         .Where(f => f.DataType == FieldDataType.EntityLink && !string.IsNullOrWhiteSpace(f.TargetEntityCode)))
             {
-                if (!string.IsNullOrEmpty(field.TargetEntityCode))
+                lookupData[field.SystemName] = await LoadEntityLinkLookupItemsAsync(field.TargetEntityCode!);
+            }
+
+            return lookupData;
+        }
+
+        protected async Task<List<SelectListItem>> LoadEntityLinkLookupItemsAsync(string targetEntityCode)
+        {
+            var candidates = BuildEntityCodeCandidates(targetEntityCode);
+            var normalized = NormalizeEntityCode(targetEntityCode);
+
+            var items = await _context.GenericObjects
+                .AsNoTracking()
+                .Where(o => candidates.Contains(o.EntityCode))
+                .OrderBy(o => o.Name)
+                .Select(o => new SelectListItem
                 {
-                    // Получаем записи целевой сущности, используя физическое свойство Name для заголовка
-                    var data = await _context.GenericObjects
-                        .Where(o => o.EntityCode == field.TargetEntityCode)
-                        .OrderBy(o => o.Name) // Сортируем по имени для удобства выбора
-                        .Select(o => new SelectListItem
-                        {
-                            Value = o.Id.ToString(),
-                            Text = o.Name // Используем поле Name из вашей модели GenericObject
-                        })
-                        .ToListAsync();
-                    
-                    lookupData[field.SystemName] = data;
+                    Value = o.Id.ToString(),
+                    Text = o.Name
+                })
+                .ToListAsync();
+
+            if (items.Any())
+            {
+                return items;
+            }
+
+            if (normalized == "employee")
+            {
+                return await _context.Employees
+                    .AsNoTracking()
+                    .Where(e => !e.IsDismissed)
+                    .OrderBy(e => e.LastName)
+                    .ThenBy(e => e.FirstName)
+                    .Select(e => new SelectListItem
+                    {
+                        Value = e.Id.ToString(),
+                        Text = e.FullName
+                    })
+                    .ToListAsync();
+            }
+
+            if (normalized == "department")
+            {
+                return await _context.Departments
+                    .AsNoTracking()
+                    .OrderBy(d => d.Name)
+                    .Select(d => new SelectListItem
+                    {
+                        Value = d.Id.ToString(),
+                        Text = d.Name
+                    })
+                    .ToListAsync();
+            }
+
+            if (normalized == "contact")
+            {
+                return await _context.Contacts
+                    .AsNoTracking()
+                    .OrderBy(c => c.FullName)
+                    .Select(c => new SelectListItem
+                    {
+                        Value = c.Id.ToString(),
+                        Text = c.FullName
+                    })
+                    .ToListAsync();
+            }
+
+            return new List<SelectListItem>();
+        }
+
+        protected static List<string> BuildEntityCodeCandidates(string? entityCode)
+        {
+            var candidates = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var normalized = (entityCode ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                return candidates.ToList();
+            }
+
+            candidates.Add(normalized);
+
+            if (normalized.EndsWith("s", StringComparison.OrdinalIgnoreCase) && normalized.Length > 1)
+            {
+                candidates.Add(normalized[..^1]);
+            }
+            else
+            {
+                candidates.Add(normalized + "s");
+            }
+
+            return candidates.ToList();
+        }
+
+        protected static string NormalizeEntityCode(string? entityCode)
+        {
+            var normalized = (entityCode ?? string.Empty).Trim();
+            if (normalized.EndsWith("s", StringComparison.OrdinalIgnoreCase) && normalized.Length > 1)
+            {
+                normalized = normalized[..^1];
+            }
+
+            return normalized.ToLowerInvariant();
+        }
+
+        protected async Task<HashSet<string>> BuildQuickCreatableEntityCodeSetAsync(IEnumerable<AppFieldDefinition> fields)
+        {
+            var candidates = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var field in (fields ?? Enumerable.Empty<AppFieldDefinition>())
+                         .Where(f => f.DataType == FieldDataType.EntityLink && !string.IsNullOrWhiteSpace(f.TargetEntityCode)))
+            {
+                foreach (var candidate in BuildEntityCodeCandidates(field.TargetEntityCode))
+                {
+                    candidates.Add(candidate);
                 }
             }
-            ViewBag.LookupData = lookupData;
+
+            var definitionCodes = await _context.AppDefinitions
+                .AsNoTracking()
+                .Where(d => candidates.Contains(d.EntityCode))
+                .Select(d => d.EntityCode)
+                .ToListAsync();
+
+            var result = new HashSet<string>(definitionCodes, StringComparer.OrdinalIgnoreCase)
+            {
+                "Contact",
+                "Contacts"
+            };
+
+            return result;
+        }
+
+        protected static bool CanQuickCreateEntity(string? targetEntityCode, ISet<string> quickCreatableEntityCodes)
+        {
+            if (string.IsNullOrWhiteSpace(targetEntityCode) || quickCreatableEntityCodes == null)
+            {
+                return false;
+            }
+
+            return BuildEntityCodeCandidates(targetEntityCode).Any(quickCreatableEntityCodes.Contains);
+        }
+
+        protected static string? BuildModalCreateUrl(string? targetEntityCode, ISet<string> quickCreatableEntityCodes)
+        {
+            if (string.IsNullOrWhiteSpace(targetEntityCode) || quickCreatableEntityCodes == null)
+            {
+                return null;
+            }
+
+            var normalized = NormalizeEntityCode(targetEntityCode);
+            if (normalized == "contact")
+            {
+                return "/Contacts/Create?modal=true";
+            }
+
+            var resolvedCode = quickCreatableEntityCodes
+                .FirstOrDefault(code => string.Equals(NormalizeEntityCode(code), normalized, StringComparison.OrdinalIgnoreCase));
+
+            if (string.IsNullOrWhiteSpace(resolvedCode))
+            {
+                return null;
+            }
+
+            return $"/Data/{resolvedCode}/Create?modal=true";
+        }
+
+        protected ContentResult BuildModalCreatedContentResult(string entityCode, Guid id, string? name)
+        {
+            var payloadJson = JsonSerializer.Serialize(new
+            {
+                type = "crm-entity-created",
+                entityCode,
+                id,
+                name = name ?? string.Empty
+            });
+
+            var html = $"""
+                        <!DOCTYPE html>
+                        <html lang="ru">
+                        <head>
+                            <meta charset="utf-8" />
+                            <title>Создано</title>
+                        </head>
+                        <body>
+                            <script>
+                                window.parent.postMessage({payloadJson}, window.location.origin);
+                            </script>
+                        </body>
+                        </html>
+                        """;
+
+            return Content(html, "text/html; charset=utf-8");
         }
 
         protected void DeletePhysicalFile(string webPath)

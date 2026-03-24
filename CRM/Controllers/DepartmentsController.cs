@@ -31,16 +31,17 @@ namespace CRM.Controllers
             return View(departments);
         }
 
-        public async Task<IActionResult> Create()
+        public async Task<IActionResult> Create(bool modal = false)
         {
             await LoadDynamicFields("Department");
             await LoadLookupLists();
+            ViewBag.IsModal = modal;
             return View();
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create(Department department, IFormCollection form)
+        public async Task<IActionResult> Create(Department department, IFormCollection form, bool modal = false)
         {
             // 1. Загрузка во временную папку
             await SaveDynamicProperties(department, form, "Department");
@@ -59,11 +60,17 @@ namespace CRM.Controllers
                 // 4. Обновление путей в БД
                 await _context.SaveChangesAsync();
 
+                if (modal)
+                {
+                    return BuildModalCreatedContentResult("Department", department.Id, department.Name);
+                }
+
                 return RedirectToAction(nameof(Index));
             }
             
             await LoadDynamicFields("Department");
             await LoadLookupLists();
+            ViewBag.IsModal = modal;
             return View(department);
         }
 

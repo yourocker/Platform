@@ -238,6 +238,25 @@ var ui = StyleService.GetSettings();
     </div>
 </div>
 
+<div class="modal fade" id="globalCreateModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-content border-0 shadow">
+            <div class="modal-header">
+                <h5 class="modal-title" id="globalCreateModalTitle">
+                    <i class="bi bi-plus-circle me-2"></i> Создание
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body p-0">
+                <iframe id="globalCreateModalFrame"
+                        title="Форма создания"
+                        class="w-100 border-0"
+                        style="min-height: 75vh;"></iframe>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="offcanvas offcanvas-end" tabindex="-1" id="notificationSidebar" style="background-color: var(--card-bg); color: var(--card-text);">
     <div class="offcanvas-header border-bottom">
         <h5 class="offcanvas-title">Уведомления</h5>
@@ -298,6 +317,105 @@ var ui = StyleService.GetSettings();
         modal.show();
         $('#profileModalContent').load('/Profile/GetSettings');
     }
+
+    (function() {
+        const createModalEl = document.getElementById('globalCreateModal');
+        const createModalTitle = document.getElementById('globalCreateModalTitle');
+        const createModalFrame = document.getElementById('globalCreateModalFrame');
+        if (!createModalEl || !createModalFrame || window.self !== window.top) {
+            return;
+        }
+
+        const createModal = new bootstrap.Modal(createModalEl);
+
+        function isCreateUrl(url) {
+            return /\/Create$/i.test(url.pathname.replace(/\/+$/, ''));
+        }
+
+        function withModalFlag(url) {
+            if (!url.searchParams.has('modal')) {
+                url.searchParams.set('modal', 'true');
+            } else if (url.searchParams.get('modal') === '1') {
+                url.searchParams.set('modal', 'true');
+            }
+
+            return url;
+        }
+
+        function openCreateModal(url, title) {
+            const titleText = String(title || '').trim() || 'Создание';
+
+            createModalTitle.innerHTML = '';
+            const icon = document.createElement('i');
+            icon.className = 'bi bi-plus-circle me-2';
+            createModalTitle.appendChild(icon);
+            createModalTitle.append(titleText);
+
+            createModalFrame.src = withModalFlag(url).toString();
+            createModal.show();
+        }
+
+        document.addEventListener('click', event => {
+            if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+                return;
+            }
+
+            const link = event.target.closest('a[href]');
+            if (!link) {
+                return;
+            }
+
+            if (link.dataset.bsToggle || link.dataset.crmModalCreate === 'off' || link.hasAttribute('download')) {
+                return;
+            }
+
+            const target = link.getAttribute('target');
+            if (target && target !== '_self') {
+                return;
+            }
+
+            let url;
+            try {
+                url = new URL(link.href, window.location.origin);
+            } catch {
+                return;
+            }
+
+            if (url.origin !== window.location.origin || !isCreateUrl(url)) {
+                return;
+            }
+
+            event.preventDefault();
+            openCreateModal(url, link.dataset.crmModalTitle || link.title || link.textContent);
+        });
+
+        createModalEl.addEventListener('hidden.bs.modal', () => {
+            createModalFrame.removeAttribute('src');
+        });
+
+        window.addEventListener('message', event => {
+            if (event.origin !== window.location.origin || !createModalEl.classList.contains('show')) {
+                return;
+            }
+
+            const data = event.data;
+            if (!data || typeof data !== 'object') {
+                return;
+            }
+
+            if (data.type === 'crm-modal-close') {
+                createModal.hide();
+                return;
+            }
+
+            if (data.type !== 'crm-entity-created') {
+                return;
+            }
+
+            createModal.hide();
+            window.location.reload();
+        });
+    })();
 </script>
 
 @await RenderSectionAsync("Scripts", required: false)

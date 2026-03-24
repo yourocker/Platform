@@ -10,7 +10,6 @@ using Microsoft.AspNetCore.Hosting;
 //using Newtonsoft.Json;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
-using Microsoft.AspNetCore.Mvc.Rendering;
 using Core.Entities.Platform.Form;
 using System.Text.Json;
 
@@ -31,28 +30,7 @@ public class GenericObjectsController(AppDbContext context, IWebHostEnvironment 
             ViewBag.DynamicFields = definition.Fields.OrderBy(f => f.SortOrder).ToList();
             ViewBag.DefinitionName = definition.Name;
             ViewBag.HasNameInLayout = false;
-
-            var lookupData = new Dictionary<string, List<SelectListItem>>();
-            
-            foreach (var field in definition.Fields.Where(f => f.DataType == FieldDataType.EntityLink))
-            {
-                var items = new List<SelectListItem>();
-                var genericItems = await _context.GenericObjects
-                    .Where(g => g.EntityCode == field.TargetEntityCode)
-                    .Select(g => new SelectListItem { Value = g.Id.ToString(), Text = g.Name })
-                    .ToListAsync();
-                
-                if (genericItems.Any()) items.AddRange(genericItems);
-                else
-                {
-                    if (field.TargetEntityCode == "Employees")
-                        items = await _context.Employees.Select(e => new SelectListItem { Value = e.Id.ToString(), Text = e.FullName }).ToListAsync();
-                    else if (field.TargetEntityCode == "Departments")
-                        items = await _context.Departments.Select(d => new SelectListItem { Value = d.Id.ToString(), Text = d.Name }).ToListAsync();
-                }
-                lookupData[field.SystemName] = items;
-            }
-            ViewBag.LookupData = lookupData;
+            ViewBag.LookupData = await BuildEntityLinkLookupDataAsync(definition.Fields);
 
             if (formType.HasValue)
             {
@@ -219,18 +197,20 @@ public class GenericObjectsController(AppDbContext context, IWebHostEnvironment 
 
     // Маршрут: /Data/{entityCode}/Create
     [HttpGet("{entityCode}/Create")]
-    public async Task<IActionResult> Create(string entityCode)
+    public async Task<IActionResult> Create(string entityCode, bool modal = false)
     {
         if (string.IsNullOrEmpty(entityCode)) return NotFound();
         await LoadDefinitionWithFields(entityCode, FormType.Create);
         ViewBag.EntityCode = entityCode;
+        ViewBag.IsModal = modal;
         return View();
     }
 
     [HttpPost("{entityCode}/Create")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Create(GenericObject obj, IFormCollection form)
+    public async Task<IActionResult> Create(string entityCode, GenericObject obj, IFormCollection form, bool modal = false)
     {
+        obj.EntityCode = entityCode;
         obj.CreatedAt = DateTime.UtcNow;
         await SaveDynamicProperties(obj, form, obj.EntityCode);
         if (ModelState.IsValid)
@@ -240,10 +220,17 @@ public class GenericObjectsController(AppDbContext context, IWebHostEnvironment 
             await _context.SaveChangesAsync();
             FinalizeDynamicFilePaths(obj, obj.EntityCode, obj.Id.ToString());
             await _context.SaveChangesAsync();
+
+            if (modal)
+            {
+                return BuildModalCreatedContentResult(obj.EntityCode, obj.Id, obj.Name);
+            }
+
             return Redirect($"/Data/{obj.EntityCode}");
         }
         await LoadDefinitionWithFields(obj.EntityCode, FormType.Create);
         ViewBag.EntityCode = obj.EntityCode;
+        ViewBag.IsModal = modal;
         return View(obj);
     }
     

@@ -99,17 +99,18 @@ namespace CRM.Controllers
             return View(employees);
         }
 
-        public async Task<IActionResult> Create()
+        public async Task<IActionResult> Create(bool modal = false)
         {
             await LoadDynamicFields("Employee"); 
             ViewBag.Positions = await _context.Positions.OrderBy(p => p.Name).ToListAsync();
             ViewBag.Departments = await _context.Departments.OrderBy(d => d.Name).ToListAsync();
+            ViewBag.IsModal = modal;
             return View();
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create(Employee employee, Guid[] selectedPositions, Guid[] selectedDepartments, string[] Phones, string[] Emails, IFormCollection form, string? Login, string? Password)
+        public async Task<IActionResult> Create(Employee employee, Guid[] selectedPositions, Guid[] selectedDepartments, string[] Phones, string[] Emails, IFormCollection form, string? Login, string? Password, bool modal = false)
         {
             employee.Phones = Phones?.Where(p => !string.IsNullOrWhiteSpace(p)).ToList() ?? new List<string>();
             employee.Emails = Emails?.Where(e => !string.IsNullOrWhiteSpace(e)).ToList() ?? new List<string>();
@@ -131,6 +132,7 @@ namespace CRM.Controllers
                         await LoadDynamicFields("Employee");
                         ViewBag.Positions = await _context.Positions.OrderBy(p => p.Name).ToListAsync();
                         ViewBag.Departments = await _context.Departments.OrderBy(d => d.Name).ToListAsync();
+                        ViewBag.IsModal = modal;
                         return View(employee);
                     }
                 }
@@ -160,11 +162,18 @@ namespace CRM.Controllers
                 await _context.SaveChangesAsync();
                 FinalizeDynamicFilePaths(employee, "Employee", employee.Id.ToString());
                 await _context.SaveChangesAsync();
+
+                if (modal)
+                {
+                    return BuildModalCreatedContentResult("Employee", employee.Id, employee.FullName);
+                }
+
                 return RedirectToAction(nameof(Index));
             }
             await LoadDynamicFields("Employee");
             ViewBag.Positions = await _context.Positions.OrderBy(p => p.Name).ToListAsync();
             ViewBag.Departments = await _context.Departments.OrderBy(d => d.Name).ToListAsync();
+            ViewBag.IsModal = modal;
             return View(employee);
         }
 

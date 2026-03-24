@@ -1,13 +1,24 @@
 ﻿@model Core.Entities.Platform.GenericObject
-@{ ViewData["Title"] = "Новая запись"; }
+@{
+    ViewData["Title"] = "Новая запись";
+    var isModal = ViewBag.IsModal as bool? ?? false;
+    if (isModal)
+    {
+        Layout = "_LayoutModal";
+    }
+}
 
 <div class="container-fluid px-4">
     <crm-page-header title="" icon="" subtitle=""></crm-page-header>
 
     <div class="row justify-content-center">
         <div class="col-lg-10">
-            <form asp-action="Create" method="post" enctype="multipart/form-data">
+            <form asp-action="Create" asp-route-entityCode="@ViewBag.EntityCode" method="post" enctype="multipart/form-data">
                 <input type="hidden" name="EntityCode" value="@ViewBag.EntityCode" />
+                @if (isModal)
+                {
+                    <input type="hidden" name="modal" value="true" />
+                }
                 
                 <div crm-card>
                     <div class="card-body p-4">
@@ -25,7 +36,14 @@
 
                 <div class="mt-4 pb-5 d-flex gap-2">
                     <button type="submit" crm-button variant="primary" icon="check-lg" class="px-5 shadow">Создать</button>
-                    <a href="/Data/@ViewBag.EntityCode" crm-button variant="outline-secondary">Отмена</a>
+                    @if (isModal)
+                    {
+                        <button type="button" crm-button variant="outline-secondary" onclick="window.parent.postMessage({ type: 'crm-modal-close' }, window.location.origin)">Отмена</button>
+                    }
+                    else
+                    {
+                        <a href="/Data/@ViewBag.EntityCode" crm-button variant="outline-secondary">Отмена</a>
+                    }
                 </div>
             </form>
         </div>

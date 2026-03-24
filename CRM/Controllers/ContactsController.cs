@@ -13,17 +13,17 @@ using Core.Interfaces.CRM;
 using Core.DTOs.CRM;
 using Core.Services.CRM;
 using Core.UI.Grid;
+using Microsoft.AspNetCore.Hosting;
 
 namespace CRM.Controllers
 {
-    public class ContactsController : Controller
+    public class ContactsController : BasePlatformController
     {
-        private readonly AppDbContext _context;
         private readonly IContactService _contactService;
 
-        public ContactsController(AppDbContext context, IContactService contactService)
+        public ContactsController(AppDbContext context, IContactService contactService, IWebHostEnvironment hostingEnvironment)
+            : base(context, hostingEnvironment)
         {
-            _context = context;
             _contactService = contactService;
         }
 
@@ -38,7 +38,9 @@ namespace CRM.Controllers
             if (appDef != null)
             {
                 // Сортируем поля для корректного отображения в форме
-                ViewBag.DynamicFields = appDef.Fields.OrderBy(f => f.SortOrder).ToList();
+                var fields = appDef.Fields.OrderBy(f => f.SortOrder).ToList();
+                ViewBag.DynamicFields = fields;
+                ViewBag.LookupData = await BuildEntityLinkLookupDataAsync(fields);
             }
         }
 
@@ -177,25 +179,33 @@ namespace CRM.Controllers
         }
 
         // GET: Create
-        public async Task<IActionResult> Create()
+        public async Task<IActionResult> Create(bool modal = false)
         {
             await LoadViewData();
+            ViewBag.IsModal = modal;
             return View(new ContactCreateDto());
         }
 
         // POST: Create
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create(ContactCreateDto dto)
+        public async Task<IActionResult> Create(ContactCreateDto dto, bool modal = false)
         {
             if (ModelState.IsValid)
             {
                 var contact = ContactMapper.ToEntity(dto);
                 var dynamicProps = ExtractDynamicProps();
-                await _contactService.CreateContactAsync(contact, dto.PhoneNumbers, dto.EmailAddresses, dynamicProps);
+                var createdContact = await _contactService.CreateContactAsync(contact, dto.PhoneNumbers, dto.EmailAddresses, dynamicProps);
+
+                if (modal)
+                {
+                    return BuildModalCreatedContentResult("Contact", createdContact.Id, createdContact.FullName);
+                }
+
                 return RedirectToAction(nameof(Index));
             }
             await LoadViewData();
+            ViewBag.IsModal = modal;
             dto.DynamicValues = ExtractDynamicProps();
             return View(dto);
         }

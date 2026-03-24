@@ -120,6 +120,7 @@ namespace Core.Services.CRM
                 existing.PerformerEmployeeId = booking.PerformerEmployeeId;
                 existing.ServiceItemId = booking.ServiceItemId;
                 existing.StatusId = booking.StatusId;
+                existing.Title = booking.Title;
                 existing.StartTime = booking.StartTime;
                 existing.EndTime = booking.EndTime;
                 existing.Amount = booking.Amount;
@@ -349,6 +350,7 @@ namespace Core.Services.CRM
                 booking.ResourceId,
                 booking.ServiceItemId,
                 booking.StatusId,
+                booking.Title,
                 booking.DealItemId,
                 booking.StartTime,
                 booking.EndTime,
@@ -388,6 +390,7 @@ namespace Core.Services.CRM
                 booking.ResourceId,
                 booking.ServiceItemId,
                 booking.StatusId,
+                booking.Title,
                 booking.StartTime,
                 booking.EndTime,
                 booking.IsOverbooking,

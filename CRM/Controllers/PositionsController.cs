@@ -61,10 +61,15 @@ namespace CRM.Controllers
             return View(positions);
         }
 
-        public async Task<IActionResult> Create() { await LoadDynamicFields("Position"); return View(); }
+        public async Task<IActionResult> Create(bool modal = false)
+        {
+            await LoadDynamicFields("Position");
+            ViewBag.IsModal = modal;
+            return View();
+        }
 
         [HttpPost] [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create(Position position, IFormCollection form)
+        public async Task<IActionResult> Create(Position position, IFormCollection form, bool modal = false)
         {
             await SaveDynamicProperties(position, form, "Position");
             if (ModelState.IsValid)
@@ -74,9 +79,16 @@ namespace CRM.Controllers
                 await _context.SaveChangesAsync();
                 FinalizeDynamicFilePaths(position, "Position", position.Id.ToString());
                 await _context.SaveChangesAsync();
+
+                if (modal)
+                {
+                    return BuildModalCreatedContentResult("Position", position.Id, position.Name);
+                }
+
                 return RedirectToAction(nameof(Index));
             }
             await LoadDynamicFields("Position");
+            ViewBag.IsModal = modal;
             return View(position);
         }
 

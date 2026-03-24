@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Text.Json;
 using System.Text.RegularExpressions;
 using Core.Data;
 using Core.Entities.Platform;
@@ -63,10 +64,11 @@ public class AppDefinitionsController(AppDbContext context) : Controller
     }
 
     [HttpGet]
-    public async Task<IActionResult> Create()
+    public async Task<IActionResult> Create(bool modal = false)
     {
         var categories = await _context.AppCategories.OrderBy(c => c.SortOrder).ToListAsync();
         ViewBag.Categories = new SelectList(categories, "Id", "Name");
+        ViewBag.IsModal = modal;
 
         var model = new AppDefinition { Icon = "box" };
         return View(model);
@@ -74,7 +76,7 @@ public class AppDefinitionsController(AppDbContext context) : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Create(AppDefinition app)
+    public async Task<IActionResult> Create(AppDefinition app, bool modal = false)
     {
         if (ModelState.IsValid)
         {
@@ -89,11 +91,16 @@ public class AppDefinitionsController(AppDbContext context) : Controller
                 await EnsureNameFieldAsync(app.Id);
                 await EnsureDefaultFormsAsync(app.Id);
             }
+            if (modal)
+            {
+                return BuildModalCreatedContentResult("AppDefinition", app.Id, app.Name);
+            }
             return RedirectToAction(nameof(Index));
         }
 
         var categories = await _context.AppCategories.OrderBy(c => c.SortOrder).ToListAsync();
         ViewBag.Categories = new SelectList(categories, "Id", "Name");
+        ViewBag.IsModal = modal;
         
         return View(app);
     }
@@ -309,6 +316,34 @@ public class AppDefinitionsController(AppDbContext context) : Controller
     private static string BuildNameOnlyLayout(Guid nameFieldId)
     {
         return $"{{\"nodes\":[{{\"type\":\"field\",\"FieldId\":\"{nameFieldId}\"}}]}}";
+    }
+
+    private ContentResult BuildModalCreatedContentResult(string entityCode, Guid id, string? name)
+    {
+        var payloadJson = JsonSerializer.Serialize(new
+        {
+            type = "crm-entity-created",
+            entityCode,
+            id,
+            name = name ?? string.Empty
+        });
+
+        var html = $"""
+                    <!DOCTYPE html>
+                    <html lang="ru">
+                    <head>
+                        <meta charset="utf-8" />
+                        <title>Создано</title>
+                    </head>
+                    <body>
+                        <script>
+                            window.parent.postMessage({payloadJson}, window.location.origin);
+                        </script>
+                    </body>
+                    </html>
+                    """;
+
+        return Content(html, "text/html; charset=utf-8");
     }
     
     // GET: AppDefinitions/FormBuilder/{id}

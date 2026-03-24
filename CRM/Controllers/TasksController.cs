@@ -211,18 +211,19 @@ namespace CRM.Controllers
 
         // --- СОЗДАНИЕ ---
 
-        public async Task<IActionResult> Create()
+        public async Task<IActionResult> Create(bool modal = false)
         {
             var user = await GetCurrentUser();
             ViewBag.CurrentUserId = user.Id;
             ViewBag.CurrentUserName = user.FullName;
+            ViewBag.IsModal = modal;
             await PrepareViewBags();
             return View();
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create(EmployeeTask task, string[] selectedObjects)
+        public async Task<IActionResult> Create(EmployeeTask task, string[] selectedObjects, bool modal = false)
         {
             var user = await GetCurrentUser();
             
@@ -259,11 +260,18 @@ namespace CRM.Controllers
             {
                 _context.Add(task);
                 await _context.SaveChangesAsync();
+
+                if (modal)
+                {
+                    return BuildModalCreatedContentResult("EmployeeTask", task.Id, task.Title);
+                }
+
                 return RedirectToAction(nameof(CreatedByMe));
             }
             
             ViewBag.CurrentUserId = user.Id;
             ViewBag.CurrentUserName = user.FullName;
+            ViewBag.IsModal = modal;
             await PrepareViewBags();
             return View(task);
         }

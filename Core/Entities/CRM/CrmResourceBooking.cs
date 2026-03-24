@@ -41,6 +41,8 @@ namespace Core.Entities.CRM
         [ForeignKey(nameof(ServiceItemId))]
         public virtual ServiceItem? ServiceItem { get; set; }
 
+        public string? Title { get; set; }
+
         [Column(TypeName = "decimal(18,2)")]
         public decimal Amount { get; set; }
 

@@ -9,8 +9,6 @@
 
     var bookingCustomFieldsJson = ViewBag.BookingCustomFieldsJson as string ?? "[]";
     var bookingLookupDataJson = ViewBag.BookingLookupDataJson as string ?? "{}";
-    var contactCustomFieldsJson = ViewBag.ContactCustomFieldsJson as string ?? "[]";
-    var contactLookupDataJson = ViewBag.ContactLookupDataJson as string ?? "{}";
     var servicesJson = ViewBag.ServicesJson as string ?? "[]";
     var contactsJson = ViewBag.ContactsJson as string ?? "[]";
     var bookingStatusesJson = ViewBag.BookingStatusesJson as string ?? "[]";
@@ -138,8 +136,26 @@
 <div class="modal fade" id="bookingModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content border-0 shadow">
-            <div class="modal-header">
-                <h5 class="modal-title" id="bookingModalTitle"><i class="bi bi-calendar-plus me-2"></i> Новое бронирование</h5>
+            <div class="modal-header align-items-start">
+                <div class="modal-title flex-grow-1 pe-3" id="bookingModalTitle">
+                    <div class="d-flex align-items-start gap-2">
+                        <i class="bi bi-calendar-check booking-title-icon" id="bookingTitleIcon"></i>
+                        <div class="flex-grow-1">
+                            <div
+                                id="bookingTitleDisplay"
+                                class="booking-title-display"
+                                role="button"
+                                tabindex="0"
+                                title="Нажмите, чтобы изменить заголовок"></div>
+                            <input
+                                type="text"
+                                id="modalBookingTitle"
+                                class="form-control booking-title-input d-none"
+                                maxlength="500" />
+                            <div id="bookingCreatedAtText" class="booking-created-at text-muted">Дата создания: -</div>
+                        </div>
+                    </div>
+                </div>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
             <div class="modal-body">
@@ -279,60 +295,20 @@
     </div>
 </div>
 
-<div class="modal fade" id="quickContactModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
-    <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+<div class="modal fade" id="linkedEntityCreateModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
+    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
         <div class="modal-content border-0 shadow">
             <div class="modal-header">
-                <h5 class="modal-title"><i class="bi bi-person-plus me-2"></i> Новый контакт</h5>
+                <h5 class="modal-title" id="linkedEntityCreateModalTitle">
+                    <i class="bi bi-box-seam me-2"></i> Новый связанный объект
+                </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
             </div>
-            <div class="modal-body">
-                <form id="quickContactForm" enctype="multipart/form-data">
-                    @Html.AntiForgeryToken()
-                    <div class="row g-2">
-                        <div class="col-md-6">
-                            <label class="form-label small text-muted">Фамилия</label>
-                            <input type="text" id="quickContactLastName" name="lastName" class="form-control form-control-sm" required />
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label small text-muted">Имя</label>
-                            <input type="text" id="quickContactFirstName" name="firstName" class="form-control form-control-sm" required />
-                        </div>
-                        <div class="col-md-12">
-                            <label class="form-label small text-muted">Отчество</label>
-                            <input type="text" id="quickContactMiddleName" name="middleName" class="form-control form-control-sm" />
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label small text-muted">Телефоны</label>
-                            <div id="quickContactPhonesContainer">
-                                <div class="input-group input-group-sm mb-1">
-                                    <input type="text" name="phones" class="form-control" placeholder="+7..." />
-                                </div>
-                            </div>
-                            <button type="button" class="btn btn-link btn-sm text-decoration-none p-0" id="addQuickContactPhoneBtn">
-                                <i class="bi bi-plus-circle me-1"></i> Добавить номер
-                            </button>
-                        </div>
-                        <div class="col-md-6">
-                            <label class="form-label small text-muted">Email</label>
-                            <div id="quickContactEmailsContainer">
-                                <div class="input-group input-group-sm mb-1">
-                                    <input type="email" name="emails" class="form-control" placeholder="user@example.com" />
-                                </div>
-                            </div>
-                            <button type="button" class="btn btn-link btn-sm text-decoration-none p-0" id="addQuickContactEmailBtn">
-                                <i class="bi bi-plus-circle me-1"></i> Добавить email
-                            </button>
-                        </div>
-                    </div>
-
-                    <div class="row g-2 mt-1" id="quickContactDynamicFields"></div>
-                    <div id="quickContactResult" class="small mt-2"></div>
-                </form>
-            </div>
-            <div class="modal-footer">
-                <button type="button" class="btn btn-sm btn-light" data-bs-dismiss="modal">Отмена</button>
-                <button type="button" class="btn btn-sm btn-primary" id="saveQuickContactBtn">Сохранить</button>
+            <div class="modal-body p-0">
+                <iframe id="linkedEntityCreateFrame"
+                        title="Форма создания связанного объекта"
+                        class="w-100 border-0"
+                        style="min-height: 75vh;"></iframe>
             </div>
         </div>
     </div>
@@ -391,6 +367,66 @@
         background: #6c757d;
         flex-shrink: 0;
     }
+
+    .booking-title-icon {
+        font-size: 1rem;
+        line-height: 1.7;
+        color: #6c757d;
+        flex-shrink: 0;
+    }
+
+    .booking-title-display {
+        font-size: 1.25rem;
+        font-weight: 500;
+        line-height: 1.3;
+        cursor: text;
+        word-break: break-word;
+    }
+
+    .booking-title-display:hover,
+    .booking-title-display:focus {
+        color: #0d6efd;
+        outline: none;
+    }
+
+    .booking-title-input {
+        font-size: 1.25rem;
+        font-weight: 500;
+        line-height: 1.3;
+        padding: 0;
+        border: 0;
+        border-bottom: 1px dashed #ced4da;
+        border-radius: 0;
+        background: transparent;
+        box-shadow: none !important;
+    }
+
+    .booking-title-input:focus {
+        border-bottom-color: #0d6efd;
+    }
+
+    .booking-created-at {
+        font-size: 0.875rem;
+        line-height: 1.3;
+        margin-top: 0.35rem;
+    }
+
+    .schedule-dynamic-items {
+        display: flex;
+        flex-direction: column;
+        gap: 0.5rem;
+    }
+
+    .schedule-dynamic-item {
+        display: flex;
+        gap: 0.5rem;
+        align-items: flex-start;
+    }
+
+    .schedule-dynamic-item-control {
+        flex: 1 1 auto;
+        min-width: 0;
+    }
 </style>
 
 @section Scripts {
@@ -405,8 +441,6 @@
 
             const customFields = @Html.Raw(bookingCustomFieldsJson);
             const lookupData = @Html.Raw(bookingLookupDataJson);
-            const contactCustomFields = @Html.Raw(contactCustomFieldsJson);
-            const contactLookupData = @Html.Raw(contactLookupDataJson);
             const servicesCatalog = @Html.Raw(servicesJson);
             const contactsCatalog = @Html.Raw(contactsJson);
             const statusesCatalog = @Html.Raw(bookingStatusesJson);
@@ -428,6 +462,10 @@
             const bookingModalEl = document.getElementById('bookingModal');
             const bookingModal = new bootstrap.Modal(bookingModalEl);
             const bookingModalTitle = document.getElementById('bookingModalTitle');
+            const bookingTitleIcon = document.getElementById('bookingTitleIcon');
+            const bookingTitleDisplay = document.getElementById('bookingTitleDisplay');
+            const modalBookingTitle = document.getElementById('modalBookingTitle');
+            const bookingCreatedAtText = document.getElementById('bookingCreatedAtText');
             const modalResult = document.getElementById('modalResult');
             const modalBookingId = document.getElementById('modalBookingId');
             const modalCreatedByEmployeeName = document.getElementById('modalCreatedByEmployeeName');
@@ -454,31 +492,31 @@
             const statusPickerMenu = document.getElementById('statusPickerMenu');
             const modalStatusId = document.getElementById('modalStatusId');
 
-            const quickContactModalEl = document.getElementById('quickContactModal');
-            const quickContactModal = new bootstrap.Modal(quickContactModalEl);
-            const quickContactForm = document.getElementById('quickContactForm');
-            const quickContactResult = document.getElementById('quickContactResult');
-            const quickContactDynamicFields = document.getElementById('quickContactDynamicFields');
-            const quickContactLastName = document.getElementById('quickContactLastName');
-            const quickContactFirstName = document.getElementById('quickContactFirstName');
-            const quickContactMiddleName = document.getElementById('quickContactMiddleName');
-            const quickContactPhonesContainer = document.getElementById('quickContactPhonesContainer');
-            const quickContactEmailsContainer = document.getElementById('quickContactEmailsContainer');
+            const linkedEntityCreateModalEl = document.getElementById('linkedEntityCreateModal');
+            const linkedEntityCreateModal = new bootstrap.Modal(linkedEntityCreateModalEl);
+            const linkedEntityCreateModalTitle = document.getElementById('linkedEntityCreateModalTitle');
+            const linkedEntityCreateFrame = document.getElementById('linkedEntityCreateFrame');
 
             const statusFilterSelect = filterForm.querySelector('[name="f_statusId"]');
             const contactFilterSelect = filterForm.querySelector('[name="f_contactId"]');
             const savedFilterSelect = document.getElementById('savedFilterSelect');
 
             const currentEmployeeName = @Html.Raw(System.Text.Json.JsonSerializer.Serialize(currentEmployeeName));
+            const dynamicFieldManagers = [];
             let presetCache = [];
             let isEditMode = false;
             let activeBookingId = null;
             let createSource = 'calendar';
             let calendar = null;
+            let bookingTitleWasCustomized = false;
+            let bookingTitleBeforeEditing = '';
+            let bookingTitleWasCustomizedBeforeEditing = false;
             const companyWorkStart = '@ViewBag.MinTime';
             const companyWorkEnd = '@ViewBag.MaxTime';
             let currentSlotMinTime = companyWorkStart;
             let currentSlotMaxTime = companyWorkEnd;
+            let bookingDynamicFieldManager = null;
+            let pendingCreateContext = null;
 
             function categoryColor(category) {
                 switch (String(category || '')) {
@@ -516,6 +554,23 @@
                     minimumFractionDigits: hasFraction ? 1 : 0,
                     maximumFractionDigits: 1
                 }) + ' ₽';
+            }
+
+            function formatBookingCreatedAt(value) {
+                const date = value instanceof Date ? value : parseDate(value);
+                if (!date) {
+                    return 'Дата создания: -';
+                }
+
+                const formatted = date.toLocaleString('ru-RU', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                }).replace(',', '');
+
+                return `Дата создания: ${formatted}`;
             }
 
             function toLocalInput(date) {
@@ -622,6 +677,112 @@
                 return copy;
             }
 
+            function getSingleSelectText(selectElement) {
+                if (!selectElement) {
+                    return '';
+                }
+
+                const selectedOption = selectElement.options[selectElement.selectedIndex];
+                return selectedOption ? String(selectedOption.textContent || '').trim() : '';
+            }
+
+            function normalizeBookingTitle(value) {
+                return String(value || '').trim();
+            }
+
+            function buildPerformerShortName(fullName) {
+                const parts = String(fullName || '')
+                    .split(/\s+/)
+                    .map(part => part.trim())
+                    .filter(part => part.length > 0);
+
+                if (!parts.length) {
+                    return 'Без исполнителя';
+                }
+
+                const lastName = parts[0];
+                const initials = parts
+                    .slice(1, 3)
+                    .filter(part => part.length > 0)
+                    .map(part => `${part.charAt(0).toUpperCase()}.`);
+
+                return initials.length > 0
+                    ? `${lastName} ${initials.join(' ')}`
+                    : lastName;
+            }
+
+            function getPrimaryServiceName() {
+                const primaryLine = bookingLineItems[0];
+                if (!primaryLine) {
+                    return 'Без услуги';
+                }
+
+                return servicesMap.get(String(primaryLine.serviceId || ''))?.name || 'Без услуги';
+            }
+
+            function generateDefaultBookingTitle() {
+                const performerPart = buildPerformerShortName(getSingleSelectText(modalPerformerEmployeeId));
+                const resourcePart = getSingleSelectText(modalResourceId) || 'Без ресурса';
+                const servicePart = getPrimaryServiceName();
+                return `${performerPart}, ${resourcePart}, ${servicePart}`;
+            }
+
+            function setBookingTitleText(value) {
+                const normalized = normalizeBookingTitle(value) || generateDefaultBookingTitle();
+                modalBookingTitle.value = normalized;
+                bookingTitleDisplay.textContent = normalized;
+                bookingModalTitle.setAttribute('aria-label', normalized);
+            }
+
+            function syncBookingTitle(options) {
+                const opts = options || {};
+                if (bookingTitleWasCustomized && !opts.force) {
+                    return;
+                }
+
+                setBookingTitleText(generateDefaultBookingTitle());
+            }
+
+            function setBookingCreatedAt(value) {
+                bookingCreatedAtText.textContent = formatBookingCreatedAt(value);
+            }
+
+            function startBookingTitleEditing() {
+                if (!modalBookingTitle.classList.contains('d-none')) {
+                    return;
+                }
+
+                bookingTitleBeforeEditing = normalizeBookingTitle(modalBookingTitle.value) || bookingTitleDisplay.textContent || '';
+                bookingTitleWasCustomizedBeforeEditing = bookingTitleWasCustomized;
+                bookingTitleDisplay.classList.add('d-none');
+                modalBookingTitle.classList.remove('d-none');
+                modalBookingTitle.focus();
+                modalBookingTitle.select();
+            }
+
+            function finishBookingTitleEditing(saveChanges) {
+                if (modalBookingTitle.classList.contains('d-none')) {
+                    return;
+                }
+
+                const shouldSave = saveChanges !== false;
+                const currentValue = shouldSave
+                    ? normalizeBookingTitle(modalBookingTitle.value)
+                    : normalizeBookingTitle(bookingTitleBeforeEditing);
+
+                modalBookingTitle.classList.add('d-none');
+                bookingTitleDisplay.classList.remove('d-none');
+
+                if (!currentValue) {
+                    bookingTitleWasCustomized = shouldSave ? false : bookingTitleWasCustomizedBeforeEditing;
+                    syncBookingTitle({ force: true });
+                    return;
+                }
+
+                bookingTitleWasCustomized = shouldSave ? true : bookingTitleWasCustomizedBeforeEditing;
+                setBookingTitleText(currentValue);
+            }
+
             function parseTimeToMinutes(timeText) {
                 if (!timeText) {
                     return null;
@@ -704,21 +865,6 @@
                     modalDiscountReason.value = '';
                     modalDiscountReason.classList.remove('is-invalid');
                 }
-            }
-
-            function appendQuickCollectionInput(container, inputName, inputType, placeholder) {
-                const wrapper = document.createElement('div');
-                wrapper.className = 'input-group input-group-sm mb-1';
-                wrapper.innerHTML = `
-                    <input type="${inputType}" name="${inputName}" class="form-control" placeholder="${placeholder}" />
-                    <button type="button" class="btn btn-outline-danger remove-quick-item"><i class="bi bi-x"></i></button>
-                `;
-
-                wrapper.querySelector('.remove-quick-item')?.addEventListener('click', () => {
-                    wrapper.remove();
-                });
-
-                container.appendChild(wrapper);
             }
 
             function getSelectedValues(selectElement) {
@@ -813,6 +959,475 @@
 
                     $select.select2(options);
                     $select.on('change', () => setFieldInvalid(select, false));
+                });
+            }
+
+            function normalizeEntityCodeValue(value) {
+                const normalized = String(value || '').trim().toLowerCase();
+                if (!normalized) {
+                    return '';
+                }
+
+                if (normalized.endsWith('s') && normalized.length > 1) {
+                    return normalized.slice(0, -1);
+                }
+
+                return normalized;
+            }
+
+            function entityCodesMatch(left, right) {
+                return normalizeEntityCodeValue(left) === normalizeEntityCodeValue(right);
+            }
+
+            function attachDynamicInputValidationReset(input) {
+                if (!input) {
+                    return;
+                }
+
+                const handler = () => setFieldInvalid(input, false);
+                input.addEventListener('input', handler);
+                input.addEventListener('change', handler);
+            }
+
+            function getDynamicInputValue(input) {
+                if (!input) {
+                    return '';
+                }
+
+                if (input.type === 'file') {
+                    return input.files && input.files.length > 0 ? '__file__' : '';
+                }
+
+                if (input.tagName === 'SELECT') {
+                    return getSelectedValues(input)[0] || '';
+                }
+
+                return String(input.value || '').trim();
+            }
+
+            function setDynamicInputValue(input, field, value) {
+                if (!input) {
+                    return;
+                }
+
+                if (input.type === 'file') {
+                    input.value = '';
+                    return;
+                }
+
+                if (input.tagName === 'SELECT') {
+                    const normalized = value === null || value === undefined ? '' : String(value);
+                    if (normalized && !Array.from(input.options).some(option => option.value === normalized)) {
+                        const option = document.createElement('option');
+                        option.value = normalized;
+                        option.textContent = normalized;
+                        input.appendChild(option);
+                    }
+
+                    setSelectValue(input, normalized);
+                    return;
+                }
+
+                if (input.type === 'datetime-local') {
+                    input.value = normalizeDateTimeForInput(value);
+                    return;
+                }
+
+                if (input.type === 'date') {
+                    input.value = normalizeDateForInput(value);
+                    return;
+                }
+
+                input.value = value === null || value === undefined ? '' : String(value);
+            }
+
+            function upsertLookupOption(options, id, name) {
+                if (!Array.isArray(options)) {
+                    return;
+                }
+
+                const normalizedId = String(id || '');
+                if (!normalizedId) {
+                    return;
+                }
+
+                const existing = options.find(option => String(option.Value) === normalizedId);
+                if (existing) {
+                    existing.Text = name;
+                    return;
+                }
+
+                options.push({
+                    Value: normalizedId,
+                    Text: name
+                });
+            }
+
+            function ensureSelectOption(selectElement, id, name) {
+                if (!selectElement) {
+                    return;
+                }
+
+                const normalizedId = String(id || '');
+                if (!normalizedId) {
+                    return;
+                }
+
+                const existing = Array.from(selectElement.options).find(option => option.value === normalizedId);
+                if (existing) {
+                    existing.textContent = name;
+                } else {
+                    const option = document.createElement('option');
+                    option.value = normalizedId;
+                    option.textContent = name;
+                    selectElement.appendChild(option);
+                }
+
+                if (hasJquery && window.jQuery(selectElement).hasClass('select2-hidden-accessible')) {
+                    window.jQuery(selectElement).trigger('change.select2');
+                }
+            }
+
+            function createDynamicFieldManager(config) {
+                const container = config.container;
+                const fields = Array.isArray(config.fields) ? config.fields : [];
+                const lookupStore = config.lookupDataStore || {};
+                const rows = new Map();
+                const columnClass = config.columnClass || 'col-md-6';
+                const labelClass = config.labelClass || 'form-label small text-muted';
+                const addButtonClass = config.addButtonClass || 'btn btn-sm btn-outline-secondary mt-1';
+
+                function getLookupOptions(field) {
+                    if (!Array.isArray(lookupStore[field.SystemName])) {
+                        lookupStore[field.SystemName] = [];
+                    }
+
+                    return lookupStore[field.SystemName];
+                }
+
+                function createInput(field, value) {
+                    const inputName = `DynamicProps[${field.SystemName}]`;
+                    let input;
+
+                    if (field.DataType === 'Text') {
+                        input = document.createElement('textarea');
+                        input.className = 'form-control form-control-sm';
+                        input.rows = 2;
+                    } else if (field.DataType === 'EntityLink') {
+                        input = document.createElement('select');
+                        input.className = 'form-select form-select-sm searchable-select';
+                        input.dataset.searchPlaceholder = `Поиск: ${String(field.Label || '').toLowerCase()}...`;
+
+                        const emptyOption = document.createElement('option');
+                        emptyOption.value = '';
+                        emptyOption.textContent = 'Не выбрано';
+                        input.appendChild(emptyOption);
+
+                        getLookupOptions(field).forEach(optionData => {
+                            const option = document.createElement('option');
+                            option.value = optionData.Value;
+                            option.textContent = optionData.Text;
+                            input.appendChild(option);
+                        });
+                    } else if (field.DataType === 'Boolean') {
+                        input = document.createElement('select');
+                        input.className = 'form-select form-select-sm';
+
+                        const noOption = document.createElement('option');
+                        noOption.value = 'false';
+                        noOption.textContent = 'Нет';
+                        input.appendChild(noOption);
+
+                        const yesOption = document.createElement('option');
+                        yesOption.value = 'true';
+                        yesOption.textContent = 'Да';
+                        input.appendChild(yesOption);
+                    } else {
+                        input = document.createElement('input');
+                        input.className = 'form-control form-control-sm';
+
+                        if (field.DataType === 'Date') {
+                            input.type = 'date';
+                        } else if (field.DataType === 'DateTime') {
+                            input.type = 'datetime-local';
+                        } else if (field.DataType === 'Number' || field.DataType === 'Money') {
+                            input.type = 'number';
+                            input.step = field.DataType === 'Money' ? '0.01' : '1';
+                        } else if (field.DataType === 'File') {
+                            input.type = 'file';
+                        } else {
+                            input.type = 'text';
+                        }
+                    }
+
+                    input.name = inputName;
+                    input.dataset.dynamicRequired = field.IsRequired ? 'true' : 'false';
+                    input.dataset.dynamicFieldInput = 'true';
+                    input.dataset.dynamicFieldSystemName = field.SystemName;
+                    attachDynamicInputValidationReset(input);
+                    setDynamicInputValue(input, field, value);
+                    return input;
+                }
+
+                function createItem(field, value) {
+                    const item = document.createElement('div');
+                    item.className = 'schedule-dynamic-item';
+
+                    const controlWrap = document.createElement('div');
+                    controlWrap.className = 'schedule-dynamic-item-control';
+
+                    const input = createInput(field, value);
+                    controlWrap.appendChild(input);
+                    item.appendChild(controlWrap);
+
+                    const canCreateLinkedEntity = typeof config.canCreateLinkedEntity === 'function'
+                        ? config.canCreateLinkedEntity(field)
+                        : false;
+
+                    if (field.DataType === 'EntityLink' && canCreateLinkedEntity && typeof config.onEntityLinkCreate === 'function') {
+                        const createButton = document.createElement('button');
+                        createButton.type = 'button';
+                        createButton.className = 'btn btn-sm btn-outline-primary';
+                        createButton.title = 'Создать связанный объект';
+                        createButton.innerHTML = '<i class="bi bi-plus-lg"></i>';
+                        createButton.addEventListener('click', () => config.onEntityLinkCreate(field, input));
+                        item.appendChild(createButton);
+                    }
+
+                    if (field.IsArray) {
+                        const removeButton = document.createElement('button');
+                        removeButton.type = 'button';
+                        removeButton.className = 'btn btn-sm btn-outline-danger';
+                        removeButton.innerHTML = '<i class="bi bi-x"></i>';
+                        removeButton.addEventListener('click', () => {
+                            item.remove();
+                        });
+                        item.appendChild(removeButton);
+                    }
+
+                    initSearchableSelects(item);
+                    return item;
+                }
+
+                function getRow(fieldSystemName) {
+                    return rows.get(fieldSystemName) || null;
+                }
+
+                function getInputs(fieldSystemName) {
+                    const row = getRow(fieldSystemName);
+                    if (!row) {
+                        return [];
+                    }
+
+                    return Array.from(row.itemsContainer.querySelectorAll('[data-dynamic-field-input="true"]'));
+                }
+
+                function setFieldValues(field, values) {
+                    const row = getRow(field.SystemName);
+                    if (!row) {
+                        return;
+                    }
+
+                    row.itemsContainer.innerHTML = '';
+
+                    const shouldIgnoreExistingFileValues = field.DataType === 'File';
+                    const normalizedValues = shouldIgnoreExistingFileValues
+                        ? []
+                        : (Array.isArray(values) ? values : []);
+                    const valuesToRender = normalizedValues.length > 0 ? normalizedValues : [''];
+
+                    valuesToRender.forEach(value => {
+                        row.itemsContainer.appendChild(createItem(field, value));
+                    });
+                }
+
+                function ensureMinimumItem(field) {
+                    if (!field.IsArray) {
+                        return;
+                    }
+
+                    const row = getRow(field.SystemName);
+                    if (!row || row.itemsContainer.children.length > 0) {
+                        return;
+                    }
+
+                    row.itemsContainer.appendChild(createItem(field, ''));
+                }
+
+                function renderField(field) {
+                    const col = document.createElement('div');
+                    col.className = columnClass;
+
+                    const label = document.createElement('label');
+                    label.className = labelClass;
+                    label.textContent = field.Label;
+                    col.appendChild(label);
+
+                    const itemsContainer = document.createElement('div');
+                    itemsContainer.className = 'schedule-dynamic-items';
+                    col.appendChild(itemsContainer);
+
+                    if (field.IsArray) {
+                        const addButton = document.createElement('button');
+                        addButton.type = 'button';
+                        addButton.className = addButtonClass;
+                        addButton.innerHTML = '<i class="bi bi-plus-lg me-1"></i> Добавить еще';
+                        addButton.addEventListener('click', () => {
+                            itemsContainer.appendChild(createItem(field, ''));
+                        });
+                        col.appendChild(addButton);
+                    }
+
+                    container.appendChild(col);
+                    rows.set(field.SystemName, {
+                        field,
+                        itemsContainer
+                    });
+
+                    setFieldValues(field, []);
+                }
+
+                function render() {
+                    container.innerHTML = '';
+                    rows.clear();
+                    fields.forEach(field => renderField(field));
+                }
+
+                function clear() {
+                    fields.forEach(field => setFieldValues(field, []));
+                }
+
+                function setValues(rawProperties) {
+                    const properties = parseProperties(rawProperties);
+
+                    fields.forEach(field => {
+                        const rawValue = properties[field.SystemName];
+                        let values = [];
+
+                        if (Array.isArray(rawValue)) {
+                            values = rawValue;
+                        } else if (rawValue !== null && rawValue !== undefined && String(rawValue).trim().length > 0) {
+                            values = [rawValue];
+                        }
+
+                        setFieldValues(field, values);
+                    });
+                }
+
+                function validate() {
+                    let hasErrors = false;
+
+                    fields.forEach(field => {
+                        if (!field.IsRequired) {
+                            getInputs(field.SystemName).forEach(input => setFieldInvalid(input, false));
+                            return;
+                        }
+
+                        ensureMinimumItem(field);
+                        const inputs = getInputs(field.SystemName);
+
+                        let invalid;
+                        if (field.DataType === 'File') {
+                            invalid = inputs.every(input => !input.files || input.files.length === 0);
+                        } else {
+                            invalid = inputs.every(input => getDynamicInputValue(input).length === 0);
+                        }
+
+                        inputs.forEach(input => setFieldInvalid(input, invalid));
+                        hasErrors = hasErrors || invalid;
+                    });
+
+                    return !hasErrors;
+                }
+
+                function upsertEntityOption(targetEntityCode, id, name) {
+                    fields
+                        .filter(field => field.DataType === 'EntityLink' && entityCodesMatch(field.TargetEntityCode, targetEntityCode))
+                        .forEach(field => {
+                            const options = getLookupOptions(field);
+                            upsertLookupOption(options, id, name);
+                            getInputs(field.SystemName)
+                                .filter(input => input.tagName === 'SELECT')
+                                .forEach(input => ensureSelectOption(input, id, name));
+                        });
+                }
+
+                return {
+                    render,
+                    clear,
+                    setValues,
+                    validate,
+                    upsertEntityOption
+                };
+            }
+
+            function upsertEntityLinkOptionAcrossManagers(entityCode, id, name) {
+                dynamicFieldManagers.forEach(manager => {
+                    manager?.upsertEntityOption(entityCode, id, name);
+                });
+            }
+
+            function applyPendingCreatedEntity(entityCode, id, name) {
+                if (!pendingCreateContext || !entityCodesMatch(pendingCreateContext.targetEntityCode, entityCode)) {
+                    return;
+                }
+
+                if (typeof pendingCreateContext.onCreated === 'function') {
+                    pendingCreateContext.onCreated(id, name);
+                }
+
+                pendingCreateContext = null;
+            }
+
+            function openCreateFormInModal(options) {
+                const createUrl = String(options?.url || '').trim();
+                if (!createUrl) {
+                    return;
+                }
+
+                pendingCreateContext = options?.context || null;
+                linkedEntityCreateFrame.src = createUrl;
+                linkedEntityCreateModalTitle.innerHTML = '';
+
+                const titleIcon = document.createElement('i');
+                titleIcon.className = options?.iconClass || 'bi bi-box-seam me-2';
+                linkedEntityCreateModalTitle.appendChild(titleIcon);
+                linkedEntityCreateModalTitle.append(options?.title || 'Новый связанный объект');
+                linkedEntityCreateModal.show();
+            }
+
+            function openEntityLinkCreateDialog(field, selectElement) {
+                const createUrl = String(field?.ModalCreateUrl || '').trim();
+                const targetEntityCode = String(field?.TargetEntityCode || '').trim();
+                if (!createUrl || !targetEntityCode) {
+                    return;
+                }
+
+                openCreateFormInModal({
+                    url: createUrl,
+                    title: `Новый объект: ${field.Label || targetEntityCode}`,
+                    context: {
+                        targetEntityCode,
+                        onCreated: (id, name) => {
+                            if (selectElement && document.body.contains(selectElement)) {
+                                ensureSelectOption(selectElement, id, name);
+                                setSelectValue(selectElement, id);
+                                setFieldInvalid(selectElement, false);
+                            }
+                        }
+                    }
+                });
+            }
+
+            function openContactCreateDialog() {
+                openCreateFormInModal({
+                    url: '/Contacts/Create?modal=true',
+                    title: 'Новый контакт',
+                    iconClass: 'bi bi-person-plus me-2',
+                    context: {
+                        targetEntityCode: 'Contact',
+                        selectInMainContacts: true
+                    }
                 });
             }
 
@@ -1107,6 +1722,7 @@
                     selectedItemsAmount.textContent = formatLineMoney(0);
                     modalAmount.value = '0.00';
                     updateDiscountReasonVisibility();
+                    syncBookingTitle();
                     return;
                 }
 
@@ -1354,6 +1970,7 @@
 
                 recalculateSelectedItemsTotals();
                 setFieldInvalid(modalServiceItemIds, false);
+                syncBookingTitle();
             }
 
             function renderFilterField(field) {
@@ -1395,168 +2012,6 @@
 
                 col.appendChild(input);
                 dynamicFilterFields.appendChild(col);
-            }
-
-            function renderBookingField(field) {
-                const col = document.createElement('div');
-                col.className = 'col-md-6';
-
-                const label = document.createElement('label');
-                label.className = 'form-label small text-muted';
-                label.textContent = field.Label;
-                col.appendChild(label);
-
-                const inputName = `DynamicProps[${field.SystemName}]`;
-                let input;
-
-                if (field.DataType === 'Text') {
-                    input = document.createElement('textarea');
-                    input.className = 'form-control form-control-sm';
-                    input.rows = 2;
-                } else if (field.DataType === 'EntityLink') {
-                    input = document.createElement('select');
-                    input.className = 'form-select form-select-sm searchable-select';
-                    input.dataset.searchPlaceholder = `Поиск: ${field.Label.toLowerCase()}...`;
-
-                    const emptyOption = document.createElement('option');
-                    emptyOption.value = '';
-                    emptyOption.textContent = 'Не выбрано';
-                    input.appendChild(emptyOption);
-
-                    const options = lookupData[field.SystemName] || [];
-                    options.forEach(opt => {
-                        const option = document.createElement('option');
-                        option.value = opt.Value;
-                        option.textContent = opt.Text;
-                        input.appendChild(option);
-                    });
-                } else if (field.DataType === 'Boolean') {
-                    input = document.createElement('select');
-                    input.className = 'form-select form-select-sm';
-
-                    const noOption = document.createElement('option');
-                    noOption.value = 'false';
-                    noOption.textContent = 'Нет';
-                    input.appendChild(noOption);
-
-                    const yesOption = document.createElement('option');
-                    yesOption.value = 'true';
-                    yesOption.textContent = 'Да';
-                    input.appendChild(yesOption);
-                } else {
-                    input = document.createElement('input');
-                    input.className = 'form-control form-control-sm';
-
-                    if (field.DataType === 'Date') {
-                        input.type = 'date';
-                    } else if (field.DataType === 'DateTime') {
-                        input.type = 'datetime-local';
-                    } else if (field.DataType === 'Number' || field.DataType === 'Money') {
-                        input.type = 'number';
-                        input.step = field.DataType === 'Money' ? '0.01' : '1';
-                    } else if (field.DataType === 'File') {
-                        input.type = 'file';
-                        if (field.IsArray) {
-                            input.multiple = true;
-                        }
-                    } else {
-                        input.type = 'text';
-                    }
-                }
-
-                input.name = inputName;
-                input.dataset.dynamicRequired = field.IsRequired ? 'true' : 'false';
-
-                if (field.IsArray && field.DataType !== 'File') {
-                    input.dataset.array = 'true';
-                    if (input.tagName === 'INPUT') {
-                        input.placeholder = 'Несколько значений через перенос строки';
-                    }
-                }
-
-                col.appendChild(input);
-                dynamicBookingFields.appendChild(col);
-            }
-
-            function renderQuickContactField(field) {
-                const col = document.createElement('div');
-                col.className = 'col-md-6';
-
-                const label = document.createElement('label');
-                label.className = 'form-label small text-muted';
-                label.textContent = field.Label;
-                col.appendChild(label);
-
-                const inputName = `DynamicProps[${field.SystemName}]`;
-                let input;
-
-                if (field.DataType === 'Text') {
-                    input = document.createElement('textarea');
-                    input.className = 'form-control form-control-sm quick-contact-dynamic';
-                    input.rows = 2;
-                } else if (field.DataType === 'EntityLink') {
-                    input = document.createElement('select');
-                    input.className = 'form-select form-select-sm searchable-select quick-contact-dynamic';
-                    input.dataset.searchPlaceholder = `Поиск: ${field.Label.toLowerCase()}...`;
-
-                    const emptyOption = document.createElement('option');
-                    emptyOption.value = '';
-                    emptyOption.textContent = 'Не выбрано';
-                    input.appendChild(emptyOption);
-
-                    const options = contactLookupData[field.SystemName] || [];
-                    options.forEach(opt => {
-                        const option = document.createElement('option');
-                        option.value = opt.Value;
-                        option.textContent = opt.Text;
-                        input.appendChild(option);
-                    });
-                } else if (field.DataType === 'Boolean') {
-                    input = document.createElement('select');
-                    input.className = 'form-select form-select-sm quick-contact-dynamic';
-
-                    const noOption = document.createElement('option');
-                    noOption.value = 'false';
-                    noOption.textContent = 'Нет';
-                    input.appendChild(noOption);
-
-                    const yesOption = document.createElement('option');
-                    yesOption.value = 'true';
-                    yesOption.textContent = 'Да';
-                    input.appendChild(yesOption);
-                } else {
-                    input = document.createElement('input');
-                    input.className = 'form-control form-control-sm quick-contact-dynamic';
-
-                    if (field.DataType === 'Date') {
-                        input.type = 'date';
-                    } else if (field.DataType === 'DateTime') {
-                        input.type = 'datetime-local';
-                    } else if (field.DataType === 'Number' || field.DataType === 'Money') {
-                        input.type = 'number';
-                        input.step = field.DataType === 'Money' ? '0.01' : '1';
-                    } else if (field.DataType === 'File') {
-                        input.type = 'file';
-                        if (field.IsArray) {
-                            input.multiple = true;
-                        }
-                    } else {
-                        input.type = 'text';
-                    }
-                }
-
-                input.name = inputName;
-                input.dataset.dynamicRequired = field.IsRequired ? 'true' : 'false';
-
-                if (field.IsArray && field.DataType !== 'File') {
-                    input.dataset.array = 'true';
-                    if (input.tagName === 'INPUT') {
-                        input.placeholder = 'Несколько значений через перенос строки';
-                    }
-                }
-
-                col.appendChild(input);
-                quickContactDynamicFields.appendChild(col);
             }
 
             function getFilterValues() {
@@ -1630,20 +2085,7 @@
             }
 
             function clearDynamicBookingFields() {
-                dynamicBookingFields.querySelectorAll('[name^="DynamicProps["]').forEach(input => {
-                    if (input.type === 'file') {
-                        input.value = '';
-                    } else if (input.tagName === 'SELECT') {
-                        setSelectValue(input, '');
-                    } else {
-                        input.value = '';
-                    }
-                });
-            }
-
-            function extractDynamicName(inputName) {
-                const match = /^DynamicProps\[(.+)]$/.exec(inputName || '');
-                return match ? match[1] : '';
+                bookingDynamicFieldManager?.clear();
             }
 
             function parseProperties(raw) {
@@ -1666,60 +2108,8 @@
                 return {};
             }
 
-            function normalizePropertyValue(value) {
-                if (value && typeof value === 'object' && value.valueKind !== undefined) {
-                    return value;
-                }
-                return value;
-            }
-
             function setDynamicValues(rawProperties) {
-                const properties = parseProperties(rawProperties);
-
-                dynamicBookingFields.querySelectorAll('[name^="DynamicProps["]').forEach(input => {
-                    const dynamicName = extractDynamicName(input.name);
-                    const rawValue = normalizePropertyValue(properties[dynamicName]);
-
-                    if (rawValue === null || rawValue === undefined) {
-                        if (input.type === 'file') {
-                            input.value = '';
-                        } else if (input.tagName === 'SELECT') {
-                            setSelectValue(input, '');
-                        } else {
-                            input.value = '';
-                        }
-                        return;
-                    }
-
-                    if (input.type === 'file') {
-                        return;
-                    }
-
-                    if (input.dataset.array === 'true') {
-                        const values = Array.isArray(rawValue)
-                            ? rawValue
-                            : [rawValue];
-                        input.value = values.map(v => String(v)).join('\n');
-                        return;
-                    }
-
-                    if (input.tagName === 'SELECT') {
-                        setSelectValue(input, String(rawValue));
-                        return;
-                    }
-
-                    if (input.type === 'datetime-local') {
-                        input.value = normalizeDateTimeForInput(rawValue);
-                        return;
-                    }
-
-                    if (input.type === 'date') {
-                        input.value = normalizeDateForInput(rawValue);
-                        return;
-                    }
-
-                    input.value = String(rawValue);
-                });
+                bookingDynamicFieldManager?.setValues(rawProperties);
             }
 
             function resetBookingModalForCreate(start, end, source) {
@@ -1729,8 +2119,10 @@
                 modalBookingId.value = '';
                 modalResult.innerHTML = '';
                 clearValidation();
+                modalBookingTitle.classList.add('d-none');
+                bookingTitleDisplay.classList.remove('d-none');
 
-                bookingModalTitle.innerHTML = '<i class="bi bi-calendar-plus me-2"></i> Новое бронирование';
+                bookingTitleIcon.className = 'bi bi-calendar-plus booking-title-icon';
                 saveBookingBtn.textContent = 'Сохранить';
                 deleteBookingBtn.classList.add('d-none');
 
@@ -1753,7 +2145,10 @@
                 setSelectValue(modalPerformerEmployeeId, performerFilter && performerFilter.value ? performerFilter.value : '');
 
                 clearDynamicBookingFields();
+                bookingTitleWasCustomized = false;
+                setBookingCreatedAt(new Date());
                 refreshSelectedItemsTable();
+                syncBookingTitle({ force: true });
             }
 
             function applySelectedServices(services, fallbackServiceId) {
@@ -1789,6 +2184,8 @@
             async function openBookingForEdit(bookingId) {
                 clearValidation();
                 modalResult.innerHTML = '';
+                modalBookingTitle.classList.add('d-none');
+                bookingTitleDisplay.classList.remove('d-none');
 
                 try {
                     const response = await fetch(`/Schedule/GetBooking?id=${encodeURIComponent(bookingId)}`);
@@ -1808,7 +2205,7 @@
                     activeBookingId = String(booking.id);
                     modalBookingId.value = activeBookingId;
 
-                    bookingModalTitle.innerHTML = '<i class="bi bi-calendar-check me-2"></i> Запись в расписании';
+                    bookingTitleIcon.className = 'bi bi-calendar-check booking-title-icon';
                     saveBookingBtn.textContent = 'Сохранить изменения';
                     deleteBookingBtn.classList.remove('d-none');
 
@@ -1824,8 +2221,13 @@
                     modalStart.value = normalizeDateTimeForInput(booking.start);
                     modalEnd.value = normalizeDateTimeForInput(booking.end);
                     modalComment.value = booking.comment || '';
+                    setBookingCreatedAt(booking.createdAt || null);
 
                     setDynamicValues(booking.properties);
+                    const generatedTitle = generateDefaultBookingTitle();
+                    const resolvedTitle = normalizeBookingTitle(booking.title) || generatedTitle;
+                    bookingTitleWasCustomized = resolvedTitle !== generatedTitle;
+                    setBookingTitleText(resolvedTitle);
                     bookingModal.show();
                 } catch {
                     alert('Ошибка сети при загрузке записи.');
@@ -1873,28 +2275,9 @@
                     }
                 }
 
-                dynamicBookingFields.querySelectorAll('[name^="DynamicProps["]').forEach(input => {
-                    const isRequired = input.dataset.dynamicRequired === 'true';
-                    if (!isRequired) {
-                        return;
-                    }
-
-                    let invalid = false;
-                    if (input.type === 'file') {
-                        invalid = !input.files || input.files.length === 0;
-                    } else if (input.dataset.array === 'true') {
-                        const parts = (input.value || '')
-                            .split(/\n|,/)
-                            .map(x => x.trim())
-                            .filter(x => x.length > 0);
-                        invalid = parts.length === 0;
-                    } else {
-                        invalid = !input.value || String(input.value).trim().length === 0;
-                    }
-
-                    setFieldInvalid(input, invalid);
-                    hasErrors = hasErrors || invalid;
-                });
+                if (bookingDynamicFieldManager && !bookingDynamicFieldManager.validate()) {
+                    hasErrors = true;
+                }
 
                 if (hasErrors && modalResult.innerHTML.length === 0) {
                     modalResult.innerHTML = '<span class="text-danger">Заполните обязательные поля, они выделены красным.</span>';
@@ -1905,10 +2288,7 @@
 
             function buildBookingFormData(options) {
                 const opts = options || {};
-                const token = getAntiForgeryToken();
-                const formData = new FormData();
-
-                formData.append('__RequestVerificationToken', token);
+                const formData = new FormData(bookingForm);
                 if (isEditMode && activeBookingId) {
                     formData.append('bookingId', activeBookingId);
                 }
@@ -1918,6 +2298,7 @@
                 formData.append('statusId', modalStatusId.value || '');
                 formData.append('start', modalStart.value);
                 formData.append('end', modalEnd.value);
+                formData.append('title', modalBookingTitle.value || '');
                 formData.append('comment', modalComment.value || '');
                 formData.append('amount', modalAmount.value || '0');
                 formData.append('discountReason', modalDiscountReason.value || '');
@@ -1945,54 +2326,11 @@
                             : '');
                 });
 
-                dynamicBookingFields.querySelectorAll('[name^="DynamicProps["]').forEach(input => {
-                    const fieldName = input.name;
-
-                    if (input.type === 'file') {
-                        const files = input.files || [];
-                        for (const file of files) {
-                            formData.append(fieldName, file);
-                        }
-                        return;
-                    }
-
-                    if (input.dataset.array === 'true') {
-                        const parts = (input.value || '')
-                            .split(/\n|,/)
-                            .map(x => x.trim())
-                            .filter(x => x.length > 0);
-                        parts.forEach(part => formData.append(fieldName, part));
-                        return;
-                    }
-
-                    if (input.value !== null && String(input.value).trim().length > 0) {
-                        formData.append(fieldName, input.value);
-                    }
-                });
-
                 return formData;
             }
 
-            function resetQuickContactForm() {
-                quickContactForm.reset();
-                quickContactPhonesContainer.innerHTML = '';
-                quickContactEmailsContainer.innerHTML = '';
-                appendQuickCollectionInput(quickContactPhonesContainer, 'phones', 'text', '+7...');
-                appendQuickCollectionInput(quickContactEmailsContainer, 'emails', 'email', 'user@example.com');
-                quickContactResult.innerHTML = '';
-
-                quickContactDynamicFields.querySelectorAll('.quick-contact-dynamic').forEach(input => {
-                    if (input.type === 'file') {
-                        input.value = '';
-                    } else if (input.tagName === 'SELECT') {
-                        setSelectValue(input, '');
-                    } else {
-                        input.value = '';
-                    }
-                });
-            }
-
-            function upsertContactOption(contactId, contactName) {
+            function upsertContactOption(contactId, contactName, options) {
+                const opts = options || {};
                 const id = String(contactId);
                 const name = String(contactName || '').trim();
                 if (!id || !name) {
@@ -2000,6 +2338,12 @@
                 }
 
                 contactsMap.set(id, { id, name });
+                const existingContact = contactsCatalog.find(contact => String(contact.id) === id);
+                if (existingContact) {
+                    existingContact.name = name;
+                } else {
+                    contactsCatalog.push({ id, name });
+                }
 
                 const hasInModal = Array.from(modalContactIds.options).some(o => o.value === id);
                 if (!hasInModal) {
@@ -2017,34 +2361,64 @@
                     contactFilterSelect.appendChild(filterOption);
                 }
 
-                const selected = getSelectedValues(modalContactIds);
-                if (!selected.includes(id)) {
-                    selected.push(id);
+                if (opts.selectInModal !== false) {
+                    const selected = getSelectedValues(modalContactIds);
+                    if (!selected.includes(id)) {
+                        selected.push(id);
+                    }
+                    setSelectValue(modalContactIds, selected);
                 }
-                setSelectValue(modalContactIds, selected);
             }
 
             customFields.forEach(field => {
                 renderFilterField(field);
-                renderBookingField(field);
             });
-            contactCustomFields.forEach(field => {
-                renderQuickContactField(field);
+
+            bookingDynamicFieldManager = createDynamicFieldManager({
+                container: dynamicBookingFields,
+                fields: customFields,
+                lookupDataStore: lookupData,
+                onEntityLinkCreate: openEntityLinkCreateDialog,
+                canCreateLinkedEntity: field => Boolean(field.ModalCreateUrl)
             });
+            bookingDynamicFieldManager.render();
+            dynamicFieldManagers.push(bookingDynamicFieldManager);
 
             buildServiceOptions();
             buildContactOptions();
             buildStatusPicker();
             initSearchableSelects(document);
-            initSearchableSelects(quickContactModalEl);
             setStatusValue(getDefaultStatusId());
-            resetQuickContactForm();
+            setBookingCreatedAt(null);
             refreshSelectedItemsTable();
+            syncBookingTitle({ force: true });
 
             bookingForm.querySelectorAll('input, textarea, select').forEach(input => {
                 input.addEventListener('input', () => setFieldInvalid(input, false));
                 input.addEventListener('change', () => setFieldInvalid(input, false));
             });
+
+            bookingTitleDisplay.addEventListener('click', startBookingTitleEditing);
+            bookingTitleDisplay.addEventListener('keydown', event => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault();
+                    startBookingTitleEditing();
+                }
+            });
+
+            modalBookingTitle.addEventListener('keydown', event => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    finishBookingTitleEditing(true);
+                } else if (event.key === 'Escape') {
+                    event.preventDefault();
+                    finishBookingTitleEditing(false);
+                }
+            });
+            modalBookingTitle.addEventListener('blur', () => finishBookingTitleEditing(true));
+
+            modalResourceId.addEventListener('change', () => syncBookingTitle());
+            modalPerformerEmployeeId.addEventListener('change', () => syncBookingTitle());
 
             const handleServiceSelection = () => {
                 const serviceId = String(modalServiceItemIds.value || '');
@@ -2064,53 +2438,46 @@
             statusPickerButton.addEventListener('click', () => setStatusInvalid(false));
 
             document.getElementById('openQuickContactBtn').addEventListener('click', () => {
-                resetQuickContactForm();
-                quickContactModal.show();
+                openContactCreateDialog();
             });
 
-            document.getElementById('addQuickContactPhoneBtn').addEventListener('click', () => {
-                appendQuickCollectionInput(quickContactPhonesContainer, 'phones', 'text', '+7...');
-            });
+            linkedEntityCreateModalEl.addEventListener('hidden.bs.modal', () => {
+                linkedEntityCreateFrame.removeAttribute('src');
+                pendingCreateContext = null;
 
-            document.getElementById('addQuickContactEmailBtn').addEventListener('click', () => {
-                appendQuickCollectionInput(quickContactEmailsContainer, 'emails', 'email', 'user@example.com');
-            });
-
-            quickContactModalEl.addEventListener('hidden.bs.modal', () => {
                 if (bookingModalEl.classList.contains('show')) {
                     document.body.classList.add('modal-open');
                 }
             });
 
-            document.getElementById('saveQuickContactBtn').addEventListener('click', async () => {
-                const lastName = (quickContactLastName.value || '').trim();
-                const firstName = (quickContactFirstName.value || '').trim();
-
-                if (!lastName || !firstName) {
-                    quickContactResult.innerHTML = '<span class="text-danger">Заполните фамилию и имя контакта.</span>';
+            window.addEventListener('message', event => {
+                if (event.origin !== window.location.origin) {
                     return;
                 }
 
-                quickContactResult.innerHTML = '';
-                const formData = new FormData(quickContactForm);
-
-                try {
-                    const response = await fetch('/Schedule/CreateQuickContact', {
-                        method: 'POST',
-                        body: formData
-                    });
-
-                    const result = await response.json();
-                    if (!result.success) {
-                        quickContactResult.innerHTML = `<span class="text-danger">${result.message || 'Не удалось создать контакт.'}</span>`;
-                        return;
-                    }
-
-                    upsertContactOption(result.id, result.name);
-                    quickContactModal.hide();
-                } catch {
-                    quickContactResult.innerHTML = '<span class="text-danger">Ошибка сети при создании контакта.</span>';
+                const data = event.data;
+                if (!data || typeof data !== 'object') {
+                    return;
                 }
+
+                if (data.type === 'crm-modal-close') {
+                    linkedEntityCreateModal.hide();
+                    return;
+                }
+
+                if (data.type !== 'crm-entity-created') {
+                    return;
+                }
+
+                if (entityCodesMatch(data.entityCode, 'Contact')) {
+                    upsertContactOption(data.id, data.name, {
+                        selectInModal: pendingCreateContext?.selectInMainContacts === true
+                    });
+                }
+
+                upsertEntityLinkOptionAcrossManagers(data.entityCode, data.id, data.name);
+                applyPendingCreatedEntity(data.entityCode, data.id, data.name);
+                linkedEntityCreateModal.hide();
             });
 
             if (!window.FullCalendar || !window.FullCalendar.Calendar) {

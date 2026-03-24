@@ -319,6 +319,7 @@ namespace Core.Data
             {
                 entity.ToTable("CrmResourceBookings");
                 entity.Property(e => e.Properties).HasColumnType("jsonb");
+                entity.Property(e => e.Title).HasColumnType("text");
                 entity.Property(e => e.Amount).HasColumnType("decimal(18,2)");
                 entity.Property(e => e.DiscountReason).HasColumnType("text");
 
