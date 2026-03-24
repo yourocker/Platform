@@ -10,6 +10,7 @@ using Core.Entities.Platform;
 using System.Text.Json;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using ClosedXML.Excel;
+using CRM.Infrastructure;
 using CRM.ViewModels;
 using System.IO;
 using Microsoft.AspNetCore.Http;
@@ -616,30 +617,7 @@ public async Task<IActionResult> ExecuteImport(string fileName, Dictionary<strin
 
         private ContentResult BuildModalCreatedContentResult(string entityCode, Guid id, string? name)
         {
-            var payloadJson = JsonSerializer.Serialize(new
-            {
-                type = "crm-entity-created",
-                entityCode,
-                id,
-                name = name ?? string.Empty
-            });
-
-            var html = $"""
-                        <!DOCTYPE html>
-                        <html lang="ru">
-                        <head>
-                            <meta charset="utf-8" />
-                            <title>Создано</title>
-                        </head>
-                        <body>
-                            <script>
-                                window.parent.postMessage({payloadJson}, window.location.origin);
-                            </script>
-                        </body>
-                        </html>
-                        """;
-
-            return Content(html, "text/html; charset=utf-8");
+            return ModalRequestHelper.BuildEntityCreatedContent(entityCode, id, name);
         }
     }
 }

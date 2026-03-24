@@ -16,7 +16,8 @@ namespace Core.Interfaces.CRM
             DateTime start,
             DateTime end,
             Guid? performerEmployeeId = null,
-            bool allowOutsideCompanyWorkHours = false);
+            bool allowOutsideCompanyWorkHours = false,
+            Guid? excludeBookingId = null);
 
         /// <summary>
         /// Создает бронирование с учетом правил овербукинга.

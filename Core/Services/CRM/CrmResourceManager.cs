@@ -28,14 +28,15 @@ namespace Core.Services.CRM
             DateTime start,
             DateTime end,
             Guid? performerEmployeeId = null,
-            bool allowOutsideCompanyWorkHours = false)
+            bool allowOutsideCompanyWorkHours = false,
+            Guid? excludeBookingId = null)
         {
             var result = await CheckAvailabilityInternalAsync(
                 resourceId,
                 start,
                 end,
                 performerEmployeeId,
-                null,
+                excludeBookingId,
                 allowOutsideCompanyWorkHours);
             return (result.Success, result.IsOverbooking, result.Message);
         }

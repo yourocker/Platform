@@ -6,6 +6,7 @@ using System.Text.RegularExpressions;
 using Core.Data;
 using Core.Entities.Platform;
 using Core.Entities.Platform.Form;
+using CRM.Infrastructure;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
@@ -320,30 +321,7 @@ public class AppDefinitionsController(AppDbContext context) : Controller
 
     private ContentResult BuildModalCreatedContentResult(string entityCode, Guid id, string? name)
     {
-        var payloadJson = JsonSerializer.Serialize(new
-        {
-            type = "crm-entity-created",
-            entityCode,
-            id,
-            name = name ?? string.Empty
-        });
-
-        var html = $"""
-                    <!DOCTYPE html>
-                    <html lang="ru">
-                    <head>
-                        <meta charset="utf-8" />
-                        <title>Создано</title>
-                    </head>
-                    <body>
-                        <script>
-                            window.parent.postMessage({payloadJson}, window.location.origin);
-                        </script>
-                    </body>
-                    </html>
-                    """;
-
-        return Content(html, "text/html; charset=utf-8");
+        return ModalRequestHelper.BuildEntityCreatedContent(entityCode, id, name);
     }
     
     // GET: AppDefinitions/FormBuilder/{id}

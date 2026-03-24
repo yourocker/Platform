@@ -1,5 +1,6 @@
 ﻿using Core.Data;
 using Core.Entities.Company;
+using CRM.Infrastructure;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using System;
@@ -12,9 +13,15 @@ namespace CRM.Controllers
 {
     public class EmployeeScheduleController : BasePlatformController
     {
-        public EmployeeScheduleController(AppDbContext context, IWebHostEnvironment hostingEnvironment) 
+        private readonly IBookingCalendarDecorationService _calendarDecorationService;
+
+        public EmployeeScheduleController(
+            AppDbContext context,
+            IWebHostEnvironment hostingEnvironment,
+            IBookingCalendarDecorationService calendarDecorationService)
             : base(context, hostingEnvironment)
         {
+            _calendarDecorationService = calendarDecorationService;
         }
 
         public async Task<IActionResult> Index()
@@ -58,49 +65,11 @@ namespace CRM.Controllers
         {
             if (employeeId == Guid.Empty) return Json(new List<object>());
 
-            var workModes = await _context.CompanyWorkModes.ToListAsync();
-            var holidays = await _context.CompanyHolidays.Where(h => h.Date >= start && h.Date <= end).ToListAsync();
-            var absences = await _context.EmployeeSchedules
-                .Where(s => s.EmployeeId == employeeId && s.IsAbsence && s.StartTime < end && s.EndTime > start)
-                .ToListAsync();
+            var decorations = await _calendarDecorationService.GetDecorationsAsync(start, end, employeeId);
+            var events = decorations
+                .Select(MapDecorationToCalendarEvent)
+                .ToList();
 
-            var events = new List<object>();
-
-            for (var dt = start.Date; dt <= end.Date; dt = dt.AddDays(1))
-            {
-                var dayMode = workModes.FirstOrDefault(m => m.DayOfWeek == dt.DayOfWeek);
-                bool isHoliday = holidays.Any(h => h.Date.Date == dt.Date);
-                string darkBg = "#adb5bd"; 
-
-                if (isHoliday || dayMode == null || dayMode.IsWeekend)
-                {
-                    events.Add(new { display = "background", start = dt.ToString("yyyy-MM-dd"), end = dt.AddDays(1).ToString("yyyy-MM-dd"), backgroundColor = darkBg });
-                }
-                else
-                {
-                    events.Add(new { display = "background", start = dt.ToString("yyyy-MM-dd") + "T00:00:00", end = dt.ToString("yyyy-MM-dd") + "T" + dayMode.StartTime.ToString(@"hh\:mm"), backgroundColor = darkBg });
-                    
-                    if (dayMode.LunchStartTime.HasValue && dayMode.LunchEndTime.HasValue)
-                    {
-                        events.Add(new { display = "background", start = dt.ToString("yyyy-MM-dd") + "T" + dayMode.LunchStartTime.Value.ToString(@"hh\:mm"), end = dt.ToString("yyyy-MM-dd") + "T" + dayMode.LunchEndTime.Value.ToString(@"hh\:mm"), backgroundColor = "#dee2e6", title = "Обед" });
-                    }
-
-                    events.Add(new { display = "background", start = dt.ToString("yyyy-MM-dd") + "T" + dayMode.EndTime.ToString(@"hh\:mm"), end = dt.AddDays(1).ToString("yyyy-MM-dd") + "T00:00:00", backgroundColor = darkBg });
-                }
-            }
-
-            foreach (var abs in absences)
-            {
-                events.Add(new { 
-                    id = abs.Id, 
-                    title = "Отсутствие", 
-                    start = abs.StartTime.ToString("yyyy-MM-ddTHH:mm:ss"), 
-                    end = abs.EndTime.ToString("yyyy-MM-ddTHH:mm:ss"), 
-                    backgroundColor = "#dc3545", 
-                    borderColor = "#a71d2a",
-                    textColor = "#fff"
-                });
-            }
             return Json(events);
         }
 
@@ -139,6 +108,32 @@ namespace CRM.Controllers
             var item = await _context.EmployeeSchedules.FindAsync(id);
             if (item != null) { _context.EmployeeSchedules.Remove(item); await _context.SaveChangesAsync(); }
             return Json(new { success = true });
+        }
+
+        private static object MapDecorationToCalendarEvent(BookingCalendarDecoration decoration)
+        {
+            if (decoration.Kind == BookingCalendarDecorationKind.EmployeeAbsence)
+            {
+                return new
+                {
+                    id = decoration.Id,
+                    title = decoration.Title,
+                    start = decoration.Start.ToString("yyyy-MM-ddTHH:mm:ss"),
+                    end = decoration.End.ToString("yyyy-MM-ddTHH:mm:ss"),
+                    backgroundColor = "#dc3545",
+                    borderColor = "#a71d2a",
+                    textColor = "#fff"
+                };
+            }
+
+            return new
+            {
+                display = "background",
+                title = decoration.Title,
+                start = decoration.Start.ToString("yyyy-MM-ddTHH:mm:ss"),
+                end = decoration.End.ToString("yyyy-MM-ddTHH:mm:ss"),
+                backgroundColor = decoration.Kind == BookingCalendarDecorationKind.CompanyLunch ? "#dee2e6" : "#adb5bd"
+            };
         }
     }
 }

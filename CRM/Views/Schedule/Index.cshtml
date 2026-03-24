@@ -122,7 +122,15 @@
     <div class="card shadow-sm border-0">
         <div class="card-body">
             <div class="d-flex justify-content-between align-items-center mb-3">
-                <span class="badge bg-secondary p-2"><i class="bi bi-cursor me-1"></i> Выделите диапазон в календаре для новой записи</span>
+                <div class="d-flex flex-wrap gap-2 align-items-center">
+                    <span class="badge bg-secondary p-2"><i class="bi bi-cursor me-1"></i> Выделите диапазон в календаре для новой записи</span>
+                    <span class="badge bg-light text-secondary border schedule-legend-badge">
+                        <span class="schedule-legend-swatch schedule-legend-swatch-company"></span>Нерабочее время
+                    </span>
+                    <span class="badge bg-light text-danger border schedule-legend-badge">
+                        <span class="schedule-legend-swatch schedule-legend-swatch-absence"></span>Отсутствие выбранного исполнителя
+                    </span>
+                </div>
                 <button type="button" class="btn btn-sm btn-primary" id="addBookingBtn">
                     <i class="bi bi-plus-lg me-1"></i> Добавить запись
                 </button>
@@ -282,6 +290,7 @@
                     <div class="row g-2" id="dynamicBookingFields"></div>
 
                     <div id="modalResult" class="small mt-2"></div>
+                    <div id="modalSlotHint" class="small mt-1"></div>
                 </form>
             </div>
             <div class="modal-footer">
@@ -290,25 +299,6 @@
                 </button>
                 <button type="button" class="btn btn-sm btn-light" data-bs-dismiss="modal">Отмена</button>
                 <button type="button" class="btn btn-sm btn-primary" id="saveBookingBtn">Сохранить</button>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="modal fade" id="linkedEntityCreateModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
-    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
-        <div class="modal-content border-0 shadow">
-            <div class="modal-header">
-                <h5 class="modal-title" id="linkedEntityCreateModalTitle">
-                    <i class="bi bi-box-seam me-2"></i> Новый связанный объект
-                </h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-            </div>
-            <div class="modal-body p-0">
-                <iframe id="linkedEntityCreateFrame"
-                        title="Форма создания связанного объекта"
-                        class="w-100 border-0"
-                        style="min-height: 75vh;"></iframe>
             </div>
         </div>
     </div>
@@ -327,6 +317,28 @@
     .fc-theme-bootstrap5 a {
         color: #495057;
         text-decoration: none;
+    }
+
+    .schedule-legend-badge {
+        font-weight: 500;
+    }
+
+    .schedule-legend-swatch {
+        display: inline-block;
+        width: 0.8rem;
+        height: 0.8rem;
+        border-radius: 0.2rem;
+        margin-right: 0.35rem;
+        vertical-align: -0.08rem;
+        border: 1px solid rgba(0, 0, 0, 0.12);
+    }
+
+    .schedule-legend-swatch-company {
+        background: rgba(108, 117, 125, 0.28);
+    }
+
+    .schedule-legend-swatch-absence {
+        background: rgba(220, 53, 69, 0.22);
     }
 
     .select2-container.is-invalid .select2-selection {
@@ -467,6 +479,7 @@
             const modalBookingTitle = document.getElementById('modalBookingTitle');
             const bookingCreatedAtText = document.getElementById('bookingCreatedAtText');
             const modalResult = document.getElementById('modalResult');
+            const modalSlotHint = document.getElementById('modalSlotHint');
             const modalBookingId = document.getElementById('modalBookingId');
             const modalCreatedByEmployeeName = document.getElementById('modalCreatedByEmployeeName');
             const addBookingBtn = document.getElementById('addBookingBtn');
@@ -492,11 +505,6 @@
             const statusPickerMenu = document.getElementById('statusPickerMenu');
             const modalStatusId = document.getElementById('modalStatusId');
 
-            const linkedEntityCreateModalEl = document.getElementById('linkedEntityCreateModal');
-            const linkedEntityCreateModal = new bootstrap.Modal(linkedEntityCreateModalEl);
-            const linkedEntityCreateModalTitle = document.getElementById('linkedEntityCreateModalTitle');
-            const linkedEntityCreateFrame = document.getElementById('linkedEntityCreateFrame');
-
             const statusFilterSelect = filterForm.querySelector('[name="f_statusId"]');
             const contactFilterSelect = filterForm.querySelector('[name="f_contactId"]');
             const savedFilterSelect = document.getElementById('savedFilterSelect');
@@ -517,6 +525,17 @@
             let currentSlotMaxTime = companyWorkEnd;
             let bookingDynamicFieldManager = null;
             let pendingCreateContext = null;
+            let currentCalendarDecorations = [];
+            let slotAvailabilityTimer = null;
+            let slotAvailabilityRequestId = 0;
+            let slotAvailabilityState = {
+                checked: false,
+                pending: false,
+                canSave: true,
+                requiresConfirmation: false,
+                isOverbooking: false,
+                message: ''
+            };
 
             function categoryColor(category) {
                 switch (String(category || '')) {
@@ -585,6 +604,30 @@
 
                 const parsed = new Date(value);
                 return Number.isNaN(parsed.getTime()) ? null : parsed;
+            }
+
+            function rangesOverlap(startA, endA, startB, endB) {
+                return startA < endB && endA > startB;
+            }
+
+            function parseDecorationInterval(item) {
+                if (!item) {
+                    return null;
+                }
+
+                const start = parseDate(item.start);
+                const end = parseDate(item.end);
+                if (!start || !end || start >= end) {
+                    return null;
+                }
+
+                const extended = item.extendedProps || {};
+                return {
+                    start,
+                    end,
+                    kind: String(extended.decorationKind || ''),
+                    isFullDay: extended.isFullDay === true
+                };
             }
 
             function normalizeDateForInput(value) {
@@ -818,6 +861,10 @@
                 let maxMinutes = baseEnd;
 
                 (events || []).forEach(eventItem => {
+                    if (eventItem.display === 'background' || eventItem?.extendedProps?.isCalendarDecoration) {
+                        return;
+                    }
+
                     const start = parseDate(eventItem.start);
                     const end = parseDate(eventItem.end);
                     if (!start || !end) {
@@ -856,6 +903,65 @@
                 const roundedStart = roundToQuarterHour(new Date());
                 const roundedEnd = new Date(roundedStart.getTime() + 30 * 60 * 1000);
                 return { start: roundedStart, end: roundedEnd };
+            }
+
+            function getCreateRangeFromDaySelection(dayStart) {
+                const baseDate = new Date(
+                    dayStart.getFullYear(),
+                    dayStart.getMonth(),
+                    dayStart.getDate(),
+                    0,
+                    0,
+                    0,
+                    0);
+                const startMinutes = parseTimeToMinutes(companyWorkStart) ?? (9 * 60);
+                const start = new Date(baseDate.getTime() + startMinutes * 60 * 1000);
+                const end = new Date(start.getTime() + 30 * 60 * 1000);
+                return { start, end };
+            }
+
+            function canUseDayCellSelection(start, end) {
+                if (!(start instanceof Date) || !(end instanceof Date) || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+                    return false;
+                }
+
+                const daysCount = Math.round((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000));
+                if (daysCount !== 1) {
+                    return false;
+                }
+
+                return !currentCalendarDecorations.some(item => {
+                    const interval = parseDecorationInterval(item);
+                    if (!interval || interval.kind !== 'CompanyClosed' || !interval.isFullDay) {
+                        return false;
+                    }
+
+                    return rangesOverlap(start, end, interval.start, interval.end);
+                });
+            }
+
+            function canUseCalendarRange(start, end, options) {
+                const opts = options || {};
+                if (!(start instanceof Date) || !(end instanceof Date) || Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+                    return false;
+                }
+
+                if (start >= end) {
+                    return false;
+                }
+
+                if (opts.allDay) {
+                    return canUseDayCellSelection(start, end);
+                }
+
+                return !currentCalendarDecorations.some(item => {
+                    const interval = parseDecorationInterval(item);
+                    if (!interval) {
+                        return false;
+                    }
+
+                    return rangesOverlap(start, end, interval.start, interval.end);
+                });
             }
 
             function updateDiscountReasonVisibility() {
@@ -1381,19 +1487,31 @@
 
             function openCreateFormInModal(options) {
                 const createUrl = String(options?.url || '').trim();
-                if (!createUrl) {
+                if (!createUrl || !window.crmModalHost?.open) {
                     return;
                 }
 
                 pendingCreateContext = options?.context || null;
-                linkedEntityCreateFrame.src = createUrl;
-                linkedEntityCreateModalTitle.innerHTML = '';
+                window.crmModalHost.open(createUrl, {
+                    title: options?.title || 'Новый связанный объект',
+                    iconClass: options?.iconClass || 'bi bi-box-seam me-2',
+                    reloadOnComplete: false,
+                    onEntityCreated: data => {
+                        if (entityCodesMatch(data.entityCode, 'Contact')) {
+                            upsertContactOption(data.id, data.name, {
+                                selectInModal: pendingCreateContext?.selectInMainContacts === true
+                            });
+                        }
 
-                const titleIcon = document.createElement('i');
-                titleIcon.className = options?.iconClass || 'bi bi-box-seam me-2';
-                linkedEntityCreateModalTitle.appendChild(titleIcon);
-                linkedEntityCreateModalTitle.append(options?.title || 'Новый связанный объект');
-                linkedEntityCreateModal.show();
+                        upsertEntityLinkOptionAcrossManagers(data.entityCode, data.id, data.name);
+                        applyPendingCreatedEntity(data.entityCode, data.id, data.name);
+                        pendingCreateContext = null;
+                        return true;
+                    },
+                    onClose: () => {
+                        pendingCreateContext = null;
+                    }
+                });
             }
 
             function openEntityLinkCreateDialog(field, selectElement) {
@@ -2084,6 +2202,165 @@
                 return params;
             }
 
+            function setSlotAvailabilityState(nextState) {
+                slotAvailabilityState = {
+                    checked: false,
+                    pending: false,
+                    canSave: true,
+                    requiresConfirmation: false,
+                    isOverbooking: false,
+                    message: '',
+                    ...nextState
+                };
+                renderSlotAvailabilityState();
+            }
+
+            function renderSlotAvailabilityState() {
+                if (!modalSlotHint) {
+                    return;
+                }
+
+                saveBookingBtn.disabled = slotAvailabilityState.pending ||
+                    (slotAvailabilityState.checked && !slotAvailabilityState.canSave);
+
+                if (slotAvailabilityState.pending) {
+                    modalSlotHint.innerHTML = '<span class="text-muted">Проверяем доступность выбранного интервала...</span>';
+                    return;
+                }
+
+                if (!slotAvailabilityState.checked || !slotAvailabilityState.message) {
+                    modalSlotHint.innerHTML = '';
+                    return;
+                }
+
+                const cssClass = slotAvailabilityState.canSave ? 'text-warning' : 'text-danger';
+                modalSlotHint.innerHTML = `<span class="${cssClass}">${slotAvailabilityState.message}</span>`;
+            }
+
+            function resetSlotAvailabilityState() {
+                if (slotAvailabilityTimer) {
+                    clearTimeout(slotAvailabilityTimer);
+                    slotAvailabilityTimer = null;
+                }
+
+                slotAvailabilityRequestId += 1;
+                setSlotAvailabilityState({
+                    checked: false,
+                    pending: false,
+                    canSave: true,
+                    requiresConfirmation: false,
+                    isOverbooking: false,
+                    message: ''
+                });
+            }
+
+            function buildSlotAvailabilityPayload() {
+                if (!modalResourceId.value || !modalPerformerEmployeeId.value || !modalStart.value || !modalEnd.value) {
+                    return null;
+                }
+
+                const start = parseDate(modalStart.value);
+                const end = parseDate(modalEnd.value);
+                if (!start || !end || start >= end) {
+                    return null;
+                }
+
+                return {
+                    resourceId: modalResourceId.value,
+                    performerEmployeeId: modalPerformerEmployeeId.value,
+                    bookingId: activeBookingId,
+                    createSource: isEditMode ? 'edit' : createSource,
+                    start: modalStart.value,
+                    end: modalEnd.value
+                };
+            }
+
+            async function runSlotAvailabilityCheck() {
+                const payload = buildSlotAvailabilityPayload();
+                if (!payload) {
+                    resetSlotAvailabilityState();
+                    return;
+                }
+
+                const requestId = ++slotAvailabilityRequestId;
+                setSlotAvailabilityState({
+                    checked: false,
+                    pending: true,
+                    canSave: true,
+                    requiresConfirmation: false,
+                    isOverbooking: false,
+                    message: ''
+                });
+
+                const formData = new FormData();
+                formData.append('__RequestVerificationToken', getAntiForgeryToken());
+                formData.append('resourceId', payload.resourceId);
+                formData.append('performerEmployeeId', payload.performerEmployeeId);
+                formData.append('start', payload.start);
+                formData.append('end', payload.end);
+                formData.append('createSource', payload.createSource);
+
+                if (payload.bookingId) {
+                    formData.append('bookingId', payload.bookingId);
+                }
+
+                try {
+                    const response = await fetch('/Schedule/CheckSlotAvailability', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP ${response.status}`);
+                    }
+
+                    const result = await response.json();
+                    if (requestId !== slotAvailabilityRequestId) {
+                        return;
+                    }
+
+                    setSlotAvailabilityState({
+                        checked: true,
+                        pending: false,
+                        canSave: result.canSave !== false,
+                        requiresConfirmation: result.requiresConfirmation === true,
+                        isOverbooking: result.isOverbooking === true,
+                        message: String(result.message || '')
+                    });
+                } catch {
+                    if (requestId !== slotAvailabilityRequestId) {
+                        return;
+                    }
+
+                    setSlotAvailabilityState({
+                        checked: false,
+                        pending: false,
+                        canSave: true,
+                        requiresConfirmation: false,
+                        isOverbooking: false,
+                        message: ''
+                    });
+                }
+            }
+
+            function scheduleSlotAvailabilityCheck(options) {
+                const opts = options || {};
+                if (slotAvailabilityTimer) {
+                    clearTimeout(slotAvailabilityTimer);
+                    slotAvailabilityTimer = null;
+                }
+
+                if (opts.immediate) {
+                    runSlotAvailabilityCheck();
+                    return;
+                }
+
+                slotAvailabilityTimer = setTimeout(() => {
+                    slotAvailabilityTimer = null;
+                    runSlotAvailabilityCheck();
+                }, 250);
+            }
+
             function clearDynamicBookingFields() {
                 bookingDynamicFieldManager?.clear();
             }
@@ -2118,6 +2395,7 @@
                 activeBookingId = null;
                 modalBookingId.value = '';
                 modalResult.innerHTML = '';
+                resetSlotAvailabilityState();
                 clearValidation();
                 modalBookingTitle.classList.add('d-none');
                 bookingTitleDisplay.classList.remove('d-none');
@@ -2149,6 +2427,7 @@
                 setBookingCreatedAt(new Date());
                 refreshSelectedItemsTable();
                 syncBookingTitle({ force: true });
+                scheduleSlotAvailabilityCheck({ immediate: true });
             }
 
             function applySelectedServices(services, fallbackServiceId) {
@@ -2184,6 +2463,7 @@
             async function openBookingForEdit(bookingId) {
                 clearValidation();
                 modalResult.innerHTML = '';
+                resetSlotAvailabilityState();
                 modalBookingTitle.classList.add('d-none');
                 bookingTitleDisplay.classList.remove('d-none');
 
@@ -2229,6 +2509,7 @@
                     bookingTitleWasCustomized = resolvedTitle !== generatedTitle;
                     setBookingTitleText(resolvedTitle);
                     bookingModal.show();
+                    scheduleSlotAvailabilityCheck({ immediate: true });
                 } catch {
                     alert('Ошибка сети при загрузке записи.');
                 }
@@ -2283,6 +2564,10 @@
                     modalResult.innerHTML = '<span class="text-danger">Заполните обязательные поля, они выделены красным.</span>';
                 }
 
+                if (!hasErrors && slotAvailabilityState.checked && !slotAvailabilityState.canSave) {
+                    return false;
+                }
+
                 return !hasErrors;
             }
 
@@ -2327,6 +2612,89 @@
                 });
 
                 return formData;
+            }
+
+            async function submitBookingTimeChange(eventApi, revert) {
+                const bookingId = String(eventApi?.id || '').trim();
+                if (!bookingId) {
+                    if (typeof revert === 'function') {
+                        revert();
+                    }
+                    return;
+                }
+
+                const formatDateForSubmit = value => {
+                    if (!(value instanceof Date) || Number.isNaN(value.getTime())) {
+                        return '';
+                    }
+
+                    const year = value.getFullYear();
+                    const month = String(value.getMonth() + 1).padStart(2, '0');
+                    const day = String(value.getDate()).padStart(2, '0');
+                    const hours = String(value.getHours()).padStart(2, '0');
+                    const minutes = String(value.getMinutes()).padStart(2, '0');
+                    const seconds = String(value.getSeconds()).padStart(2, '0');
+                    return `${year}-${month}-${day}T${hours}:${minutes}:${seconds}`;
+                };
+
+                const submit = async allowOutOfHours => {
+                    const formData = new FormData();
+                    formData.append('__RequestVerificationToken', getAntiForgeryToken());
+                    formData.append('bookingId', bookingId);
+                    formData.append('start', formatDateForSubmit(eventApi.start));
+                    formData.append('end', formatDateForSubmit(eventApi.end));
+                    formData.append('allowOutOfHours', allowOutOfHours ? 'true' : 'false');
+
+                    const response = await fetch('/Schedule/RescheduleBooking', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    return response.json();
+                };
+
+                try {
+                    let result = await submit(false);
+
+                    const needsOutOfHoursConfirmation = !result.success &&
+                        String(result.message || '').toLowerCase().includes('подтвердите') &&
+                        String(result.message || '').toLowerCase().includes('вне рабочего времени');
+
+                    if (needsOutOfHoursConfirmation) {
+                        const accepted = confirm('Время записи выходит за рамки рабочего графика компании. Сохранить такую запись?');
+                        if (!accepted) {
+                            if (typeof revert === 'function') {
+                                revert();
+                            }
+                            return;
+                        }
+
+                        result = await submit(true);
+                    }
+
+                    if (!result.success) {
+                        if (typeof revert === 'function') {
+                            revert();
+                        }
+                        alert(result.message || 'Не удалось изменить время записи.');
+                        return;
+                    }
+
+                    if (result.start) {
+                        eventApi.setStart(result.start);
+                    }
+
+                    if (result.end) {
+                        eventApi.setEnd(result.end);
+                    }
+
+                    calendar.refetchEvents();
+                } catch {
+                    if (typeof revert === 'function') {
+                        revert();
+                    }
+                    alert('Ошибка сети при изменении времени записи.');
+                }
             }
 
             function upsertContactOption(contactId, contactName, options) {
@@ -2417,8 +2785,18 @@
             });
             modalBookingTitle.addEventListener('blur', () => finishBookingTitleEditing(true));
 
-            modalResourceId.addEventListener('change', () => syncBookingTitle());
-            modalPerformerEmployeeId.addEventListener('change', () => syncBookingTitle());
+            modalResourceId.addEventListener('change', () => {
+                syncBookingTitle();
+                scheduleSlotAvailabilityCheck();
+            });
+            modalPerformerEmployeeId.addEventListener('change', () => {
+                syncBookingTitle();
+                scheduleSlotAvailabilityCheck();
+            });
+            modalStart.addEventListener('change', () => scheduleSlotAvailabilityCheck());
+            modalEnd.addEventListener('change', () => scheduleSlotAvailabilityCheck());
+            modalStart.addEventListener('input', () => scheduleSlotAvailabilityCheck());
+            modalEnd.addEventListener('input', () => scheduleSlotAvailabilityCheck());
 
             const handleServiceSelection = () => {
                 const serviceId = String(modalServiceItemIds.value || '');
@@ -2441,45 +2819,6 @@
                 openContactCreateDialog();
             });
 
-            linkedEntityCreateModalEl.addEventListener('hidden.bs.modal', () => {
-                linkedEntityCreateFrame.removeAttribute('src');
-                pendingCreateContext = null;
-
-                if (bookingModalEl.classList.contains('show')) {
-                    document.body.classList.add('modal-open');
-                }
-            });
-
-            window.addEventListener('message', event => {
-                if (event.origin !== window.location.origin) {
-                    return;
-                }
-
-                const data = event.data;
-                if (!data || typeof data !== 'object') {
-                    return;
-                }
-
-                if (data.type === 'crm-modal-close') {
-                    linkedEntityCreateModal.hide();
-                    return;
-                }
-
-                if (data.type !== 'crm-entity-created') {
-                    return;
-                }
-
-                if (entityCodesMatch(data.entityCode, 'Contact')) {
-                    upsertContactOption(data.id, data.name, {
-                        selectInModal: pendingCreateContext?.selectInMainContacts === true
-                    });
-                }
-
-                upsertEntityLinkOptionAcrossManagers(data.entityCode, data.id, data.name);
-                applyPendingCreatedEntity(data.entityCode, data.id, data.name);
-                linkedEntityCreateModal.hide();
-            });
-
             if (!window.FullCalendar || !window.FullCalendar.Calendar) {
                 document.getElementById('bookingCalendar').innerHTML =
                     '<div class="alert alert-warning mb-0">Не удалось загрузить календарь. Обновите страницу или проверьте доступ к CDN fullcalendar.</div>';
@@ -2496,7 +2835,10 @@
                 snapDuration: '00:15:00',
                 allDaySlot: false,
                 selectable: true,
-                editable: false,
+                editable: true,
+                eventStartEditable: true,
+                eventDurationEditable: true,
+                eventResizableFromStart: true,
                 selectMirror: true,
 
                 headerToolbar: {
@@ -2527,10 +2869,49 @@
                         .catch(err => failureCallback(err));
                 },
 
+                eventSources: [
+                    {
+                        events: function(info, successCallback, failureCallback) {
+                            const params = buildFilterParams(info);
+                            fetch(`/Schedule/GetCalendarDecorations?${params.toString()}`)
+                                .then(resp => resp.json())
+                                .then(data => {
+                                    currentCalendarDecorations = Array.isArray(data) ? data : [];
+                                    successCallback(currentCalendarDecorations);
+                                })
+                                .catch(err => {
+                                    currentCalendarDecorations = [];
+                                    failureCallback(err);
+                                });
+                        }
+                    }
+                ],
+
+                selectAllow: function(selectInfo) {
+                    return canUseCalendarRange(selectInfo.start, selectInfo.end, {
+                        allDay: selectInfo.allDay === true
+                    });
+                },
+
+                eventAllow: function(dropInfo) {
+                    return canUseCalendarRange(dropInfo.start, dropInfo.end);
+                },
+
                 select: function(info) {
-                    resetBookingModalForCreate(info.start, info.end, 'calendar');
+                    const range = info.allDay
+                        ? getCreateRangeFromDaySelection(info.start)
+                        : { start: info.start, end: info.end };
+                    resetBookingModalForCreate(range.start, range.end, 'calendar');
                     bookingModal.show();
                     calendar.unselect();
+                },
+
+                eventDrop: function(info) {
+                    submitBookingTimeChange(info.event, info.revert);
+                },
+
+                eventResize: function(info) {
+                    submitBookingTimeChange(info.event, info.revert);
                 },
 
                 eventClick: function(info) {
@@ -2645,6 +3026,10 @@
                     return;
                 }
 
+                if (slotAvailabilityState.checked && !slotAvailabilityState.canSave) {
+                    return;
+                }
+
                 let allowOutOfHours = false;
                 const startValue = parseDate(modalStart.value);
                 const endValue = parseDate(modalEnd.value);
@@ -2740,6 +3125,8 @@
                 activeBookingId = null;
                 createSource = 'calendar';
                 modalBookingId.value = '';
+                modalResult.innerHTML = '';
+                resetSlotAvailabilityState();
             });
 
             reloadFilterPresets();

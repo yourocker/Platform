@@ -7,6 +7,7 @@ using Core.Entities.Platform;
 using Core.Entities.System;
 using Core.Interfaces.CRM;
 using Core.Interfaces.Platform;
+using CRM.Infrastructure;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Primitives;
@@ -24,16 +25,19 @@ namespace CRM.Controllers
 
         private readonly ICrmResourceManager _resourceManager;
         private readonly IBookingPolicyService _bookingPolicyService;
+        private readonly IBookingCalendarDecorationService _calendarDecorationService;
 
         public ScheduleController(
             AppDbContext context,
             IWebHostEnvironment hostingEnvironment,
             ICrmResourceManager resourceManager,
-            IBookingPolicyService bookingPolicyService)
+            IBookingPolicyService bookingPolicyService,
+            IBookingCalendarDecorationService calendarDecorationService)
             : base(context, hostingEnvironment)
         {
             _resourceManager = resourceManager;
             _bookingPolicyService = bookingPolicyService;
+            _calendarDecorationService = calendarDecorationService;
         }
 
         public async Task<IActionResult> Index()
@@ -300,6 +304,7 @@ namespace CRM.Controllers
                         extendedProps = new
                         {
                             title = resolvedTitle,
+                            performerEmployeeId = b.PerformerEmployeeId,
                             resource = b.Resource.Name,
                             services = serviceList,
                             contacts = b.BookingContacts.Select(c => c.Contact.FullName).OrderBy(x => x).ToList(),
@@ -315,6 +320,50 @@ namespace CRM.Controllers
                 .ToList();
 
             return Json(events);
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> GetCalendarDecorations(DateTime start, DateTime end)
+        {
+            var filters = ReadFiltersFromQuery();
+            var performerEmployeeId = filters.TryGetValue("f_performerEmployeeId", out var performerText)
+                ? ParseOptionalGuid(performerText)
+                : null;
+
+            var decorations = await _calendarDecorationService.GetDecorationsAsync(start, end, performerEmployeeId);
+            var payload = decorations
+                .Select(MapDecorationToScheduleEvent)
+                .ToList();
+
+            return Json(payload);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> CheckSlotAvailability(
+            Guid resourceId,
+            Guid performerEmployeeId,
+            DateTime start,
+            DateTime end,
+            Guid? bookingId = null,
+            string? createSource = null)
+        {
+            var preview = await EvaluateSlotAvailabilityAsync(
+                resourceId,
+                performerEmployeeId,
+                start,
+                end,
+                bookingId,
+                createSource);
+
+            return Json(new
+            {
+                success = true,
+                canSave = preview.CanSave,
+                requiresConfirmation = preview.RequiresConfirmation,
+                isOverbooking = preview.IsOverbooking,
+                message = preview.Message
+            });
         }
 
         [HttpPost]
@@ -684,6 +733,97 @@ namespace CRM.Controllers
             {
                 await _resourceManager.UpdateBookingAsync(booking, canBypassCompanyWorkHours);
                 return Json(new { success = true });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> RescheduleBooking(Guid bookingId, DateTime start, DateTime end, bool allowOutOfHours = false)
+        {
+            var currentEmployeeId = GetCurrentEmployeeId();
+            if (!currentEmployeeId.HasValue)
+            {
+                return Json(new { success = false, message = "Не удалось определить пользователя текущей сессии." });
+            }
+
+            if (bookingId == Guid.Empty)
+            {
+                return Json(new { success = false, message = "Не указан идентификатор записи." });
+            }
+
+            var existing = await _context.CrmResourceBookings
+                .AsNoTracking()
+                .Include(b => b.BookingItems)
+                .Include(b => b.BookingContacts)
+                .FirstOrDefaultAsync(b => b.Id == bookingId);
+            if (existing == null)
+            {
+                return Json(new { success = false, message = "Бронирование не найдено." });
+            }
+
+            if (start >= end)
+            {
+                return Json(new { success = false, message = "Время окончания должно быть позже времени начала." });
+            }
+
+            var isOutsideCompanyWorkHours = await IsOutsideCompanyWorkHoursAsync(start, end);
+            var wasOutsideCompanyWorkHours = await IsOutsideCompanyWorkHoursAsync(existing.StartTime, existing.EndTime);
+            var canBypassCompanyWorkHours = isOutsideCompanyWorkHours && (allowOutOfHours || wasOutsideCompanyWorkHours);
+            if (isOutsideCompanyWorkHours && !canBypassCompanyWorkHours)
+            {
+                return Json(new { success = false, message = "Подтвердите сохранение записи вне рабочего времени." });
+            }
+
+            var booking = new CrmResourceBooking
+            {
+                Id = existing.Id,
+                ResourceId = existing.ResourceId,
+                PerformerEmployeeId = existing.PerformerEmployeeId,
+                CreatedByEmployeeId = existing.CreatedByEmployeeId ?? currentEmployeeId.Value,
+                ServiceItemId = existing.ServiceItemId,
+                StatusId = existing.StatusId,
+                Title = existing.Title,
+                StartTime = start,
+                EndTime = end,
+                Amount = existing.Amount,
+                DiscountReason = existing.DiscountReason,
+                Comment = existing.Comment,
+                Properties = existing.Properties,
+                BookingItems = existing.BookingItems
+                    .Select(item => new CrmResourceBookingItem
+                    {
+                        Id = item.Id,
+                        BookingId = existing.Id,
+                        ServiceItemId = item.ServiceItemId,
+                        Quantity = item.Quantity,
+                        UnitPrice = item.UnitPrice,
+                        CustomUnitPrice = item.CustomUnitPrice,
+                        DiscountAmount = item.DiscountAmount,
+                        LineTotal = item.LineTotal
+                    })
+                    .ToList(),
+                BookingContacts = existing.BookingContacts
+                    .Select(link => new CrmResourceBookingContact
+                    {
+                        BookingId = existing.Id,
+                        ContactId = link.ContactId
+                    })
+                    .ToList()
+            };
+
+            try
+            {
+                await _resourceManager.UpdateBookingAsync(booking, canBypassCompanyWorkHours);
+                return Json(new
+                {
+                    success = true,
+                    start = booking.StartTime.ToString("yyyy-MM-ddTHH:mm:ss"),
+                    end = booking.EndTime.ToString("yyyy-MM-ddTHH:mm:ss")
+                });
             }
             catch (Exception ex)
             {
@@ -1208,6 +1348,42 @@ namespace CRM.Controllers
             };
         }
 
+        private static object MapDecorationToScheduleEvent(BookingCalendarDecoration decoration)
+        {
+            var backgroundColor = decoration.Kind switch
+            {
+                BookingCalendarDecorationKind.CompanyLunch => "#dee2e6",
+                BookingCalendarDecorationKind.EmployeeAbsence => "rgba(220, 53, 69, 0.22)",
+                _ => "rgba(108, 117, 125, 0.28)"
+            };
+
+            var cssClass = decoration.Kind switch
+            {
+                BookingCalendarDecorationKind.CompanyLunch => "schedule-calendar-lunch",
+                BookingCalendarDecorationKind.EmployeeAbsence => "schedule-calendar-absence",
+                _ => "schedule-calendar-closed"
+            };
+
+            return new
+            {
+                id = decoration.Id,
+                title = decoration.Title,
+                start = decoration.Start.ToString("yyyy-MM-ddTHH:mm:ss"),
+                end = decoration.End.ToString("yyyy-MM-ddTHH:mm:ss"),
+                display = "background",
+                backgroundColor,
+                classNames = new[] { cssClass },
+                overlap = false,
+                editable = false,
+                extendedProps = new
+                {
+                    isCalendarDecoration = true,
+                    decorationKind = decoration.Kind.ToString(),
+                    isFullDay = decoration.IsFullDay
+                }
+            };
+        }
+
         private async Task<string> ResolveBookingTitleAsync(
             string? rawTitle,
             Guid performerEmployeeId,
@@ -1374,6 +1550,96 @@ namespace CRM.Controllers
             return false;
         }
 
+        private async Task<SlotAvailabilityPreview> EvaluateSlotAvailabilityAsync(
+            Guid resourceId,
+            Guid performerEmployeeId,
+            DateTime start,
+            DateTime end,
+            Guid? bookingId,
+            string? createSource)
+        {
+            if (resourceId == Guid.Empty)
+            {
+                return new SlotAvailabilityPreview(false, false, false, "Выберите ресурс.");
+            }
+
+            if (performerEmployeeId == Guid.Empty)
+            {
+                return new SlotAvailabilityPreview(false, false, false, "Выберите исполнителя.");
+            }
+
+            if (start >= end)
+            {
+                return new SlotAvailabilityPreview(false, false, false, "Время окончания должно быть позже времени начала.");
+            }
+
+            var isOutsideCompanyWorkHours = await IsOutsideCompanyWorkHoursAsync(start, end);
+            if (isOutsideCompanyWorkHours &&
+                !bookingId.HasValue &&
+                !string.Equals(createSource, "button", StringComparison.OrdinalIgnoreCase))
+            {
+                return new SlotAvailabilityPreview(
+                    false,
+                    false,
+                    false,
+                    "Запись вне рабочего времени можно создать только через кнопку \"Добавить запись\".");
+            }
+
+            var availability = await _resourceManager.CheckAvailabilityAsync(
+                resourceId,
+                start,
+                end,
+                performerEmployeeId,
+                isOutsideCompanyWorkHours,
+                bookingId);
+
+            if (!availability.Success)
+            {
+                return new SlotAvailabilityPreview(
+                    false,
+                    false,
+                    availability.IsOverbooking,
+                    availability.Message);
+            }
+
+            var requiresConfirmation = isOutsideCompanyWorkHours;
+            var message = BuildSlotAvailabilityMessage(
+                requiresConfirmation,
+                availability.IsOverbooking,
+                availability.Message);
+
+            return new SlotAvailabilityPreview(
+                true,
+                requiresConfirmation,
+                availability.IsOverbooking,
+                message);
+        }
+
+        private static string BuildSlotAvailabilityMessage(
+            bool requiresConfirmation,
+            bool isOverbooking,
+            string? defaultMessage)
+        {
+            if (requiresConfirmation && isOverbooking)
+            {
+                return "Время доступно как овербукинг, но при сохранении потребуется подтверждение, потому что запись выходит за рамки графика компании.";
+            }
+
+            if (requiresConfirmation)
+            {
+                return "Время доступно, но при сохранении потребуется подтверждение, потому что запись выходит за рамки графика компании.";
+            }
+
+            if (isOverbooking)
+            {
+                return string.IsNullOrWhiteSpace(defaultMessage)
+                    ? "Время доступно, запись будет создана как овербукинг."
+                    : defaultMessage;
+            }
+
+            return string.Empty;
+        }
+
         private Guid? GetCurrentEmployeeId()
         {
             var employeeIdRaw = User.FindFirstValue(ClaimTypes.NameIdentifier);
@@ -1474,5 +1740,11 @@ namespace CRM.Controllers
 
             return fallback;
         }
+
+        private sealed record SlotAvailabilityPreview(
+            bool CanSave,
+            bool RequiresConfirmation,
+            bool IsOverbooking,
+            string Message);
     }
 }

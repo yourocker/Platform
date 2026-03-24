@@ -28,6 +28,7 @@ builder.Services.AddControllersWithViews(options =>
         .Build();
     options.Filters.Add(new AuthorizeFilter(policy));
     options.Filters.AddService<FeatureGateFilter>();
+    options.Filters.AddService<ModalRedirectFilter>();
 });
 
 // 1.1. Сервисы платформы
@@ -70,8 +71,10 @@ builder.Services.AddScoped<IContactService, ContactService>();
 builder.Services.AddScoped<ICrmService, CrmService>();
 builder.Services.AddScoped<ICrmResourceManager, CrmResourceManager>();
 builder.Services.AddScoped<IBookingPolicyService, BookingPolicyService>();
+builder.Services.AddScoped<IBookingCalendarDecorationService, BookingCalendarDecorationService>();
 builder.Services.AddScoped<IFeatureToggleService, FeatureToggleService>();
 builder.Services.AddScoped<FeatureGateFilter>();
+builder.Services.AddScoped<ModalRedirectFilter>();
 
 builder.Services.AddScoped<Core.Services.ICrmStyleService, Core.Services.CrmStyleService>();
 

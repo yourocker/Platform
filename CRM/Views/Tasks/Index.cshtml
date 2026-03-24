@@ -116,7 +116,7 @@
                         <div class="kanban-tasks-list">
                             @foreach (var task in Model.Where(x => x.Status == kvp.Key))
                             {
-                                <div class="kanban-card" data-task-id="@task.Id" onclick="location.href='@Url.Action("Details", new { id = task.Id })'">
+                                <div class="kanban-card" data-task-id="@task.Id" onclick="openTaskDetails('@Url.Action("Details", new { id = task.Id })')">
                                     <div class="fw-bold mb-2">@task.Title</div>
                                     <div class="d-flex justify-content-between align-items-center small text-muted">
                                         <span><i class="bi bi-person"></i> @(task.Assignee?.FullName.Split(' ')[0] ?? "?")</span>
@@ -138,6 +138,16 @@
 
 @section Scripts {
     <script>
+        function openTaskDetails(url) {
+            if (window.crmModalHost?.canHandleUrl?.(url)) {
+                window.crmModalHost.open(url);
+                return false;
+            }
+
+            window.location.href = url;
+            return false;
+        }
+
         function saveTab(tabId) { localStorage.setItem('activeTaskTab', tabId); }
         document.addEventListener('DOMContentLoaded', function () {
             const activeTab = localStorage.getItem('activeTaskTab');
@@ -167,7 +177,10 @@
                 buttonText: { today: 'Сегодня', month: 'Месяц', week: 'Неделя', list: 'Список' },
                 events: '/Tasks/GetCalendarEvents?filter=@filterType',
                 eventClick: function(info) {
-                    if (info.event.url) { window.location.href = info.event.url; info.jsEvent.preventDefault(); }
+                    if (info.event.url) {
+                        info.jsEvent.preventDefault();
+                        openTaskDetails(info.event.url);
+                    }
                 }
             });
             document.getElementById('calendar-tab').addEventListener('shown.bs.tab', () => calendar.render());

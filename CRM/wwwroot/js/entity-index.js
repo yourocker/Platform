@@ -49,7 +49,14 @@ function initClickableRows() {
             if (selection.toString().length > 0) return;
 
             const url = this.dataset.href;
-            if (url) window.location.href = url;
+            if (!url) return;
+
+            if (window.crmModalHost?.canHandleUrl?.(url)) {
+                window.crmModalHost.open(url);
+                return;
+            }
+
+            window.location.href = url;
         });
     });
 }

@@ -231,7 +231,14 @@ var currentFilters = ViewBag.CurrentFilters as Dictionary<string, string> ?? new
             row.addEventListener('click', function(e) {
                 if (e.target.closest('.btn-group') || e.target.closest('a') || e.target.closest('input')) return;
                 const link = this.querySelector('a[href*="/Edit/"]');
-                if (link) window.location.href = link.href;
+                if (!link) return;
+
+                if (window.crmModalHost?.canHandleLink?.(link)) {
+                    window.crmModalHost.openLink(link);
+                    return;
+                }
+
+                window.location.href = link.href;
             });
         });
     });

@@ -14,6 +14,7 @@ using System.IO;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Core.Entities.Tasks;
+using CRM.Infrastructure;
 
 namespace CRM.Controllers
 {
@@ -222,30 +223,7 @@ namespace CRM.Controllers
 
         protected ContentResult BuildModalCreatedContentResult(string entityCode, Guid id, string? name)
         {
-            var payloadJson = JsonSerializer.Serialize(new
-            {
-                type = "crm-entity-created",
-                entityCode,
-                id,
-                name = name ?? string.Empty
-            });
-
-            var html = $"""
-                        <!DOCTYPE html>
-                        <html lang="ru">
-                        <head>
-                            <meta charset="utf-8" />
-                            <title>Создано</title>
-                        </head>
-                        <body>
-                            <script>
-                                window.parent.postMessage({payloadJson}, window.location.origin);
-                            </script>
-                        </body>
-                        </html>
-                        """;
-
-            return Content(html, "text/html; charset=utf-8");
+            return ModalRequestHelper.BuildEntityCreatedContent(entityCode, id, name);
         }
 
         protected void DeletePhysicalFile(string webPath)
