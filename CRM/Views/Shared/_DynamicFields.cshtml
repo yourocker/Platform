@@ -157,11 +157,12 @@
                 </label>
 
                 <div id="container_@field.SystemName" class="dynamic-field-container">
-                    @foreach (var val in currentValues)
+                    @for (var valueIndex = 0; valueIndex < currentValues.Count; valueIndex++)
                     {
+                        var val = currentValues[valueIndex];
                         var wrapperId = "wrapper_" + Guid.NewGuid().ToString("N");
 
-                        <div class="input-group mb-2 dynamic-field-item flex-column" id="@wrapperId">
+                        <div class="mb-2 dynamic-field-item" id="@wrapperId" data-dynamic-field-item="@field.SystemName">
                             @if (field.DataType == FieldDataType.File && !string.IsNullOrWhiteSpace(val) && !val.Contains("/uploads/temp/"))
                             {
                                 <div class="mb-1 d-flex align-items-center">
@@ -178,7 +179,7 @@
                                 </div>
                             }
 
-                            <div class="d-flex w-100">
+                            <div class="dynamic-field-control">
                                 @if (!showAsReadOnly)
                                 {
                                     @renderField(field, val, hasError, lookupData, isRequired)
@@ -192,14 +193,17 @@
 
                                     @if (field.IsArray)
                                     {
-                                        <button type="button" class="btn btn-outline-danger" onclick="this.closest('.dynamic-field-item').remove()">
+                                        <button type="button"
+                                                class="btn btn-outline-danger dynamic-field-remove @(valueIndex == 0 ? "d-none" : string.Empty)"
+                                                data-dynamic-field-remove="@field.SystemName"
+                                                onclick="removeDynamicFieldItem(this, '@field.SystemName')">
                                             <i class="bi bi-x"></i>
                                         </button>
                                     }
                                 }
                                 else
                                 {
-                                    @if (field.DataType == FieldDataType.EntityLink)
+                                    @if (field.DataType == FieldDataType.EntityLink || field.DataType == FieldDataType.Select)
                                     {
                                         var displayName = val;
                                         if (lookupData.ContainsKey(field.SystemName))
@@ -210,7 +214,7 @@
 
                                         if (!string.IsNullOrEmpty(val))
                                         {
-                                            if (canView && !string.IsNullOrEmpty(field.TargetEntityCode))
+                                            if (field.DataType == FieldDataType.EntityLink && canView && !string.IsNullOrEmpty(field.TargetEntityCode))
                                             {
                                                 var href = $"/Data/Details/{val}";
                                                 <a href="@href" class="btn btn-outline-primary btn-sm">
@@ -273,7 +277,7 @@
         }
         else
         {
-            <div class="row mb-3 align-items-start">
+            <div class="row align-items-start dynamic-field-row">
                 <label class="col-sm-3 col-lg-2 col-form-label text-muted text-sm-end fw-bold">
                     @field.Label
                     @if (isRequired && isEditMode && !isReadOnly)
@@ -284,11 +288,12 @@
 
                 <div class="col-sm-9 col-lg-10">
                     <div id="container_@field.SystemName" class="dynamic-field-container">
-                        @foreach (var val in currentValues)
+                        @for (var valueIndex = 0; valueIndex < currentValues.Count; valueIndex++)
                         {
+                            var val = currentValues[valueIndex];
                             var wrapperId = "wrapper_" + Guid.NewGuid().ToString("N");
 
-                            <div class="input-group mb-2 dynamic-field-item flex-column" id="@wrapperId">
+                            <div class="mb-2 dynamic-field-item" id="@wrapperId" data-dynamic-field-item="@field.SystemName">
                                 @if (field.DataType == FieldDataType.File && !string.IsNullOrWhiteSpace(val) && !val.Contains("/uploads/temp/"))
                                 {
                                     <div class="mb-1 d-flex align-items-center">
@@ -305,7 +310,7 @@
                                     </div>
                                 }
 
-                                <div class="d-flex w-100">
+                                <div class="dynamic-field-control">
                                     @if (!showAsReadOnly)
                                     {
                                         @renderField(field, val, hasError, lookupData, isRequired)
@@ -319,14 +324,17 @@
 
                                         @if (field.IsArray)
                                         {
-                                            <button type="button" class="btn btn-outline-danger" onclick="this.closest('.dynamic-field-item').remove()">
+                                            <button type="button"
+                                                    class="btn btn-outline-danger dynamic-field-remove @(valueIndex == 0 ? "d-none" : string.Empty)"
+                                                    data-dynamic-field-remove="@field.SystemName"
+                                                    onclick="removeDynamicFieldItem(this, '@field.SystemName')">
                                                 <i class="bi bi-x"></i>
                                             </button>
                                         }
                                     }
                                     else
                                     {
-                                        @if (field.DataType == FieldDataType.EntityLink)
+                                        @if (field.DataType == FieldDataType.EntityLink || field.DataType == FieldDataType.Select)
                                         {
                                             var displayName = val;
                                             if (lookupData.ContainsKey(field.SystemName))
@@ -337,7 +345,7 @@
 
                                             if (!string.IsNullOrEmpty(val))
                                             {
-                                                if (canView && !string.IsNullOrEmpty(field.TargetEntityCode))
+                                                if (field.DataType == FieldDataType.EntityLink && canView && !string.IsNullOrEmpty(field.TargetEntityCode))
                                                 {
                                                     var href = $"/Data/Details/{val}";
                                                     <a href="@href" class="btn btn-outline-primary btn-sm">
@@ -497,7 +505,7 @@
             {
                 if (!hasNameInLayout && string.Equals(field.SystemName, "Name", StringComparison.OrdinalIgnoreCase))
                     continue;
-                RenderFieldBlock(field, false, false, true, true, false);
+                RenderFieldBlock(field, false, false, true, true, true);
             }
         }
     </div>
@@ -515,6 +523,11 @@
             </div>
         </div>
         <div data-type="EntityLink">
+            <select class="form-control select2-entity">
+                <option value="">-- Выберите --</option>
+            </select>
+        </div>
+        <div data-type="Select">
             <select class="form-control select2-entity">
                 <option value="">-- Выберите --</option>
             </select>
@@ -538,7 +551,33 @@
             $('.select2-entity').each(function() {
                 initSelect2(this);
             });
+
+            document.querySelectorAll('[id^="container_"]').forEach(container => {
+                const systemName = container.id.replace('container_', '');
+                refreshDynamicFieldRemoveButtons(systemName);
+            });
         });
+
+        function refreshDynamicFieldRemoveButtons(systemName) {
+            const container = document.getElementById('container_' + systemName);
+            if (!container) {
+                return;
+            }
+
+            const buttons = Array.from(container.querySelectorAll(`[data-dynamic-field-remove="${systemName}"]`));
+            buttons.forEach((button, index) => {
+                button.classList.toggle('d-none', index === 0);
+            });
+        }
+
+        function removeDynamicFieldItem(button, systemName) {
+            const item = button.closest('.dynamic-field-item');
+            if (item) {
+                item.remove();
+            }
+
+            refreshDynamicFieldRemoveButtons(systemName);
+        }
 
         function addDynamicField(systemName, dataType) {
             const container = document.getElementById('container_' + systemName);
@@ -546,10 +585,14 @@
                           || document.querySelector(`#field_templates [data-type="String"]`);
 
             const wrapper = document.createElement('div');
-            wrapper.className = 'input-group mb-2 dynamic-field-item';
+            wrapper.className = 'mb-2 dynamic-field-item';
+            wrapper.dataset.dynamicFieldItem = systemName;
 
             const content = template.cloneNode(true);
             const input = content.querySelector('input') || content.querySelector('textarea') || content.querySelector('select');
+            const contentNode = content.classList.contains('form-check')
+                ? content
+                : (content.firstElementChild || content);
 
             if (input) {
                 input.name = `DynamicProps[${systemName}]`;
@@ -561,7 +604,7 @@
                  if(hidden) hidden.name = `DynamicProps[${systemName}]`;
             }
 
-            if (dataType === 'EntityLink') {
+            if (dataType === 'EntityLink' || dataType === 'Select') {
                 const sourceSelect = document.querySelector(`select[name="DynamicProps[${systemName}]"]`);
                 if (sourceSelect && input) {
                     input.innerHTML = sourceSelect.innerHTML;
@@ -571,16 +614,22 @@
 
             const btn = document.createElement('button');
             btn.type = 'button';
-            btn.className = 'btn btn-outline-danger';
+            btn.className = 'btn btn-outline-danger dynamic-field-remove';
+            btn.dataset.dynamicFieldRemove = systemName;
             btn.innerHTML = '<i class="bi bi-x"></i>';
-            btn.onclick = function() { this.closest('.dynamic-field-item').remove(); };
+            btn.onclick = function() { removeDynamicFieldItem(this, systemName); };
 
-            wrapper.appendChild(content.classList.contains('form-check') || content.tagName === 'DIV' ? content : (content.firstElementChild || content));
-            wrapper.appendChild(btn);
+            const control = document.createElement('div');
+            control.className = 'dynamic-field-control';
+            control.appendChild(contentNode);
+            control.appendChild(btn);
+
+            wrapper.appendChild(control);
 
             container.appendChild(wrapper);
+            refreshDynamicFieldRemoveButtons(systemName);
 
-            if (dataType === 'EntityLink' && input) {
+            if ((dataType === 'EntityLink' || dataType === 'Select') && input) {
                 initSelect2(input);
             }
         }
@@ -626,6 +675,7 @@
         switch (field.DataType)
         {
             case FieldDataType.EntityLink:
+            case FieldDataType.Select:
                 var options = new System.Text.StringBuilder();
                 options.Append("<option value=\"\">-- Выберите --</option>");
                 if (lookupData.TryGetValue(field.SystemName, out var items))
@@ -636,6 +686,12 @@
                         options.Append($"<option value=\"{item.Value}\" {sel}>{item.Text}</option>");
                     }
                 }
+
+                if (!string.IsNullOrWhiteSpace(value) && (items == null || items.All(item => item.Value != value)))
+                {
+                    options.Append($"<option value=\"{value}\" selected>{value}</option>");
+                }
+
                 return new HtmlString($"<select name=\"{fieldName}\" class=\"form-control select2-entity {errorClass}\" {required}>{options}</select>");
 
             case FieldDataType.Number:

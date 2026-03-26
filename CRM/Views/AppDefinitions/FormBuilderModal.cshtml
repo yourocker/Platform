@@ -1,4 +1,5 @@
-﻿@using Core.Entities.Platform.Form
+﻿@using Core.Entities.Platform
+@using Core.Entities.Platform.Form
 @using CRM.ViewModels.FormConfig
 @using System.Text.Json
 @using System.Collections.Generic
@@ -127,13 +128,34 @@
                         </div>
                         <div class="mb-3">
                             <label class="form-label small fw-bold">Тип данных</label>
-                            <select name="dataType" class="form-select form-select-sm">
-                                <option value="0">Строка</option>
-                                <option value="2">Число</option>
-                                <option value="4">Дата и время</option>
-                                <option value="7">Связь с объектом</option>
-                                <option value="8">Файл</option>
+                            <select name="dataType" id="builderFieldDataTypeSelect" class="form-select form-select-sm" onchange="fieldManager.toggleFieldConfigSections()">
+                                @foreach (var type in Enum.GetValues<FieldDataType>())
+                                {
+                                    <option value="@((int)type)">@type.ToRuName()</option>
+                                }
                             </select>
+                        </div>
+                        <div id="builderTargetEntityWrapper" style="display:none;" class="mb-3">
+                            <label class="form-label small fw-bold">Целевая сущность</label>
+                            <select name="targetEntityCode" id="builderTargetEntitySelect" class="form-select form-select-sm">
+                                <option value="">-- Выберите объект --</option>
+                                @if (ViewBag.AllDefinitions != null)
+                                {
+                                    foreach (var def in (IEnumerable<AppDefinition>)ViewBag.AllDefinitions)
+                                    {
+                                        <option value="@def.EntityCode">@def.Name (@def.EntityCode)</option>
+                                    }
+                                }
+                            </select>
+                        </div>
+                        <div id="builderSelectOptionsWrapper" style="display:none;" class="mb-3">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <label class="form-label small fw-bold mb-0">Пункты списка</label>
+                                <button type="button" class="btn btn-sm btn-outline-success" onclick="fieldManager.addSelectOptionRow()">
+                                    <i class="bi bi-plus-lg"></i> Добавить
+                                </button>
+                            </div>
+                            <div id="builderSelectOptionsContainer" class="d-grid gap-2"></div>
                         </div>
                         <div class="row">
                             <div class="col-6">

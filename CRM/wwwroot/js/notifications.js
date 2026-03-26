@@ -1,21 +1,20 @@
 ﻿"use strict";
 
-const NOTIFICATION_SERVICE_URL = "https://localhost:7163";
-const NOTIFICATION_HUB_URL = `${NOTIFICATION_SERVICE_URL}/hubs/notifications`;
-
-const currentUserIdInput = document.getElementById('currentUserId');
-const currentUserId = currentUserIdInput ? currentUserIdInput.value : null;
+const NOTIFICATION_API_BASE = "/api/notifications";
+const NOTIFICATION_HUB_URL = "/hubs/notifications";
+const notificationAntiforgeryTokenInput = document.getElementById("notificationAntiforgeryToken");
+const notificationAntiforgeryToken = notificationAntiforgeryTokenInput
+    ? notificationAntiforgeryTokenInput.value
+    : null;
 
 // Запрашиваем разрешение на системные уведомления при первом запуске
 if (typeof Notification !== 'undefined' && Notification.permission !== "granted") {
     Notification.requestPermission();
 }
 
-if (currentUserId) {
-    const urlWithParams = `${NOTIFICATION_HUB_URL}?userId=${currentUserId}`;
-
+if (document.getElementById("notificationSidebar")) {
     const connection = new signalR.HubConnectionBuilder()
-        .withUrl(urlWithParams)
+        .withUrl(NOTIFICATION_HUB_URL)
         .withAutomaticReconnect()
         .build();
 
@@ -43,16 +42,24 @@ if (currentUserId) {
         updateBadgeCount(1);
     });
 
+    connection.onreconnected(function () {
+        console.log(">>> 🔄 SignalR переподключен.");
+        fetchHistory();
+    });
+
     connection.start().then(function () {
         console.log(">>> ✅ SignalR подключен.");
-        fetchHistory();
     }).catch(err => console.error(">>> ❌ Ошибка SignalR:", err));
+
+    fetchHistory();
 }
 
 // Загрузка истории
 async function fetchHistory() {
     try {
-        const response = await fetch(`${NOTIFICATION_SERVICE_URL}/api/notifications/history/${currentUserId}`);
+        const response = await fetch(`${NOTIFICATION_API_BASE}/history`, {
+            credentials: "same-origin"
+        });
         if (!response.ok) return;
 
         const notifications = await response.json();
@@ -75,12 +82,16 @@ async function fetchHistory() {
 const notificationSidebar = document.getElementById('notificationSidebar');
 if (notificationSidebar) {
     notificationSidebar.addEventListener('show.bs.offcanvas', async function () {
+        await fetchHistory();
+
         const badge = document.getElementById("notificationBadge");
         if (!badge || badge.style.display === "none") return;
 
         try {
-            const response = await fetch(`${NOTIFICATION_SERVICE_URL}/api/notifications/mark-as-read/${currentUserId}`, {
-                method: 'POST'
+            const response = await fetch(`${NOTIFICATION_API_BASE}/mark-as-read`, {
+                method: 'POST',
+                credentials: "same-origin",
+                headers: buildPostHeaders()
             });
             if (response.ok) {
                 badge.innerText = "0";
@@ -91,6 +102,18 @@ if (notificationSidebar) {
             console.error("Ошибка при прочтении:", e);
         }
     });
+}
+
+function buildPostHeaders() {
+    const headers = {
+        "X-Requested-With": "XMLHttpRequest"
+    };
+
+    if (notificationAntiforgeryToken) {
+        headers["X-CSRF-TOKEN"] = notificationAntiforgeryToken;
+    }
+
+    return headers;
 }
 
 function updateBadgeCount(amount, isAbsolute = false) {
@@ -115,18 +138,42 @@ function addNotificationToSidebar(data, isNew) {
     const isRead = data.isRead !== undefined ? data.isRead : !isNew;
     const itemClass = isRead ? "" : "bg-light border-start border-primary border-4";
 
-    const html = `
-        <div class="notification-item p-3 border-bottom mb-1 ${itemClass}" 
-             style="cursor: pointer;" 
-             onclick="location.href='${data.url || '#'}'">
-            <div class="d-flex justify-content-between">
-                <strong class="text-dark" style="font-size: 0.85rem;">${data.title}</strong>
-                <small class="text-muted" style="font-size: 0.7rem;">
-                    ${new Date(data.createdAt || Date.now()).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}
-                </small>
-            </div>
-            <div class="text-secondary mt-1" style="font-size: 0.8rem;">${data.message}</div>
-        </div>`;
+    const item = document.createElement('div');
+    item.className = `notification-item p-3 border-bottom mb-1 ${itemClass}`.trim();
+    item.style.cursor = 'pointer';
 
-    list.insertAdjacentHTML('afterbegin', html);
+    const normalizedUrl = normalizeNotificationUrl(data.url);
+    item.addEventListener('click', () => {
+        if (normalizedUrl !== '#') {
+            location.href = normalizedUrl;
+        }
+    });
+
+    const header = document.createElement('div');
+    header.className = 'd-flex justify-content-between';
+
+    const title = document.createElement('strong');
+    title.className = 'text-dark';
+    title.style.fontSize = '0.85rem';
+    title.textContent = data.title || 'Уведомление';
+
+    const createdAt = document.createElement('small');
+    createdAt.className = 'text-muted';
+    createdAt.style.fontSize = '0.7rem';
+    createdAt.textContent = new Date(data.createdAt || Date.now())
+        .toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    header.append(title, createdAt);
+
+    const message = document.createElement('div');
+    message.className = 'text-secondary mt-1';
+    message.style.fontSize = '0.8rem';
+    message.textContent = data.message || '';
+
+    item.append(header, message);
+    list.prepend(item);
+}
+
+function normalizeNotificationUrl(url) {
+    return typeof url === 'string' && url.startsWith('/') ? url : '#';
 }

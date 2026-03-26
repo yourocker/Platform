@@ -3,6 +3,7 @@
 
 @{
     var ui = StyleService.GetSettings();
+    var modalSize = (ViewData["ModalSize"] as string) ?? "lg";
 }
 
 <!DOCTYPE html>
@@ -57,11 +58,95 @@
         }
 
         body[data-crm-modal-page="true"] main[role="main"] {
-            padding: 24px;
+            padding: 18px 20px 20px;
+        }
+
+        body[data-crm-modal-page="true"] {
+            --card-bg: #ffffff;
+            --card-text: var(--page-text);
+            --page-bg: transparent;
+        }
+
+        body[data-crm-modal-page="true"] .crm-page-header {
+            display: none !important;
+        }
+
+        body[data-crm-modal-page="true"] .container,
+        body[data-crm-modal-page="true"] .container-fluid {
+            max-width: none !important;
+            padding-left: 0 !important;
+            padding-right: 0 !important;
+        }
+
+        body[data-crm-modal-page="true"] > main > .container-fluid > .row,
+        body[data-crm-modal-page="true"] > main > .container > .row,
+        body[data-crm-modal-page="true"] > main > .container-fluid > form > .row,
+        body[data-crm-modal-page="true"] > main > .container > form > .row,
+        body[data-crm-modal-page="true"] > main > form > .row {
+            margin-left: 0;
+            margin-right: 0;
+        }
+
+        body[data-crm-modal-page="true"] > main > .container-fluid > .row > [class*="col-"],
+        body[data-crm-modal-page="true"] > main > .container > .row > [class*="col-"],
+        body[data-crm-modal-page="true"] > main > .container-fluid > form > .row > [class*="col-"],
+        body[data-crm-modal-page="true"] > main > .container > form > .row > [class*="col-"],
+        body[data-crm-modal-page="true"] > main > form > .row > [class*="col-"] {
+            flex: 0 0 100%;
+            max-width: 100%;
+            padding-left: 0;
+            padding-right: 0;
+        }
+
+        body[data-crm-modal-page="true"] .card {
+            background: #fff !important;
+            color: var(--page-text) !important;
+            border: 1px solid rgba(15, 23, 42, 0.08) !important;
+            box-shadow: 0 8px 24px rgba(15, 23, 42, 0.05) !important;
+            border-radius: 16px !important;
+            margin-bottom: 14px !important;
+        }
+
+        body[data-crm-modal-page="true"] .card-header {
+            background: transparent !important;
+            border-bottom: 1px solid rgba(15, 23, 42, 0.06) !important;
+        }
+
+        body[data-crm-modal-page="true"] .entity-details-tabs,
+        body[data-crm-modal-page="true"] .tab-content,
+        body[data-crm-modal-page="true"] form,
+        body[data-crm-modal-page="true"] .card {
+            width: 100%;
+        }
+
+        body[data-crm-modal-page="true"] > main > .container-fluid > .row > [class*="col-"] > form > .card:first-of-type > .card-header,
+        body[data-crm-modal-page="true"] > main > .container > .row > [class*="col-"] > form > .card:first-of-type > .card-header,
+        body[data-crm-modal-page="true"] > main > .container-fluid > .row > [class*="col-"] > .card:first-of-type > .card-header,
+        body[data-crm-modal-page="true"] > main > .container > .row > [class*="col-"] > .card:first-of-type > .card-header,
+        body[data-crm-modal-page="true"] .container-fluid > form > .card:first-of-type > .card-header,
+        body[data-crm-modal-page="true"] .container > form > .card:first-of-type > .card-header,
+        body[data-crm-modal-page="true"] .container-fluid > .card:first-of-type > .card-header,
+        body[data-crm-modal-page="true"] .container > .card:first-of-type > .card-header,
+        body[data-crm-modal-page="true"] main > form > .card:first-of-type > .card-header,
+        body[data-crm-modal-page="true"] main > .card:first-of-type > .card-header {
+            display: none !important;
+        }
+
+        body[data-crm-modal-page="true"] .mt-4.pb-5,
+        body[data-crm-modal-page="true"] .pb-5 {
+            padding-bottom: 0 !important;
+        }
+
+        body[data-crm-modal-page="true"] .tab-content {
+            background: #fff;
+        }
+
+        body[data-crm-modal-page="true"] .modal-page-debug {
+            display: none;
         }
     </style>
 </head>
-<body data-crm-modal-page="true">
+<body data-crm-modal-page="true" data-crm-modal-size="@modalSize">
     <main role="main">
         @RenderBody()
     </main>

@@ -1,8 +1,31 @@
 ﻿@using Core.Entities.Platform
+@using System.Text.Json
 @model Core.Entities.Platform.AppDefinition
 
+@{
+    var orderedFields = Model.Fields.OrderBy(f => f.SortOrder).ToList();
+    var fieldMapJson = JsonSerializer.Serialize(
+        orderedFields.ToDictionary(
+            field => field.Id.ToString(),
+            field => new
+            {
+                id = field.Id,
+                label = field.Label,
+                systemName = field.SystemName,
+                dataType = field.DataType.ToString(),
+                isRequired = field.IsRequired,
+                isArray = field.IsArray,
+                isSystem = field.IsSystem,
+                targetEntityCode = field.TargetEntityCode,
+                selectOptions = field.GetSelectOptions().OrderBy(option => option.SortOrder).Select(option => new
+                {
+                    value = option.Value,
+                    label = option.Label
+                }).ToList()
+            }));
+}
+
 <div class="container-fluid px-4">
-    @* --- НАВИГАЦИЯ (ХЛЕБНЫЕ КРОШКИ) --- *@
     <nav aria-label="breadcrumb" class="mt-3">
         <ol class="breadcrumb mb-0 small">
             <li class="breadcrumb-item"><a asp-action="Index" class="text-decoration-none">Конструктор</a></li>
@@ -10,26 +33,23 @@
         </ol>
     </nav>
 
-    @* --- УНИФИЦИРОВАННЫЙ ХЕДЕР --- *@
     <crm-page-header title="Поля сущности: @Model.Name" icon="@Model.Icon" subtitle="Настройка динамических атрибутов и связей объекта @Model.EntityCode">
         <a asp-action="Index" crm-button variant="outline-secondary" icon="arrow-left" class="me-2">Назад к списку</a>
 
-        <button type="button" crm-button variant="primary" icon="plus-circle" class="shadow-sm px-4" data-bs-toggle="modal" data-bs-target="#addFieldModal">
+        <button type="button" crm-button variant="primary" icon="plus-circle" class="shadow-sm px-4" onclick="openCreateFieldModal()">
             Добавить поле
         </button>
     </crm-page-header>
 
-    @* --- ОШИБКИ --- *@
     @if (TempData["Error"] != null)
     {
-    <div class="alert alert-danger border-0 shadow-sm mb-4 d-flex align-items-center">
-        <i class="bi bi-exclamation-triangle-fill me-3 fs-4"></i>
-        <div>@TempData["Error"]</div>
-        <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert"></button>
-    </div>
+        <div class="alert alert-danger border-0 shadow-sm mb-4 d-flex align-items-center">
+            <i class="bi bi-exclamation-triangle-fill me-3 fs-4"></i>
+            <div>@TempData["Error"]</div>
+            <button type="button" class="btn-close ms-auto" data-bs-dismiss="alert"></button>
+        </div>
     }
 
-    @* --- ТАБЛИЦА ПОЛЕЙ --- *@
     <div crm-card class="overflow-hidden">
         <div class="table-responsive">
             <table class="table table-hover align-middle mb-0">
@@ -44,53 +64,72 @@
                 </tr>
                 </thead>
                 <tbody>
-                @if (!Model.Fields.Any())
+                @if (!orderedFields.Any())
                 {
-                <crm-table-empty is-search="false" />
+                    <crm-table-empty is-search="false" />
                 }
                 else
                 {
-                @foreach (var field in Model.Fields.OrderBy(f => f.SortOrder))
-                {
-                <tr>
-                    <td class="ps-4"><strong>@field.Label</strong></td>
-                    <td><code>@field.SystemName</code></td>
-                    <td>
-                                    <span class="badge bg-info bg-opacity-10 text-info border-0 px-2 py-1">
-                                        @field.DataType.ToRuName()
-                                    </span>
-                        @if (field.DataType == FieldDataType.EntityLink && !string.IsNullOrEmpty(field.TargetEntityCode))
-                        {
-                        <div class="small text-muted mt-1"><i class="bi bi-link-45deg"></i> Цель: @field.TargetEntityCode</div>
-                        }
-                    </td>
-                    <td class="text-center">
-                        @if (field.IsRequired)
-                        {
-                        <i class="bi bi-check-circle-fill text-success fs-5"></i>
-                        }
-                        else
-                        {
-                        <i class="bi bi-dash-circle text-muted opacity-50"></i>
-                        }
-                    </td>
-                    <td class="text-center">
-                        @if (field.IsArray)
-                        {
-                        <span class="badge bg-secondary rounded-pill fw-normal">Да</span>
-                        }
-                        else
-                        {
-                        <span class="text-muted small">Нет</span>
-                        }
-                    </td>
-                    <td class="text-end pe-4">
-                        <form asp-action="DeleteField" asp-route-id="@field.Id" method="post" onsubmit="return confirm('Удалить это поле? Данные в БД останутся в JSON, но поле перестанет отображаться.');">
-                            <button type="submit" crm-button variant="white" icon="trash" icon-class="text-danger" class="border btn-sm"></button>
-                        </form>
-                    </td>
-                </tr>
-                }
+                    @foreach (var field in orderedFields)
+                    {
+                        var selectOptions = field.GetSelectOptions();
+
+                        <tr>
+                            <td class="ps-4">
+                                <strong>@field.Label</strong>
+                                @if (field.IsSystem)
+                                {
+                                    <span class="badge bg-secondary-subtle text-secondary ms-2">Системное</span>
+                                }
+                            </td>
+                            <td><code>@field.SystemName</code></td>
+                            <td>
+                                <span class="badge bg-info bg-opacity-10 text-info border-0 px-2 py-1">
+                                    @field.DataType.ToRuName()
+                                </span>
+                                @if (field.DataType == FieldDataType.EntityLink && !string.IsNullOrEmpty(field.TargetEntityCode))
+                                {
+                                    <div class="small text-muted mt-1"><i class="bi bi-link-45deg"></i> Цель: @field.TargetEntityCode</div>
+                                }
+                                @if (field.DataType == FieldDataType.Select)
+                                {
+                                    <div class="small text-muted mt-1"><i class="bi bi-list-ul"></i> Пунктов: @selectOptions.Count</div>
+                                }
+                            </td>
+                            <td class="text-center">
+                                @if (field.IsRequired)
+                                {
+                                    <i class="bi bi-check-circle-fill text-success fs-5"></i>
+                                }
+                                else
+                                {
+                                    <i class="bi bi-dash-circle text-muted opacity-50"></i>
+                                }
+                            </td>
+                            <td class="text-center">
+                                @if (field.IsArray)
+                                {
+                                    <span class="badge bg-secondary rounded-pill fw-normal">Да</span>
+                                }
+                                else
+                                {
+                                    <span class="text-muted small">Нет</span>
+                                }
+                            </td>
+                            <td class="text-end pe-4">
+                                <div class="d-inline-flex gap-2">
+                                    <button type="button" crm-button variant="white" icon="pencil" class="border btn-sm" onclick="openEditFieldModal('@field.Id')"></button>
+
+                                    @if (!field.IsSystem)
+                                    {
+                                        <form asp-action="DeleteField" asp-route-id="@field.Id" method="post" onsubmit="return confirm('Удалить это поле? Данные в БД останутся в JSON, но поле перестанет отображаться.');">
+                                            <button type="submit" crm-button variant="white" icon="trash" icon-class="text-danger" class="border btn-sm"></button>
+                                        </form>
+                                    }
+                                </div>
+                            </td>
+                        </tr>
+                    }
                 }
                 </tbody>
             </table>
@@ -98,45 +137,64 @@
     </div>
 </div>
 
-@* --- МОДАЛЬНОЕ ОКНО ДОБАВЛЕНИЯ ПОЛЯ --- *@
-<div class="modal fade" id="addFieldModal" tabindex="-1" aria-hidden="true">
+<div class="modal fade" id="fieldEditorModal" tabindex="-1" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
         <div class="modal-content border-0 shadow">
-            <form asp-action="AddField" method="post">
+            <form id="fieldEditorForm" method="post" action="@Url.Action("AddField")">
+                @Html.AntiForgeryToken()
                 <input type="hidden" name="appDefinitionId" value="@Model.Id" />
+                <input type="hidden" name="id" id="fieldIdInput" />
+
                 <div class="modal-header bg-light border-0">
-                    <h5 class="modal-title fw-bold">Новое динамическое поле</h5>
+                    <h5 class="modal-title fw-bold" id="fieldEditorTitle">Новое динамическое поле</h5>
                     <button type="button" class="btn-close shadow-none" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
-                <div class="modal-body p-4">
-                    <crm-input label="Название" name="label" placeholder="Напр: Серийный номер" required></crm-input>
 
-                    <crm-input label="Системное имя" name="systemName" placeholder="serial_number" required></crm-input>
-                    <div class="form-text mt-n2 mb-3 small text-muted">Только латиница и нижнее подчеркивание.</div>
+                <div class="modal-body p-4">
+                    <div class="mb-3">
+                        <label for="fieldLabelInput" class="form-label text-muted small fw-bold text-uppercase">Название</label>
+                        <input type="text" name="label" id="fieldLabelInput" class="form-control form-control-sm" placeholder="Напр: Серийный номер" required />
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="fieldSystemNameInput" class="form-label text-muted small fw-bold text-uppercase">Системное имя</label>
+                        <input type="text" name="systemName" id="fieldSystemNameInput" class="form-control form-control-sm" placeholder="serial_number" required />
+                    </div>
+                    <div class="form-text mt-n2 mb-3 small text-muted" id="fieldSystemNameHint">Только латиница и нижнее подчеркивание.</div>
 
                     <crm-input label="Тип данных">
-                        <select name="dataType" id="dataTypeSelect" class="form-select form-select-sm shadow-none" required onchange="toggleTargetEntitySelector()">
+                        <select name="dataType" id="fieldDataTypeSelect" class="form-select form-select-sm shadow-none" required onchange="toggleFieldConfigSections()">
                             @foreach (var type in Enum.GetValues<FieldDataType>())
                             {
-                            <option value="@type">@type.ToRuName()</option>
+                                <option value="@type">@type.ToRuName()</option>
                             }
                         </select>
                     </crm-input>
 
-                    @* Блок выбора целевой сущности *@
                     <div id="targetEntityWrapper" style="display:none;" class="mb-4 p-3 bg-light rounded border border-primary border-opacity-10">
-                        <label class="form-label text-primary fw-bold small text-uppercase">Целевая сущность (для связи)</label>
+                        <label class="form-label text-primary fw-bold small text-uppercase">Целевая сущность</label>
                         <select name="targetEntityCode" id="targetEntitySelect" class="form-select form-select-sm shadow-none">
                             <option value="">-- Выберите объект --</option>
                             @if (ViewBag.AllDefinitions != null)
                             {
-                            foreach (var def in (IEnumerable<AppDefinition>)ViewBag.AllDefinitions)
-                            {
-                            <option value="@def.EntityCode">@def.Name (@def.EntityCode)</option>
-                            }
+                                foreach (var def in (IEnumerable<AppDefinition>)ViewBag.AllDefinitions)
+                                {
+                                    <option value="@def.EntityCode">@def.Name (@def.EntityCode)</option>
+                                }
                             }
                         </select>
                         <div class="form-text small">Записи выбранного объекта будут доступны для выбора в этом поле.</div>
+                    </div>
+
+                    <div id="selectOptionsWrapper" style="display:none;" class="mb-4 p-3 bg-light rounded border border-success border-opacity-10">
+                        <div class="d-flex justify-content-between align-items-center mb-3">
+                            <label class="form-label text-success fw-bold small text-uppercase mb-0">Пункты выпадающего списка</label>
+                            <button type="button" class="btn btn-sm btn-outline-success" onclick="addSelectOptionRow()">
+                                <i class="bi bi-plus-lg"></i> Добавить пункт
+                            </button>
+                        </div>
+                        <div id="selectOptionsContainer" class="d-grid gap-2"></div>
+                        <div class="form-text small">Можно менять названия существующих пунктов. Их внутренние значения сохраняются автоматически.</div>
                     </div>
 
                     <div class="row g-3">
@@ -154,8 +212,9 @@
                         </div>
                     </div>
                 </div>
+
                 <div class="modal-footer border-0 p-4 pt-0">
-                    <button type="submit" crm-button variant="primary" class="w-100 py-2">Создать поле</button>
+                    <button type="submit" crm-button variant="primary" class="w-100 py-2" id="fieldEditorSubmitButton">Создать поле</button>
                 </div>
             </form>
         </div>
@@ -163,17 +222,145 @@
 </div>
 
 <script>
-    function toggleTargetEntitySelector() {
-        const select = document.getElementById('dataTypeSelect');
-        const wrapper = document.getElementById('targetEntityWrapper');
-        const targetSelect = document.getElementById('targetEntitySelect');
+    document.addEventListener('DOMContentLoaded', () => {
+        const fieldEditorModalElement = document.getElementById('fieldEditorModal');
+        const fieldEditorModal = window.bootstrap?.Modal.getOrCreateInstance(fieldEditorModalElement);
+        const fieldEditorForm = document.getElementById('fieldEditorForm');
+        const fieldEditorTitle = document.getElementById('fieldEditorTitle');
+        const fieldEditorSubmitButton = document.getElementById('fieldEditorSubmitButton');
+        const fieldIdInput = document.getElementById('fieldIdInput');
+        const fieldLabelInput = document.getElementById('fieldLabelInput');
+        const fieldSystemNameInput = document.getElementById('fieldSystemNameInput');
+        const fieldSystemNameHint = document.getElementById('fieldSystemNameHint');
+        const fieldDataTypeSelect = document.getElementById('fieldDataTypeSelect');
+        const targetEntityWrapper = document.getElementById('targetEntityWrapper');
+        const targetEntitySelect = document.getElementById('targetEntitySelect');
+        const selectOptionsWrapper = document.getElementById('selectOptionsWrapper');
+        const selectOptionsContainer = document.getElementById('selectOptionsContainer');
+        const reqCheck = document.getElementById('reqCheck');
+        const arrayCheck = document.getElementById('arrayCheck');
+        const addFieldUrl = '@Url.Action("AddField")';
+        const editFieldUrl = '@Url.Action("EditField")';
+        const existingFields = @Html.Raw(fieldMapJson);
 
-        if (select.value === 'EntityLink') {
-            wrapper.style.display = 'block';
-            targetSelect.required = true;
-        } else {
-            wrapper.style.display = 'none';
-            targetSelect.required = false;
+        function createSelectOptionRow(label = '', value = '') {
+            const row = document.createElement('div');
+            row.className = 'd-flex align-items-center gap-2';
+
+            const hiddenValue = document.createElement('input');
+            hiddenValue.type = 'hidden';
+            hiddenValue.name = 'optionValues';
+            hiddenValue.value = value || '';
+
+            const labelInput = document.createElement('input');
+            labelInput.type = 'text';
+            labelInput.name = 'optionLabels';
+            labelInput.value = label || '';
+            labelInput.className = 'form-control form-control-sm';
+            labelInput.placeholder = 'Название пункта';
+
+            const removeButton = document.createElement('button');
+            removeButton.type = 'button';
+            removeButton.className = 'btn btn-sm btn-outline-danger';
+            removeButton.innerHTML = '<i class="bi bi-x-lg"></i>';
+            removeButton.onclick = () => row.remove();
+
+            row.appendChild(hiddenValue);
+            row.appendChild(labelInput);
+            row.appendChild(removeButton);
+            return row;
         }
-    }
+
+        function addSelectOptionRow(label = '', value = '') {
+            selectOptionsContainer.appendChild(createSelectOptionRow(label, value));
+        }
+
+        function clearSelectOptions() {
+            selectOptionsContainer.innerHTML = '';
+        }
+
+        function ensureSelectHasRow() {
+            if (selectOptionsContainer.children.length === 0) {
+                addSelectOptionRow();
+            }
+        }
+
+        function toggleFieldConfigSections() {
+            const type = fieldDataTypeSelect.value;
+            const isEntityLink = type === 'EntityLink';
+            const isSelect = type === 'Select';
+
+            targetEntityWrapper.style.display = isEntityLink ? 'block' : 'none';
+            targetEntitySelect.required = isEntityLink;
+            if (!isEntityLink) {
+                targetEntitySelect.value = '';
+            }
+
+            selectOptionsWrapper.style.display = isSelect ? 'block' : 'none';
+            if (isSelect) {
+                ensureSelectHasRow();
+            } else {
+                clearSelectOptions();
+            }
+        }
+
+        function resetFieldModal() {
+            fieldEditorForm.action = addFieldUrl;
+            fieldEditorForm.reset();
+            fieldIdInput.value = '';
+            fieldEditorTitle.textContent = 'Новое динамическое поле';
+            fieldEditorSubmitButton.textContent = 'Создать поле';
+            fieldSystemNameInput.readOnly = false;
+            fieldSystemNameInput.classList.remove('bg-light');
+            fieldSystemNameHint.textContent = 'Только латиница и нижнее подчеркивание.';
+            clearSelectOptions();
+            fieldDataTypeSelect.value = 'String';
+            targetEntitySelect.value = '';
+            reqCheck.checked = false;
+            arrayCheck.checked = false;
+            toggleFieldConfigSections();
+        }
+
+        function openCreateFieldModal() {
+            resetFieldModal();
+            fieldEditorModal?.show();
+        }
+
+        function openEditFieldModal(id) {
+            const field = existingFields[id];
+            if (!field) {
+                return;
+            }
+
+            resetFieldModal();
+            fieldEditorForm.action = editFieldUrl;
+            fieldEditorTitle.textContent = 'Редактирование поля';
+            fieldEditorSubmitButton.textContent = 'Сохранить изменения';
+            fieldIdInput.value = field.id;
+            fieldLabelInput.value = field.label || '';
+            fieldSystemNameInput.value = field.systemName || '';
+            fieldSystemNameInput.readOnly = true;
+            fieldSystemNameInput.classList.add('bg-light');
+            fieldSystemNameHint.textContent = 'Системное имя задаётся при создании и больше не редактируется.';
+            fieldDataTypeSelect.value = field.dataType || 'String';
+            targetEntitySelect.value = field.targetEntityCode || '';
+            reqCheck.checked = !!field.isRequired;
+            arrayCheck.checked = !!field.isArray;
+
+            if (field.dataType === 'Select') {
+                clearSelectOptions();
+                (field.selectOptions || []).forEach(option => addSelectOptionRow(option.label || '', option.value || ''));
+            }
+
+            toggleFieldConfigSections();
+            fieldEditorModal?.show();
+        }
+
+        fieldEditorModalElement.addEventListener('hidden.bs.modal', resetFieldModal);
+
+        window.addSelectOptionRow = addSelectOptionRow;
+        window.toggleFieldConfigSections = toggleFieldConfigSections;
+        window.openCreateFieldModal = openCreateFieldModal;
+        window.openEditFieldModal = openEditFieldModal;
+    });
 </script>

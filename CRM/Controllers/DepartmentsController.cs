@@ -88,7 +88,7 @@ namespace CRM.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(Guid id, Department department, IFormCollection form)
+        public async Task<IActionResult> Edit(Guid id, Department department, IFormCollection form, bool modal = false)
         {
             if (id != department.Id) return NotFound();
 
@@ -110,6 +110,11 @@ namespace CRM.Controllers
                     if (!DepartmentExists(department.Id)) return NotFound();
                     else throw;
                 }
+                if (modal)
+                {
+                    return BuildModalUpdatedContentResult("Department", department.Id, department.Name);
+                }
+
                 return RedirectToAction(nameof(Index));
             }
             

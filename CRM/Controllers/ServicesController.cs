@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Core.Data;
+using Core.DTOs.CRM;
 using Core.Entities.CRM;
 using Core.Entities.Platform;
 using System.Text.Json;
@@ -14,20 +15,10 @@ using CRM.Infrastructure;
 using CRM.ViewModels;
 using System.IO;
 using Microsoft.AspNetCore.Http;
+using Core.Services.CRM;
 
 namespace CRM.Controllers
 {
-    public class ServiceTreeItem
-    {
-        public Guid Id { get; set; }
-        public Guid? ParentId { get; set; }
-        public string Name { get; set; } = string.Empty;
-        public string Type { get; set; } = "Item";
-        public decimal? Price { get; set; }
-        public int Level { get; set; }
-        public string? Properties { get; set; }
-    }
-
     public class ServicesController : Controller
     {
         private readonly AppDbContext _context;
@@ -47,12 +38,137 @@ namespace CRM.Controllers
 
             if (appDef != null)
             {
-                ViewBag.DynamicFields = appDef.Fields.OrderBy(f => f.SortOrder).ToList();
+                var fields = appDef.Fields.OrderBy(f => f.SortOrder).ToList();
+                ViewBag.DynamicFields = fields;
+                ViewBag.LookupData = await BuildLookupDataAsync(fields);
             }
             
             var categories = await _context.ServiceCategories.OrderBy(c => c.Name).ToListAsync();
             ViewBag.Categories = new SelectList(categories, "Id", "Name");
             ViewBag.EntityCode = entityCode;
+        }
+
+        private async Task<Dictionary<string, List<SelectListItem>>> BuildLookupDataAsync(IEnumerable<AppFieldDefinition> fields)
+        {
+            var lookupData = new Dictionary<string, List<SelectListItem>>();
+
+            foreach (var field in fields.Where(f => f.DataType == FieldDataType.Select))
+            {
+                lookupData[field.SystemName] = field.GetSelectOptions()
+                    .OrderBy(option => option.SortOrder)
+                    .Select(option => new SelectListItem
+                    {
+                        Value = option.Value,
+                        Text = option.Label
+                    })
+                    .ToList();
+            }
+
+            foreach (var field in fields.Where(f => f.DataType == FieldDataType.EntityLink && !string.IsNullOrWhiteSpace(f.TargetEntityCode)))
+            {
+                lookupData[field.SystemName] = await LoadEntityLookupItemsAsync(field.TargetEntityCode!);
+            }
+
+            return lookupData;
+        }
+
+        private async Task<List<SelectListItem>> LoadEntityLookupItemsAsync(string targetEntityCode)
+        {
+            var candidates = BuildEntityCodeCandidates(targetEntityCode);
+            var normalized = NormalizeEntityCode(targetEntityCode);
+
+            var genericItems = await _context.GenericObjects
+                .AsNoTracking()
+                .Where(item => candidates.Contains(item.EntityCode))
+                .OrderBy(item => item.Name)
+                .Select(item => new SelectListItem
+                {
+                    Value = item.Id.ToString(),
+                    Text = item.Name
+                })
+                .ToListAsync();
+
+            if (genericItems.Any())
+            {
+                return genericItems;
+            }
+
+            if (normalized == "employee")
+            {
+                return await _context.Employees
+                    .AsNoTracking()
+                    .Where(item => !item.IsDismissed)
+                    .OrderBy(item => item.LastName)
+                    .ThenBy(item => item.FirstName)
+                    .Select(item => new SelectListItem
+                    {
+                        Value = item.Id.ToString(),
+                        Text = item.FullName
+                    })
+                    .ToListAsync();
+            }
+
+            if (normalized == "department")
+            {
+                return await _context.Departments
+                    .AsNoTracking()
+                    .OrderBy(item => item.Name)
+                    .Select(item => new SelectListItem
+                    {
+                        Value = item.Id.ToString(),
+                        Text = item.Name
+                    })
+                    .ToListAsync();
+            }
+
+            if (normalized == "contact")
+            {
+                return await _context.Contacts
+                    .AsNoTracking()
+                    .OrderBy(item => item.FullName)
+                    .Select(item => new SelectListItem
+                    {
+                        Value = item.Id.ToString(),
+                        Text = item.FullName
+                    })
+                    .ToListAsync();
+            }
+
+            return new List<SelectListItem>();
+        }
+
+        private static List<string> BuildEntityCodeCandidates(string? entityCode)
+        {
+            var candidates = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            var normalized = (entityCode ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(normalized))
+            {
+                return candidates.ToList();
+            }
+
+            candidates.Add(normalized);
+
+            if (normalized.EndsWith("s", StringComparison.OrdinalIgnoreCase) && normalized.Length > 1)
+            {
+                candidates.Add(normalized[..^1]);
+            }
+            else
+            {
+                candidates.Add(normalized + "s");
+            }
+
+            return candidates.ToList();
+        }
+
+        private static string NormalizeEntityCode(string? entityCode)
+        {
+            var normalized = (entityCode ?? string.Empty).Trim();
+            if (normalized.EndsWith("s", StringComparison.OrdinalIgnoreCase) && normalized.Length > 1)
+            {
+                normalized = normalized[..^1];
+            }
+
+            return normalized.ToLowerInvariant();
         }
 
         private Dictionary<string, object> ExtractDynamicProps()
@@ -368,24 +484,16 @@ public async Task<IActionResult> ExecuteImport(string fileName, Dictionary<strin
             var allCategories = await _context.ServiceCategories.ToListAsync();
             var allItems = await _context.ServiceItems.Include(i => i.Category).ToListAsync();
 
-            var treeResult = new List<ServiceTreeItem>();
+            var treeResult = new List<ServiceTreeItemDto>();
 
             if (!string.IsNullOrEmpty(searchString))
             {
                 var s = searchString.Trim();
                 var filteredItems = allItems.Where(i => 
-                    EF.Functions.ILike(i.Name, $"%{s}%") || 
-                    (i.Category != null && EF.Functions.ILike(i.Category.Name, $"%{s}%")) ||
+                    i.Name.Contains(s, StringComparison.OrdinalIgnoreCase) || 
+                    (i.Category != null && i.Category.Name.Contains(s, StringComparison.OrdinalIgnoreCase)) ||
                     (i.Properties != null && i.Properties.Contains(s, StringComparison.OrdinalIgnoreCase))
-                ).Select(i => new ServiceTreeItem {
-                    Id = i.Id, 
-                    ParentId = i.CategoryId,
-                    Name = i.Name, 
-                    Type = "Item", 
-                    Price = i.Price, 
-                    Level = 0, 
-                    Properties = i.Properties
-                });
+                ).Select(i => ServiceMapper.ToTreeItemDto(i, 0));
                 treeResult.AddRange(filteredItems);
             }
             else
@@ -397,45 +505,30 @@ public async Task<IActionResult> ExecuteImport(string fileName, Dictionary<strin
             return View(treeResult);
         }
 
-        private void BuildTree(Guid? parentId, int level, List<ServiceCategory> cats, List<ServiceItem> items, List<ServiceTreeItem> result)
+        private void BuildTree(Guid? parentId, int level, List<ServiceCategory> cats, List<ServiceItem> items, List<ServiceTreeItemDto> result)
         {
             if (level >= 10) return;
 
             var currentLevelCats = cats.Where(c => c.ParentCategoryId == parentId).OrderBy(c => c.Name);
             foreach (var cat in currentLevelCats)
             {
-                result.Add(new ServiceTreeItem { 
-                    Id = cat.Id, 
-                    ParentId = parentId,
-                    Name = cat.Name, 
-                    Type = "Category", 
-                    Level = level, 
-                    Properties = cat.Properties 
-                });
+                result.Add(ServiceMapper.ToTreeItemDto(cat, parentId, level));
                 
                 BuildTree(cat.Id, level + 1, cats, items, result);
                 
                 var currentLevelItems = items.Where(i => i.CategoryId == cat.Id).OrderBy(i => i.Name);
                 foreach (var item in currentLevelItems)
                 {
-                    result.Add(new ServiceTreeItem { 
-                        Id = item.Id, 
-                        ParentId = cat.Id,
-                        Name = item.Name, 
-                        Type = "Item", 
-                        Price = item.Price, 
-                        Level = level + 1, 
-                        Properties = item.Properties 
-                    });
+                    result.Add(ServiceMapper.ToTreeItemDto(item, level + 1));
                 }
             }
 
             if (parentId == null)
             {
-                var rootItems = items.Where(i => i.CategoryId == null || i.CategoryId == Guid.Empty || !cats.Any(c => c.Id == i.CategoryId));
+                var rootItems = items.Where(i => i.CategoryId == Guid.Empty || !cats.Any(c => c.Id == i.CategoryId));
                 foreach (var item in rootItems)
                 {
-                    result.Add(new ServiceTreeItem { Id = item.Id, ParentId = null, Name = item.Name, Type = "Item", Price = item.Price, Level = 0, Properties = item.Properties });
+                    result.Add(ServiceMapper.ToTreeItemDto(item, 0));
                 }
             }
         }
@@ -444,22 +537,23 @@ public async Task<IActionResult> ExecuteImport(string fileName, Dictionary<strin
         {
             await LoadViewData("ServiceItem");
             ViewBag.IsModal = modal;
-            return View(new ServiceItem { Id = Guid.NewGuid(), EntityCode = "ServiceItem" });
+            return View(new ServiceItemFormDto());
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create(ServiceItem service, bool modal = false)
+        public async Task<IActionResult> Create(ServiceItemFormDto dto, bool modal = false)
         {
             var dynamicData = ExtractDynamicProps();
-            if (dynamicData.Any()) service.Properties = JsonSerializer.Serialize(dynamicData);
-
-            service.CreatedAt = DateTime.UtcNow;
-            ModelState.Remove(nameof(service.EntityCode));
-            ModelState.Remove(nameof(service.Category));
+            dto.DynamicValues = dynamicData;
 
             if (ModelState.IsValid)
             {
+                var service = ServiceMapper.ToEntity(dto);
+                service.CreatedAt = DateTime.UtcNow;
+                service.EntityCode = "ServiceItem";
+                service.Properties = dynamicData.Any() ? JsonSerializer.Serialize(dynamicData) : null;
+
                 _context.Add(service);
                 await _context.SaveChangesAsync();
 
@@ -472,7 +566,7 @@ public async Task<IActionResult> ExecuteImport(string fileName, Dictionary<strin
             }
             await LoadViewData("ServiceItem");
             ViewBag.IsModal = modal;
-            return View(service);
+            return View(dto);
         }
 
         public async Task<IActionResult> Edit(Guid? id)
@@ -481,20 +575,17 @@ public async Task<IActionResult> ExecuteImport(string fileName, Dictionary<strin
             var service = await _context.ServiceItems.FindAsync(id);
             if (service == null) return NotFound();
             await LoadViewData("ServiceItem");
-            return View(service);
+            return View(ServiceMapper.ToFormDto(service));
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(Guid id, ServiceItem service)
+        public async Task<IActionResult> Edit(Guid id, ServiceItemFormDto dto, bool modal = false)
         {
-            if (id != service.Id) return NotFound();
+            if (id != dto.Id) return NotFound();
 
             var dynamicData = ExtractDynamicProps();
-            service.Properties = dynamicData.Any() ? JsonSerializer.Serialize(dynamicData) : null;
-
-            ModelState.Remove(nameof(service.EntityCode));
-            ModelState.Remove(nameof(service.Category));
+            dto.DynamicValues = dynamicData;
 
             if (ModelState.IsValid)
             {
@@ -503,21 +594,26 @@ public async Task<IActionResult> ExecuteImport(string fileName, Dictionary<strin
                     var original = await _context.ServiceItems.FindAsync(id);
                     if (original == null) return NotFound();
 
-                    original.Name = service.Name;
-                    original.Price = service.Price;
-                    original.CategoryId = service.CategoryId;
-                    original.Properties = service.Properties;
+                    ServiceMapper.UpdateEntity(original, dto);
+                    original.Properties = dynamicData.Any() ? JsonSerializer.Serialize(dynamicData) : null;
 
                     await _context.SaveChangesAsync();
+
+                    if (modal)
+                    {
+                        return ModalRequestHelper.BuildEntityUpdatedContent("ServiceItem", original.Id, original.Name);
+                    }
+
                     return RedirectToAction(nameof(Index));
                 }
-                catch (DbUpdateConcurrencyException) { if (!ServiceExists(service.Id)) return NotFound(); throw; }
+                catch (DbUpdateConcurrencyException) { if (!ServiceExists(dto.Id)) return NotFound(); throw; }
             }
             await LoadViewData("ServiceItem");
-            return View(service);
+            return View(dto);
         }
 
         [HttpPost]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteItem(Guid id)
         {
             var item = await _context.ServiceItems.FindAsync(id);
@@ -529,6 +625,7 @@ public async Task<IActionResult> ExecuteImport(string fileName, Dictionary<strin
         }
 
         [HttpPost]
+        [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteCategory(Guid id)
         {
             var cat = await _context.ServiceCategories.FindAsync(id);
@@ -550,27 +647,29 @@ public async Task<IActionResult> ExecuteImport(string fileName, Dictionary<strin
         public async Task<IActionResult> CreateCategory()
         {
             await LoadViewData("ServiceCategory");
-            return View(new ServiceCategory { Id = Guid.NewGuid(), EntityCode = "ServiceCategory" });
+            return View(new ServiceCategoryFormDto());
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> CreateCategory(ServiceCategory category)
+        public async Task<IActionResult> CreateCategory(ServiceCategoryFormDto dto)
         {
             var dynamicData = ExtractDynamicProps();
-            if (dynamicData.Any()) category.Properties = JsonSerializer.Serialize(dynamicData);
-
-            category.CreatedAt = DateTime.UtcNow;
-            ModelState.Remove(nameof(category.EntityCode));
+            dto.DynamicValues = dynamicData;
 
             if (ModelState.IsValid)
             {
+                var category = ServiceMapper.ToEntity(dto);
+                category.CreatedAt = DateTime.UtcNow;
+                category.EntityCode = "ServiceCategory";
+                category.Properties = dynamicData.Any() ? JsonSerializer.Serialize(dynamicData) : null;
+
                 _context.Add(category);
                 await _context.SaveChangesAsync();
                 return RedirectToAction(nameof(Index));
             }
             await LoadViewData("ServiceCategory");
-            return View(category);
+            return View(dto);
         }
 
         public async Task<IActionResult> EditCategory(Guid? id)
@@ -579,19 +678,17 @@ public async Task<IActionResult> ExecuteImport(string fileName, Dictionary<strin
             var category = await _context.ServiceCategories.FindAsync(id);
             if (category == null) return NotFound();
             await LoadViewData("ServiceCategory");
-            return View(category);
+            return View(ServiceMapper.ToFormDto(category));
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> EditCategory(Guid id, ServiceCategory category)
+        public async Task<IActionResult> EditCategory(Guid id, ServiceCategoryFormDto dto, bool modal = false)
         {
-            if (id != category.Id) return NotFound();
+            if (id != dto.Id) return NotFound();
 
             var dynamicData = ExtractDynamicProps();
-            category.Properties = dynamicData.Any() ? JsonSerializer.Serialize(dynamicData) : null;
-
-            ModelState.Remove(nameof(category.EntityCode));
+            dto.DynamicValues = dynamicData;
 
             if (ModelState.IsValid)
             {
@@ -600,17 +697,22 @@ public async Task<IActionResult> ExecuteImport(string fileName, Dictionary<strin
                     var original = await _context.ServiceCategories.FindAsync(id);
                     if (original == null) return NotFound();
 
-                    original.Name = category.Name;
-                    original.ParentCategoryId = category.ParentCategoryId;
-                    original.Properties = category.Properties;
+                    ServiceMapper.UpdateEntity(original, dto);
+                    original.Properties = dynamicData.Any() ? JsonSerializer.Serialize(dynamicData) : null;
 
                     await _context.SaveChangesAsync();
+
+                    if (modal)
+                    {
+                        return ModalRequestHelper.BuildEntityUpdatedContent("ServiceCategory", original.Id, original.Name);
+                    }
+
                     return RedirectToAction(nameof(Index));
                 }
-                catch (DbUpdateConcurrencyException) { if (!CategoryExists(category.Id)) return NotFound(); throw; }
+                catch (DbUpdateConcurrencyException) { if (!CategoryExists(dto.Id)) return NotFound(); throw; }
             }
             await LoadViewData("ServiceCategory");
-            return View(category);
+            return View(dto);
         }
 
         private bool CategoryExists(Guid id) => _context.ServiceCategories.Any(e => e.Id == id);

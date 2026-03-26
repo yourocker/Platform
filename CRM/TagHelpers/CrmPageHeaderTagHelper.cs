@@ -25,7 +25,7 @@ namespace CRM.TagHelpers
             
             output.TagMode = TagMode.StartTagAndEndTag;
             output.TagName = "div";
-            output.Attributes.SetAttribute("class", "row mb-4 align-items-center justify-content-between");
+            output.Attributes.SetAttribute("class", "crm-page-header row mb-4 align-items-center justify-content-between");
 
             // Левая часть: Иконка + Заголовок
             var leftCol = new TagBuilder("div");

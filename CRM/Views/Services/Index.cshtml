@@ -1,10 +1,12 @@
-﻿@using Core.Entities.CRM
+﻿@using CRM.Infrastructure
+@using Core.DTOs.CRM
 @using Core.Entities.Platform
-@using System.Text.Json
-@model IEnumerable<CRM.Controllers.ServiceTreeItem>
+@using Microsoft.AspNetCore.Mvc.Rendering
+@model IEnumerable<ServiceTreeItemDto>
 @{
     ViewData["Title"] = "Справочник услуг";
     var dynamicFields = ViewBag.DynamicFields as List<AppFieldDefinition> ?? new List<AppFieldDefinition>();
+    var lookupData = ViewBag.LookupData as Dictionary<string, List<SelectListItem>> ?? new Dictionary<string, List<SelectListItem>>();
     string currentSearch = ViewBag.CurrentSearch;
 }
 
@@ -112,10 +114,6 @@
                 <tbody>
                     @foreach (var item in Model) {
                         var isCat = item.Type == "Category";
-                        var propValues = new Dictionary<string, object>();
-                        if (!string.IsNullOrEmpty(item.Properties)) {
-                            try { propValues = JsonSerializer.Deserialize<Dictionary<string, object>>(item.Properties) ?? new Dictionary<string, object>(); } catch { }
-                        }
 
                         <tr id="row-@item.Id"
                             data-id="@item.Id"
@@ -142,20 +140,24 @@
 
                             @foreach (var field in dynamicFields) {
                                 <td class="col-dyn-@field.SystemName">
-                                    @if (!isCat && propValues.TryGetValue(field.SystemName, out var val) && val != null) {
-                                        @val.ToString()
+                                    @if (!isCat && item.DynamicValues.TryGetValue(field.SystemName, out var val) && val != null) {
+                                        @TableCellDisplayFormatter.FormatRawValue(val, field, lookupData)
+                                    }
+                                    else if (!isCat)
+                                    {
+                                        @TableCellDisplayFormatter.FormatRawValue(null, field, lookupData)
                                     }
                                 </td>
                             }
 
                             <td class="text-end pe-4">
-                                <div class="btn-group btn-group-sm shadow-sm">
+                                <div class="btn-group btn-group-sm shadow-sm crm-table-actions">
                                     @if (isCat) {
-                                        <a asp-action="EditCategory" asp-route-id="@item.Id" class="btn btn-white border" title="Редактировать раздел"><i class="bi bi-pencil-fill text-primary"></i></a>
-                                        <button type="button" class="btn btn-white border" onclick="confirmDelete('@item.Id', 'Category')" title="Удалить раздел"><i class="bi bi-trash-fill text-danger"></i></button>
+                                        <a asp-action="EditCategory" asp-route-id="@item.Id" class="btn btn-white border crm-table-action" title="Редактировать раздел"><i class="bi bi-pencil-fill text-primary"></i></a>
+                                        <button type="button" class="btn btn-white border crm-table-action" onclick="confirmDelete('@item.Id', 'Category')" title="Удалить раздел"><i class="bi bi-trash-fill text-danger"></i></button>
                                     } else {
-                                        <a asp-action="Edit" asp-route-id="@item.Id" class="btn btn-white border"><i class="bi bi-pencil-fill text-primary"></i></a>
-                                        <button type="button" class="btn btn-white border" onclick="confirmDelete('@item.Id', 'Item')"><i class="bi bi-trash-fill text-danger"></i></button>
+                                        <a asp-action="Edit" asp-route-id="@item.Id" class="btn btn-white border crm-table-action" title="Редактировать"><i class="bi bi-pencil-fill text-primary"></i></a>
+                                        <button type="button" class="btn btn-white border crm-table-action" onclick="confirmDelete('@item.Id', 'Item')" title="Удалить"><i class="bi bi-trash-fill text-danger"></i></button>
                                     }
                                 </div>
                             </td>

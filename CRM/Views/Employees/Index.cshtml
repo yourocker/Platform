@@ -1,9 +1,12 @@
-﻿@using Core.Entities.Platform
-@using System.Text.Json
-@model IEnumerable<Core.Entities.Company.Employee>
+﻿@using CRM.Infrastructure
+@using Core.DTOs.Company
+@using Core.Entities.Platform
+@using Microsoft.AspNetCore.Mvc.Rendering
+@model IEnumerable<EmployeeListDto>
 @{
 ViewData["Title"] = "Сотрудники";
 var dynamicFields = ViewBag.DynamicFields as List<AppFieldDefinition> ?? new List<AppFieldDefinition>();
+var lookupData = ViewBag.LookupData as Dictionary<string, List<SelectListItem>> ?? new Dictionary<string, List<SelectListItem>>();
 
 int totalItems = ViewBag.TotalItems ?? 0;
 int pageNumber = ViewBag.PageNumber ?? 1;
@@ -121,7 +124,6 @@ var currentFilters = ViewBag.CurrentFilters as Dictionary<string, string> ?? new
                 {
                 @foreach (var item in Model)
                 {
-                var props = string.IsNullOrEmpty(item.Properties) ? new Dictionary<string, object>() : JsonSerializer.Deserialize<Dictionary<string, object>>(item.Properties);
                 <tr class="@(item.IsDismissed ? "table-secondary opacity-75" : "")">
                     <td class="ps-4 col-lastname fw-bold">@item.LastName</td>
                     <td class="col-firstname">@item.FirstName</td>
@@ -130,14 +132,16 @@ var currentFilters = ViewBag.CurrentFilters as Dictionary<string, string> ?? new
                         @if (item.Phones?.Any() == true) { <span><i class="bi bi-telephone me-1"></i> @item.Phones.First()</span> }
                     </td>
                     <td class="col-pos">
-                        @foreach (var app in item.StaffAppointments) {
-                        <div class="small mb-1"><span class="badge bg-white text-dark border fw-normal shadow-sm">@app.Position?.Name</span> <span class="text-muted ms-1" style="font-size: 0.7rem;">@app.Department?.Name</span></div>
+                        @foreach (var app in item.Appointments) {
+                        <div class="small mb-1"><span class="badge bg-white text-dark border fw-normal shadow-sm">@app.PositionName</span> <span class="text-muted ms-1" style="font-size: 0.7rem;">@app.DepartmentName</span></div>
                         }
                     </td>
                     @foreach (var field in dynamicFields)
                     {
                     <td class="col-dyn-@field.SystemName small">
-                        @(props.TryGetValue(field.SystemName, out var val) ? val?.ToString() : "—")
+                        @(item.DynamicValues.TryGetValue(field.SystemName, out var val)
+                            ? TableCellDisplayFormatter.FormatRawValue(val, field, lookupData)
+                            : TableCellDisplayFormatter.FormatRawValue(null, field, lookupData))
                     </td>
                     }
                     <td class="text-center col-status">
@@ -146,7 +150,10 @@ var currentFilters = ViewBag.CurrentFilters as Dictionary<string, string> ?? new
                                     </span>
                     </td>
                     <td class="text-end pe-4">
-                        <a asp-action="Edit" asp-route-id="@item.Id" crm-button variant="white" icon="pencil" icon-class="text-primary" class="border btn-sm"></a>
+                        <div class="btn-group btn-group-sm shadow-sm crm-table-actions" onclick="event.stopPropagation();">
+                            <a asp-action="Edit" asp-route-id="@item.Id" crm-button variant="white" icon="pencil-fill" icon-class="text-primary" class="border btn-sm crm-table-action" title="Редактировать"></a>
+                            <a asp-action="Delete" asp-route-id="@item.Id" crm-button variant="white" icon="trash-fill" icon-class="text-danger" class="border btn-sm crm-table-action" title="Удалить"></a>
+                        </div>
                     </td>
                 </tr>
                 }

@@ -249,7 +249,7 @@ namespace CRM.Controllers
         // POST: Edit
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(Guid id, ContactEditDto dto)
+        public async Task<IActionResult> Edit(Guid id, ContactEditDto dto, bool modal = false)
         {
             if (id != dto.Id) return NotFound();
 
@@ -292,6 +292,11 @@ namespace CRM.Controllers
                     if (!ContactExists(dto.Id)) return NotFound();
                     throw;
                 }
+                if (modal)
+                {
+                    return BuildModalUpdatedContentResult("Contact", id, $"{dto.LastName} {dto.FirstName} {dto.MiddleName}".Trim());
+                }
+
                 return RedirectToAction(nameof(Index));
             }
             

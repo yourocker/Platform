@@ -45,9 +45,25 @@ namespace Core.Data
 
         private static async Task EnsureAdminAsync(UserManager<Employee> userManager, IConfiguration configuration)
         {
-            var adminLogin = configuration["SeedData:AdminUser"] ?? "admin";
-            var adminPassword = configuration["SeedData:AdminPassword"] ?? "Admin123!";
-            var adminEmail = configuration["SeedData:AdminEmail"] ?? "admin@linkcrm.local";
+            var enableAdminSeed = bool.TryParse(configuration["SeedData:EnableAdminSeed"], out var parsedEnableAdminSeed)
+                && parsedEnableAdminSeed;
+
+            if (!enableAdminSeed)
+            {
+                return;
+            }
+
+            var adminLogin = configuration["SeedData:AdminUser"];
+            var adminPassword = configuration["SeedData:AdminPassword"];
+            var adminEmail = configuration["SeedData:AdminEmail"];
+
+            if (string.IsNullOrWhiteSpace(adminLogin) ||
+                string.IsNullOrWhiteSpace(adminPassword) ||
+                string.IsNullOrWhiteSpace(adminEmail))
+            {
+                throw new InvalidOperationException(
+                    "Admin seed is enabled, but SeedData:AdminUser, SeedData:AdminPassword and SeedData:AdminEmail are not fully configured.");
+            }
 
             var adminUser = await userManager.FindByNameAsync(adminLogin);
 

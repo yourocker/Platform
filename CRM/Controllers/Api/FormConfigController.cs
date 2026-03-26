@@ -30,9 +30,12 @@ public class FormConfigController : ControllerBase
         var query = _context.AppFieldDefinitions.Where(f => f.AppDefinitionId == appId);
         if (!includeDeleted) query = query.Where(f => !f.IsDeleted);
 
-        var fields = await query
+        var fieldEntities = await query
             .OrderBy(f => f.IsDeleted)
             .ThenBy(f => f.SortOrder)
+            .ToListAsync();
+
+        var fields = fieldEntities
             .Select(f => new FieldDto
             {
                 Id = f.Id,
@@ -45,8 +48,9 @@ public class FormConfigController : ControllerBase
                 IsDeleted = f.IsDeleted,
                 Description = f.Description,
                 TargetEntityCode = f.TargetEntityCode,
+                SelectOptions = f.GetSelectOptions(),
                 SortOrder = f.SortOrder
-            }).ToListAsync();
+            }).ToList();
 
         return Ok(fields);
     }
@@ -64,6 +68,10 @@ public class FormConfigController : ControllerBase
         if (await _context.AppFieldDefinitions.AnyAsync(f => f.AppDefinitionId == request.AppDefinitionId && f.SystemName == systemName))
             return BadRequest($"Системное имя '{systemName}' уже занято.");
 
+        var validationError = ValidateFieldConfiguration(request.DataType, request.TargetEntityCode, request.SelectOptions);
+        if (!string.IsNullOrWhiteSpace(validationError))
+            return BadRequest(validationError);
+
         var field = new AppFieldDefinition
         {
             Id = Guid.NewGuid(),
@@ -74,13 +82,64 @@ public class FormConfigController : ControllerBase
             IsRequired = request.IsRequired,
             IsArray = request.IsArray,
             Description = request.Description,
-            TargetEntityCode = request.TargetEntityCode,
             SortOrder = (_context.AppFieldDefinitions.Where(f => f.AppDefinitionId == request.AppDefinitionId).Max(f => (int?)f.SortOrder) ?? 0) + 1
         };
+
+        if (request.DataType == FieldDataType.EntityLink)
+        {
+            field.TargetEntityCode = request.TargetEntityCode?.Trim();
+            field.SetSelectOptions(null);
+        }
+        else if (request.DataType == FieldDataType.Select)
+        {
+            field.TargetEntityCode = null;
+            field.SetSelectOptions(request.SelectOptions);
+        }
+        else
+        {
+            field.TargetEntityCode = null;
+            field.SetSelectOptions(null);
+        }
 
         _context.AppFieldDefinitions.Add(field);
         await _context.SaveChangesAsync();
         return Ok(new { success = true, id = field.Id });
+    }
+
+    [HttpPost]
+    public async Task<IActionResult> UpdateField([FromBody] UpdateFieldRequest request)
+    {
+        var field = await _context.AppFieldDefinitions.FindAsync(request.Id);
+        if (field == null) return NotFound();
+
+        var validationError = ValidateFieldConfiguration(request.DataType, request.TargetEntityCode, request.SelectOptions);
+        if (!string.IsNullOrWhiteSpace(validationError))
+            return BadRequest(validationError);
+
+        field.Label = request.Label;
+        field.Description = request.Description;
+        field.DataType = request.DataType;
+        field.IsRequired = request.IsRequired;
+        field.IsArray = request.IsArray;
+
+        if (request.DataType == FieldDataType.EntityLink)
+        {
+            field.TargetEntityCode = request.TargetEntityCode?.Trim();
+            field.SetSelectOptions(null);
+        }
+        else if (request.DataType == FieldDataType.Select)
+        {
+            field.TargetEntityCode = null;
+            field.SetSelectOptions(request.SelectOptions);
+        }
+        else
+        {
+            field.TargetEntityCode = null;
+            field.SetSelectOptions(null);
+        }
+
+        await _context.SaveChangesAsync();
+        return Ok(new { success = true });
     }
 
     [HttpPost]
@@ -331,6 +390,31 @@ public class FormConfigController : ControllerBase
     private static string BuildNameOnlyLayout(Guid nameFieldId)
     {
         return $"{{\"nodes\":[{{\"type\":\"field\",\"FieldId\":\"{nameFieldId}\"}}]}}";
+    }
+
+    private static string? ValidateFieldConfiguration(
+        FieldDataType dataType,
+        string? targetEntityCode,
+        IEnumerable<FieldSelectOption>? selectOptions)
+    {
+        if (dataType == FieldDataType.EntityLink && string.IsNullOrWhiteSpace(targetEntityCode))
+            return "Для поля-связи нужно выбрать целевую сущность.";
+
+        if (dataType != FieldDataType.Select)
+            return null;
+
+        var normalizedLabels = (selectOptions ?? Enumerable.Empty<FieldSelectOption>())
+            .Where(option => !string.IsNullOrWhiteSpace(option.Label))
+            .Select(option => option.Label.Trim())
+            .ToList();
+
+        if (normalizedLabels.Count == 0)
+            return "Для выпадающего списка нужно добавить хотя бы один пункт.";
+
+        if (normalizedLabels.Count != normalizedLabels.Distinct(StringComparer.OrdinalIgnoreCase).Count())
+            return "Пункты выпадающего списка не должны дублироваться.";
+
+        return null;
     }
 
     #endregion

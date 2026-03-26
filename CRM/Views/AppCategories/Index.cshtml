@@ -117,15 +117,15 @@
                                     }
                                 </td>
                                 <td class="text-end pe-4">
-                                    <div class="btn-group btn-group-sm shadow-sm">
+                                    <div class="btn-group btn-group-sm shadow-sm crm-table-actions">
                                         @if (!item.IsSystem)
                                         {
-                                            <a asp-action="Edit" asp-route-id="@item.Id" crm-button variant="white" icon="pencil-fill" icon-class="text-primary" class="border" title="Редактировать"></a>
-                                            <a asp-action="Delete" asp-route-id="@item.Id" crm-button variant="white" icon="trash-fill" icon-class="text-danger" class="border" title="Удалить"></a>
+                                            <a asp-action="Edit" asp-route-id="@item.Id" crm-button variant="white" icon="pencil-fill" icon-class="text-primary" class="border crm-table-action" title="Редактировать"></a>
+                                            <a asp-action="Delete" asp-route-id="@item.Id" crm-button variant="white" icon="trash-fill" icon-class="text-danger" class="border crm-table-action" title="Удалить"></a>
                                         }
                                         else
                                         {
-                                            <button crm-button variant="white" icon="lock-fill" class="border disabled opacity-50" title="Системный раздел защищен"></button>
+                                            <button crm-button variant="white" icon="lock-fill" class="border disabled opacity-50 crm-table-action" title="Системный раздел защищен"></button>
                                         }
                                     </div>
                                 </td>

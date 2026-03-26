@@ -1,4 +1,4 @@
-﻿@model Core.Entities.CRM.ServiceItem
+﻿@model Core.DTOs.CRM.ServiceItemFormDto
 @{ ViewData["Title"] = "Редактирование услуги"; }
 
 <div class="row justify-content-center">
@@ -10,9 +10,8 @@
             <h3 class="fw-bold text-secondary mb-0"><i class="bi bi-pencil-square me-2"></i>Редактирование: @Model.Name</h3>
         </div>
 
-        <form asp-action="Edit" method="post">
+        <form asp-action="Edit" method="post" enctype="multipart/form-data">
             <input type="hidden" asp-for="Id" />
-            <input type="hidden" asp-for="EntityCode" />
 
             <div class="card shadow-sm border-0 mb-4">
                 <div class="card-body p-4">

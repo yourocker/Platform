@@ -48,14 +48,14 @@
                         </div>
                         
                         @* Действия *@
-                        <div class="btn-group btn-group-sm shadow-sm">
+                        <div class="btn-group btn-group-sm shadow-sm crm-table-actions">
                             <a asp-action="Edit" asp-route-id="@dept.Id" 
                                crm-button variant="white" icon="pencil-fill" icon-class="text-primary" 
-                               class="border" title="Редактировать"></a>
+                               class="border crm-table-action" title="Редактировать"></a>
                                
                             <a asp-action="Delete" asp-route-id="@dept.Id" 
                                crm-button variant="white" icon="trash-fill" icon-class="text-danger" 
-                               class="border" title="Удалить"></a>
+                               class="border crm-table-action" title="Удалить"></a>
                         </div>
                     </div>
                     

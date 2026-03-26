@@ -1,0 +1,142 @@
+@using CRM.ViewModels.Schedule
+@model BookingDetailsViewModel
+
+@{
+    var booking = Model.Booking;
+}
+
+<div class="row g-4">
+    <div class="col-lg-6">
+        <div class="booking-details-section">
+            <div class="booking-details-section-title">Основные параметры</div>
+            <dl class="booking-details-grid">
+                <dt>Исполнитель</dt>
+                <dd>@(booking.PerformerEmployee?.FullName ?? "—")</dd>
+
+                <dt>Ресурс</dt>
+                <dd>@(booking.Resource?.Name ?? "—")</dd>
+
+                <dt>Кто записал</dt>
+                <dd>@(booking.CreatedByEmployee?.FullName ?? "—")</dd>
+
+                <dt>Начало</dt>
+                <dd>@booking.StartTime.ToString("dd.MM.yyyy HH:mm")</dd>
+
+                <dt>Окончание</dt>
+                <dd>@booking.EndTime.ToString("dd.MM.yyyy HH:mm")</dd>
+
+                <dt>Сумма</dt>
+                <dd>@booking.Amount.ToString("0.##") ₽</dd>
+
+                <dt>Комментарий</dt>
+                <dd>@(string.IsNullOrWhiteSpace(booking.Comment) ? "—" : booking.Comment)</dd>
+
+                <dt>Обоснование скидки</dt>
+                <dd>@(string.IsNullOrWhiteSpace(booking.DiscountReason) ? "—" : booking.DiscountReason)</dd>
+            </dl>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="booking-details-section">
+            <div class="booking-details-section-title">Контакты</div>
+            @if (booking.BookingContacts.Any())
+            {
+                <div class="booking-details-tags">
+                    @foreach (var contact in booking.BookingContacts.OrderBy(x => x.Contact?.FullName ?? string.Empty))
+                    {
+                        <span class="booking-details-tag">
+                            <i class="bi bi-person"></i>
+                            @(contact.Contact?.FullName ?? contact.ContactId.ToString())
+                        </span>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="booking-details-empty">Контакты не указаны</div>
+            }
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mt-1">
+    <div class="col-12">
+        <div class="booking-details-section">
+            <div class="booking-details-section-title">Услуги и товары</div>
+            @if (booking.BookingItems.Any())
+            {
+                <div class="table-responsive">
+                    <table class="table table-sm align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Наименование</th>
+                                <th class="text-end">Цена</th>
+                                <th class="text-end">Кол-во</th>
+                                <th class="text-end">Скидка</th>
+                                <th class="text-end">Сумма</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in booking.BookingItems.OrderBy(x => x.ServiceItem?.Name ?? string.Empty))
+                            {
+                                <tr>
+                                    <td>@(item.ServiceItem?.Name ?? item.ServiceItemId.ToString())</td>
+                                    <td class="text-end">@item.UnitPrice.ToString("0.##") ₽</td>
+                                    <td class="text-end">@item.Quantity.ToString("0.##")</td>
+                                    <td class="text-end">@item.DiscountAmount.ToString("0.##") ₽</td>
+                                    <td class="text-end">@item.LineTotal.ToString("0.##") ₽</td>
+                                </tr>
+                            }
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <th colspan="4" class="text-end">Итого</th>
+                                <th class="text-end">@booking.Amount.ToString("0.##") ₽</th>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+            }
+            else
+            {
+                <div class="booking-details-empty">Услуги и товары не выбраны</div>
+            }
+        </div>
+    </div>
+</div>
+
+@if (Model.CustomFields.Any())
+{
+    <div class="row g-4 mt-1">
+        <div class="col-12">
+            <div class="booking-details-section">
+                <div class="booking-details-section-title">Пользовательские поля</div>
+                <div class="booking-details-custom-list">
+                    @foreach (var field in Model.CustomFields)
+                    {
+                        <div class="booking-details-custom-item">
+                            <div class="booking-details-custom-label">@field.Label</div>
+                            <div class="booking-details-custom-values">
+                                @foreach (var value in field.Values)
+                                {
+                                    if (!string.IsNullOrWhiteSpace(value.Url))
+                                    {
+                                        <a href="@value.Url" target="_blank" class="booking-details-tag text-decoration-none">
+                                            <i class="bi bi-paperclip"></i>
+                                            @value.Text
+                                        </a>
+                                    }
+                                    else
+                                    {
+                                        <span class="booking-details-tag">@value.Text</span>
+                                    }
+                                }
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}

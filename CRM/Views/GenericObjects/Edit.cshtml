@@ -1,4 +1,4 @@
-﻿@model Core.Entities.Platform.GenericObject
+﻿@model Core.DTOs.Platform.GenericObjectDto
 @{ ViewData["Title"] = "Редактирование: " + Model.Name; }
 
 <div class="container-fluid px-4">
@@ -9,7 +9,6 @@
             <form asp-action="Edit" method="post" enctype="multipart/form-data">
                 <div asp-validation-summary="ModelOnly" class="text-danger mb-3"></div>
                 <input type="hidden" asp-for="Id" />
-                <input type="hidden" asp-for="EntityCode" />
 
                 <div crm-card>
                     <div class="card-header bg-transparent border-0 pt-4 px-4">
@@ -30,7 +29,7 @@
 
                 <div class="mt-4 pb-5 d-flex gap-2">
                     <button type="submit" crm-button variant="primary" icon="save" class="px-5 shadow">Сохранить изменения</button>
-                    <a href="/Data/@Model.EntityCode" crm-button variant="outline-secondary">Назад к списку</a>
+                    <a href="/Data/@ViewBag.EntityCode" crm-button variant="outline-secondary">Назад к списку</a>
                 </div>
             </form>
         </div>

@@ -48,6 +48,7 @@ namespace Core.Data
         public DbSet<TaskComment> TaskComments { get; set; }
         public DbSet<TaskEntityRelation> TaskEntityRelations { get; set; }
         public DbSet<OutboxEvent> OutboxEvents { get; set; }
+        public DbSet<UserNotification> UserNotifications { get; set; }
         
         // --- Рабочие графики ---
         public DbSet<CompanyWorkMode> CompanyWorkModes { get; set; }
@@ -162,6 +163,17 @@ namespace Core.Data
                     .WithMany()
                     .HasForeignKey(t => t.AssigneeId)
                     .OnDelete(DeleteBehavior.Restrict);
+            });
+
+            modelBuilder.Entity<UserNotification>(entity =>
+            {
+                entity.ToTable("UserNotifications");
+                entity.HasKey(e => e.Id);
+                entity.HasIndex(e => e.UserId);
+                entity.HasIndex(e => e.SourceEventId).IsUnique();
+                entity.Property(e => e.Title).HasMaxLength(256).IsRequired();
+                entity.Property(e => e.Message).HasMaxLength(2000).IsRequired();
+                entity.Property(e => e.Url).HasMaxLength(1024).IsRequired();
             });
 
             // 6. Оргструктура

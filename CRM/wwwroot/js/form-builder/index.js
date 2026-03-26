@@ -1,6 +1,6 @@
-﻿import { fieldManager } from './field-manager.js?v=20260319a';
-import { layoutDesigner } from './designer.js?v=20260319a';
-import { FormApiClient } from './api.js?v=20260319a';
+﻿import { fieldManager } from './field-manager.js?v=20260325b';
+import { layoutDesigner } from './designer.js?v=20260325b';
+import { FormApiClient } from './api.js?v=20260325b';
 
 const EMPTY_LAYOUT = '{"nodes":[]}';
 const MODE_KEYS = ['Create', 'Edit', 'View'];

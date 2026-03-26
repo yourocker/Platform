@@ -58,6 +58,19 @@ namespace CRM.Controllers
                 lookupData[field.SystemName] = await LoadEntityLinkLookupItemsAsync(field.TargetEntityCode!);
             }
 
+            foreach (var field in (fields ?? Enumerable.Empty<AppFieldDefinition>())
+                         .Where(f => f.DataType == FieldDataType.Select))
+            {
+                lookupData[field.SystemName] = field.GetSelectOptions()
+                    .OrderBy(option => option.SortOrder)
+                    .Select(option => new SelectListItem
+                    {
+                        Value = option.Value,
+                        Text = option.Label
+                    })
+                    .ToList();
+            }
+
             return lookupData;
         }
 
@@ -240,6 +253,11 @@ namespace CRM.Controllers
         protected ContentResult BuildModalCreatedContentResult(string entityCode, Guid id, string? name)
         {
             return ModalRequestHelper.BuildEntityCreatedContent(entityCode, id, name);
+        }
+
+        protected ContentResult BuildModalUpdatedContentResult(string entityCode, Guid id, string? name)
+        {
+            return ModalRequestHelper.BuildEntityUpdatedContent(entityCode, id, name);
         }
 
         protected void DeletePhysicalFile(string webPath)
@@ -525,6 +543,17 @@ namespace CRM.Controllers
                     return val.Contains("true", StringComparison.OrdinalIgnoreCase);
                 case FieldDataType.EntityLink:
                     return val;
+                case FieldDataType.Select:
+                    var availableValues = def.GetSelectOptions()
+                        .Select(option => option.Value)
+                        .ToHashSet(StringComparer.Ordinal);
+                    if (availableValues.Contains(val))
+                    {
+                        return val;
+                    }
+
+                    ModelState.AddModelError(formKey, $"Значение '{val}' отсутствует в списке поля '{def.Label}'.");
+                    throw new FormatException();
                 default:
                     return val;
             }

@@ -1,11 +1,19 @@
 (function () {
     const MODAL_QUERY_KEY = 'modal';
+    const MODAL_SIZE_PRESETS = {
+        sm: { width: 560, height: 360 },
+        md: { width: 760, height: 440 },
+        lg: { width: 960, height: 620 },
+        xl: { width: 1160, height: 760 }
+    };
     const MANAGED_PATH_PATTERNS = [
         /\/Create$/i,
         /\/Edit\/[^/]+$/i,
         /\/Details\/[^/]+$/i,
         /\/Delete\/[^/]+$/i
     ];
+    const SAVE_SUCCESS_MESSAGE = 'Изменения сохранены';
+    const SAVE_SUCCESS_DURATION_MS = 1000;
 
     function toUrl(input) {
         try {
@@ -124,6 +132,26 @@
         return fraction;
     }
 
+    function normalizeModalSize(value) {
+        const normalized = String(value || '').trim().toLowerCase();
+        return Object.prototype.hasOwnProperty.call(MODAL_SIZE_PRESETS, normalized) ? normalized : null;
+    }
+
+    function inferActionSize(input) {
+        const url = toUrl(input);
+        const pathname = url?.pathname.replace(/\/+$/, '') ?? '';
+
+        if (/\/Delete\/[^/]+$/i.test(pathname)) {
+            return 'md';
+        }
+
+        if (/\/Details\/[^/]+$/i.test(pathname)) {
+            return 'xl';
+        }
+
+        return 'lg';
+    }
+
     function initModalHost() {
         const modalEl = document.getElementById('globalCreateModal');
         const modalDialog = document.getElementById('globalCreateModalDialog');
@@ -150,24 +178,17 @@
             modalTitle.append(safeTitle);
         }
 
-        function resetSizing() {
-            modalDialog.style.removeProperty('--crm-modal-dialog-width');
-            modalFrame.style.height = '520px';
+        function applySizing(size) {
+            const normalizedSize = normalizeModalSize(size) || 'lg';
+            const preset = MODAL_SIZE_PRESETS[normalizedSize];
+
+            modalDialog.dataset.crmModalSize = normalizedSize;
+            modalDialog.style.setProperty('--crm-modal-dialog-width', `${preset.width}px`);
+            modalFrame.style.height = `${preset.height}px`;
         }
 
-        function applyLayout(data) {
-            const rawWidth = Number.parseFloat(data?.width);
-            const rawHeight = Number.parseFloat(data?.height);
-            const width = Number.isFinite(rawWidth) ? clamp(rawWidth, 420, Math.max(window.innerWidth - 32, 420)) : null;
-            const height = Number.isFinite(rawHeight) ? clamp(rawHeight, 320, Math.max(window.innerHeight - 140, 320)) : null;
-
-            if (width) {
-                modalDialog.style.setProperty('--crm-modal-dialog-width', `${Math.round(width)}px`);
-            }
-
-            if (height) {
-                modalFrame.style.height = `${Math.round(height)}px`;
-            }
+        function resetSizing() {
+            applySizing('lg');
         }
 
         function open(input, options) {
@@ -178,9 +199,10 @@
 
             const openOptions = options && typeof options === 'object' ? { ...options } : {};
             const actionMeta = inferActionMeta(url, openOptions.title, openOptions.iconClass);
+            const size = normalizeModalSize(openOptions.size) || inferActionSize(url);
 
             state.options = openOptions;
-            resetSizing();
+            applySizing(size);
             setTitle(actionMeta.title, actionMeta.iconClass);
             modalFrame.src = ensureModalFlag(url);
             modal.show();
@@ -222,6 +244,55 @@
             if (!handled) {
                 reloadParent();
             }
+        }
+
+        function ensureSaveSuccessToast() {
+            let toast = document.getElementById('crmModalSaveSuccessToast');
+            if (toast) {
+                return toast;
+            }
+
+            toast = document.createElement('div');
+            toast.id = 'crmModalSaveSuccessToast';
+            toast.className = 'crm-save-success-toast';
+            toast.setAttribute('aria-live', 'polite');
+            toast.setAttribute('aria-atomic', 'true');
+            toast.innerHTML = `
+                <div class="crm-save-success-toast__icon" aria-hidden="true">
+                    <i class="bi bi-check-lg"></i>
+                </div>
+                <div class="crm-save-success-toast__text">${SAVE_SUCCESS_MESSAGE}</div>
+            `;
+
+            document.body.appendChild(toast);
+            return toast;
+        }
+
+        function showSaveSuccessToast() {
+            const toast = ensureSaveSuccessToast();
+            toast.classList.remove('is-visible');
+
+            window.requestAnimationFrame(() => {
+                toast.classList.add('is-visible');
+            });
+
+            window.clearTimeout(showSaveSuccessToast.hideTimer);
+            showSaveSuccessToast.hideTimer = window.setTimeout(() => {
+                toast.classList.remove('is-visible');
+            }, SAVE_SUCCESS_DURATION_MS);
+        }
+
+        function handleEntityUpdated(data) {
+            if (typeof state.options?.onEntityUpdated === 'function') {
+                state.options.onEntityUpdated(data);
+            }
+
+            close();
+            showSaveSuccessToast();
+
+            window.setTimeout(() => {
+                reloadParent();
+            }, SAVE_SUCCESS_DURATION_MS);
         }
 
         function handleNavigation(data) {
@@ -292,14 +363,17 @@
                 case 'crm-modal-close':
                     close();
                     return;
-                case 'crm-modal-layout':
-                    applyLayout(data);
+                case 'crm-modal-config':
+                    applySizing(data.size);
                     return;
                 case 'crm-modal-title':
                     setTitle(data.title, data.iconClass);
                     return;
                 case 'crm-entity-created':
                     handleEntityCreated(data);
+                    return;
+                case 'crm-entity-updated':
+                    handleEntityUpdated(data);
                     return;
                 case 'crm-modal-navigate':
                     handleNavigation(data);
@@ -376,62 +450,13 @@
                    Boolean(link.querySelector('.bi-arrow-left, .bi-arrow-left-short, .bi-x-lg, .bi-x'));
         }
 
-        function detectPreferredWidth() {
-            const explicitWidth = Number.parseFloat(document.body.dataset.crmModalWidth || '');
-            if (Number.isFinite(explicitWidth) && explicitWidth > 0) {
-                return explicitWidth;
+        function detectModalSize() {
+            const explicitSize = normalizeModalSize(document.body.dataset.crmModalSize);
+            if (explicitSize) {
+                return explicitSize;
             }
 
-            const topLevelRows = Array.from(document.querySelectorAll(
-                'main > .container-fluid > .row, ' +
-                'main > .container > .row, ' +
-                'main > .container-fluid > form > .row, ' +
-                'main > .container > form > .row, ' +
-                'main > form > .row'
-            )).filter(element => element instanceof HTMLElement && element.offsetParent !== null);
-
-            const gridFraction = topLevelRows.reduce((maxFraction, row) => {
-                const rowFraction = Array.from(row.children)
-                    .filter(child => child instanceof HTMLElement && child.offsetParent !== null)
-                    .reduce((sum, child) => {
-                        return sum + parseBootstrapColumnFraction(child.className);
-                    }, 0);
-
-                return Math.max(maxFraction, Math.min(rowFraction, 1));
-            }, 0);
-
-            if (gridFraction > 0) {
-                return Math.round(1320 * gridFraction + 64);
-            }
-
-            const forms = Array.from(document.querySelectorAll('main form'))
-                .filter(element => element instanceof HTMLElement && element.offsetParent !== null);
-            const formWidth = forms.reduce((maxWidth, form) => Math.max(maxWidth, form.scrollWidth + 48), 0);
-            if (formWidth > 0) {
-                return formWidth;
-            }
-
-            const cards = Array.from(document.querySelectorAll('main .card'))
-                .filter(element => element instanceof HTMLElement && element.offsetParent !== null);
-            const cardWidth = cards.reduce((maxWidth, card) => {
-                return Math.max(maxWidth, Math.ceil(card.getBoundingClientRect().width + 48));
-            }, 0);
-
-            return cardWidth || 960;
-        }
-
-        function detectPreferredHeight() {
-            const body = document.body;
-            const root = document.documentElement;
-            const main = document.querySelector('main');
-
-            return Math.max(
-                body.scrollHeight,
-                body.offsetHeight,
-                root.scrollHeight,
-                root.offsetHeight,
-                main?.scrollHeight || 0
-            );
+            return inferActionSize(window.location.href);
         }
 
         function detectTitle() {
@@ -466,19 +491,10 @@
             };
         }
 
-        let layoutFrame = null;
-        function queueLayoutUpdate() {
-            if (layoutFrame !== null) {
-                cancelAnimationFrame(layoutFrame);
-            }
-
-            layoutFrame = requestAnimationFrame(() => {
-                layoutFrame = null;
-                postToParent({
-                    type: 'crm-modal-layout',
-                    width: detectPreferredWidth(),
-                    height: detectPreferredHeight()
-                });
+        function publishConfig() {
+            postToParent({
+                type: 'crm-modal-config',
+                size: detectModalSize()
             });
         }
 
@@ -524,26 +540,8 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             ensureHiddenModalInputs();
+            publishConfig();
             publishTitle();
-            queueLayoutUpdate();
-
-            if (window.ResizeObserver) {
-                const resizeObserver = new ResizeObserver(() => queueLayoutUpdate());
-                resizeObserver.observe(document.body);
-                resizeObserver.observe(document.documentElement);
-            }
-
-            if (window.MutationObserver) {
-                const mutationObserver = new MutationObserver(() => queueLayoutUpdate());
-                mutationObserver.observe(document.body, {
-                    childList: true,
-                    subtree: true,
-                    attributes: true
-                });
-            }
-
-            window.addEventListener('load', queueLayoutUpdate);
-            window.addEventListener('resize', queueLayoutUpdate);
         });
     }
 

@@ -182,7 +182,16 @@ public class AppDefinitionsController(AppDbContext context) : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> AddField(Guid appDefinitionId, string label, string systemName, FieldDataType dataType, bool isRequired, bool isArray, string? targetEntityCode)
+    public async Task<IActionResult> AddField(
+        Guid appDefinitionId,
+        string label,
+        string systemName,
+        FieldDataType dataType,
+        bool isRequired,
+        bool isArray,
+        string? targetEntityCode,
+        List<string>? optionLabels,
+        List<string>? optionValues)
     {
         var app = await _context.AppDefinitions
             .Include(a => a.Fields)
@@ -191,6 +200,12 @@ public class AppDefinitionsController(AppDbContext context) : Controller
         if (app == null) return NotFound();
 
         var normalizedSystemName = systemName?.Trim().ToLower();
+
+        if (string.IsNullOrWhiteSpace(label))
+        {
+            TempData["Error"] = "Название поля не может быть пустым.";
+            return RedirectToAction(nameof(Fields), new { id = appDefinitionId });
+        }
 
         if (string.IsNullOrEmpty(normalizedSystemName))
         {
@@ -219,14 +234,25 @@ public class AppDefinitionsController(AppDbContext context) : Controller
         {
             Id = Guid.NewGuid(),
             AppDefinitionId = appDefinitionId,
-            Label = label,
+            Label = label.Trim(),
             SystemName = normalizedSystemName,
-            DataType = dataType,
-            IsRequired = isRequired,
-            IsArray = isArray,
-            SortOrder = nextSortOrder,
-            TargetEntityCode = targetEntityCode
+            SortOrder = nextSortOrder
         };
+
+        var configurationError = ApplyFieldConfiguration(
+            newField,
+            dataType,
+            isRequired,
+            isArray,
+            targetEntityCode,
+            optionLabels,
+            optionValues);
+
+        if (!string.IsNullOrWhiteSpace(configurationError))
+        {
+            TempData["Error"] = configurationError;
+            return RedirectToAction(nameof(Fields), new { id = appDefinitionId });
+        }
 
         _context.AppFieldDefinitions.Add(newField);
         await _context.SaveChangesAsync();
@@ -236,10 +262,58 @@ public class AppDefinitionsController(AppDbContext context) : Controller
 
     [HttpPost]
     [ValidateAntiForgeryToken]
+    public async Task<IActionResult> EditField(
+        Guid id,
+        string label,
+        FieldDataType dataType,
+        bool isRequired,
+        bool isArray,
+        string? targetEntityCode,
+        List<string>? optionLabels,
+        List<string>? optionValues)
+    {
+        var field = await _context.AppFieldDefinitions.FindAsync(id);
+        if (field == null) return NotFound();
+
+        if (string.IsNullOrWhiteSpace(label))
+        {
+            TempData["Error"] = "Название поля не может быть пустым.";
+            return RedirectToAction(nameof(Fields), new { id = field.AppDefinitionId });
+        }
+
+        field.Label = label.Trim();
+
+        var configurationError = ApplyFieldConfiguration(
+            field,
+            dataType,
+            isRequired,
+            isArray,
+            targetEntityCode,
+            optionLabels,
+            optionValues);
+
+        if (!string.IsNullOrWhiteSpace(configurationError))
+        {
+            TempData["Error"] = configurationError;
+            return RedirectToAction(nameof(Fields), new { id = field.AppDefinitionId });
+        }
+
+        await _context.SaveChangesAsync();
+        return RedirectToAction(nameof(Fields), new { id = field.AppDefinitionId });
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
     public async Task<IActionResult> DeleteField(Guid id)
     {
         var field = await _context.AppFieldDefinitions.FindAsync(id);
         if (field == null) return NotFound();
+
+        if (field.IsSystem)
+        {
+            TempData["Error"] = "Системные поля удалять нельзя.";
+            return RedirectToAction(nameof(Fields), new { id = field.AppDefinitionId });
+        }
 
         var appId = field.AppDefinitionId;
         _context.AppFieldDefinitions.Remove(field);
@@ -319,6 +393,83 @@ public class AppDefinitionsController(AppDbContext context) : Controller
         return $"{{\"nodes\":[{{\"type\":\"field\",\"FieldId\":\"{nameFieldId}\"}}]}}";
     }
 
+    private static string? ApplyFieldConfiguration(
+        AppFieldDefinition field,
+        FieldDataType dataType,
+        bool isRequired,
+        bool isArray,
+        string? targetEntityCode,
+        IReadOnlyList<string>? optionLabels,
+        IReadOnlyList<string>? optionValues)
+    {
+        field.DataType = dataType;
+        field.IsRequired = isRequired;
+        field.IsArray = isArray;
+
+        if (dataType == FieldDataType.EntityLink)
+        {
+            if (string.IsNullOrWhiteSpace(targetEntityCode))
+            {
+                return "Для поля-связи нужно выбрать целевую сущность.";
+            }
+
+            field.TargetEntityCode = targetEntityCode.Trim();
+            field.SetSelectOptions(null);
+            return null;
+        }
+
+        field.TargetEntityCode = null;
+
+        if (dataType != FieldDataType.Select)
+        {
+            field.SetSelectOptions(null);
+            return null;
+        }
+
+        var options = BuildSelectOptions(optionLabels, optionValues);
+        if (options.Count == 0)
+        {
+            return "Для выпадающего списка нужно добавить хотя бы один пункт.";
+        }
+
+        if (options.Count != options.Select(option => option.Label).Distinct(StringComparer.OrdinalIgnoreCase).Count())
+        {
+            return "Пункты выпадающего списка не должны дублироваться.";
+        }
+
+        field.SetSelectOptions(options);
+        return null;
+    }
+
+    private static List<FieldSelectOption> BuildSelectOptions(
+        IReadOnlyList<string>? optionLabels,
+        IReadOnlyList<string>? optionValues)
+    {
+        var labels = optionLabels ?? Array.Empty<string>();
+        var values = optionValues ?? Array.Empty<string>();
+        var maxCount = Math.Max(labels.Count, values.Count);
+        var options = new List<FieldSelectOption>();
+
+        for (var i = 0; i < maxCount; i++)
+        {
+            var label = i < labels.Count ? labels[i]?.Trim() : null;
+            if (string.IsNullOrWhiteSpace(label))
+            {
+                continue;
+            }
+
+            var value = i < values.Count ? values[i]?.Trim() : null;
+            options.Add(new FieldSelectOption
+            {
+                Value = string.IsNullOrWhiteSpace(value) ? Guid.NewGuid().ToString("N") : value,
+                Label = label,
+                SortOrder = options.Count
+            });
+        }
+
+        return options;
+    }
+
     private ContentResult BuildModalCreatedContentResult(string entityCode, Guid id, string? name)
     {
         return ModalRequestHelper.BuildEntityCreatedContent(entityCode, id, name);
@@ -362,6 +513,11 @@ public class AppDefinitionsController(AppDbContext context) : Controller
             IsDefault = f.IsDefault,
             LayoutJson = string.IsNullOrWhiteSpace(f.Layout) ? "{\"nodes\":[]}" : f.Layout
         }).ToList();
+
+        ViewBag.AllDefinitions = await _context.AppDefinitions
+            .AsNoTracking()
+            .OrderBy(definition => definition.Name)
+            .ToListAsync();
 
         // Возвращаем только modal-версию конструктора (single source of truth)
         return PartialView("FormBuilderModal", viewModel);

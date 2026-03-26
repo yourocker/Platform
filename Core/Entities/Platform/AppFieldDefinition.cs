@@ -1,18 +1,33 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using System.Text.Json;
 
 namespace Core.Entities.Platform;
 
 public enum FieldDataType
 {
-    String,
-    Text,
-    Number,
-    Money,
-    DateTime,
-    Date,
-    Boolean,
-    EntityLink,
-    File
+    String = 0,
+    Text = 1,
+    Number = 2,
+    Money = 3,
+    DateTime = 4,
+    Date = 5,
+    Boolean = 6,
+    EntityLink = 7,
+    File = 8,
+    Select = 9
+}
+
+public class FieldSelectOption
+{
+    [Required]
+    [MaxLength(100)]
+    public string Value { get; set; } = string.Empty;
+
+    [Required]
+    [MaxLength(255)]
+    public string Label { get; set; } = string.Empty;
+
+    public int SortOrder { get; set; }
 }
 
 public class AppFieldDefinition
@@ -60,6 +75,47 @@ public class AppFieldDefinition
     
     [MaxLength(50)]
     public string? TargetEntityCode { get; set; }
+
+    public string? OptionsJson { get; set; }
+
+    public List<FieldSelectOption> GetSelectOptions()
+    {
+        if (string.IsNullOrWhiteSpace(OptionsJson))
+        {
+            return new List<FieldSelectOption>();
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<List<FieldSelectOption>>(OptionsJson)
+                   ?.Where(option => !string.IsNullOrWhiteSpace(option.Label))
+                   .OrderBy(option => option.SortOrder)
+                   .ThenBy(option => option.Label)
+                   .ToList()
+                   ?? new List<FieldSelectOption>();
+        }
+        catch
+        {
+            return new List<FieldSelectOption>();
+        }
+    }
+
+    public void SetSelectOptions(IEnumerable<FieldSelectOption>? options)
+    {
+        var normalizedOptions = (options ?? Enumerable.Empty<FieldSelectOption>())
+            .Where(option => !string.IsNullOrWhiteSpace(option.Label))
+            .Select((option, index) => new FieldSelectOption
+            {
+                Value = string.IsNullOrWhiteSpace(option.Value) ? Guid.NewGuid().ToString("N") : option.Value.Trim(),
+                Label = option.Label.Trim(),
+                SortOrder = index
+            })
+            .ToList();
+
+        OptionsJson = normalizedOptions.Count == 0
+            ? null
+            : JsonSerializer.Serialize(normalizedOptions);
+    }
 }
 
 public static class FieldDataTypeExtensions
@@ -75,6 +131,7 @@ public static class FieldDataTypeExtensions
         FieldDataType.Boolean => "Логическое (Да/Нет)",
         FieldDataType.EntityLink => "Связь с объектом",
         FieldDataType.File => "Файл",
+        FieldDataType.Select => "Выпадающий список",
         _ => type.ToString()
     };
     

@@ -29,8 +29,22 @@ namespace CRM.TagHelpers
         public override void Process(TagHelperContext context, TagHelperOutput output)
         {
             var settings = _styleService.GetSettings();
-            
-            output.Attributes.SetAttribute("class", $"btn btn-{Variant} shadow-sm");
+
+            var existingClass = output.Attributes["class"]?.Value?.ToString();
+            var classParts = new List<string>();
+
+            if (!string.IsNullOrWhiteSpace(existingClass))
+            {
+                classParts.Add(existingClass.Trim());
+            }
+
+            classParts.Add("btn");
+            classParts.Add($"btn-{Variant}");
+            classParts.Add("shadow-sm");
+
+            output.Attributes.SetAttribute("class", string.Join(" ", classParts
+                .Where(part => !string.IsNullOrWhiteSpace(part))
+                .Distinct(StringComparer.OrdinalIgnoreCase)));
 
             // Применяем PrimaryColor из БД для кнопок типа primary
             if (Variant == "primary")

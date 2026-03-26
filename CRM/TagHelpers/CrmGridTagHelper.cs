@@ -3,7 +3,9 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using CRM.Infrastructure;
 using Core.DTOs.Interfaces;
+using Core.Entities.Platform;
 using Core.UI.Grid;
 using Microsoft.AspNetCore.Html;
 using Microsoft.AspNetCore.Mvc;
@@ -54,6 +56,10 @@ namespace CRM.TagHelpers
             var columns = columnsList.Cast<dynamic>().ToList();
             var urlHelper = _urlHelperFactory.GetUrlHelper(ViewContext);
             var request = ViewContext.HttpContext.Request;
+            var dynamicFields = (ViewContext.ViewData["DynamicFields"] as IEnumerable<AppFieldDefinition> ?? Enumerable.Empty<AppFieldDefinition>())
+                .ToDictionary(field => field.SystemName, StringComparer.OrdinalIgnoreCase);
+            var lookupData = ViewContext.ViewData["LookupData"] as Dictionary<string, List<SelectListItem>>
+                             ?? new Dictionary<string, List<SelectListItem>>();
             
             string currentSort = request.Query["sortOrder"].ToString() ?? "";
 
@@ -158,26 +164,28 @@ namespace CRM.TagHelpers
                     if (!visible) td.Attributes.Add("style", "display:none");
                     if (columns.IndexOf(col) == 0) td.AddCssClass("ps-4");
 
-                    if (type == GridColumnType.Actions)
-                    {
-                        td.AddCssClass("text-end pe-4 no-row-click");
-                        if (idVal != null) td.InnerHtml.AppendHtml(RenderActions(urlHelper, idVal));
-                    }
-                    else
-                    {
-                        object? val = null;
-                        if (type == GridColumnType.Dynamic)
+                        if (type == GridColumnType.Actions)
                         {
-                            string key = (string)col.DynamicKey;
-                            if (item is IDynamicValues dynItem && dynItem.DynamicValues != null && dynItem.DynamicValues.TryGetValue(key, out var dVal))
-                                val = dVal;
-                        }
+                            td.AddCssClass("text-end pe-4 no-row-click");
+                            if (idVal != null) td.InnerHtml.AppendHtml(RenderActions(urlHelper, idVal));
+                    }
                         else
                         {
-                            var provider = col.ValueProvider as Delegate;
-                            if (provider != null) val = provider.DynamicInvoke(item);
-                        }
-                        td.InnerHtml.AppendHtml(RenderValue(val, type));
+                            object? val = null;
+                            AppFieldDefinition? dynamicField = null;
+                            if (type == GridColumnType.Dynamic)
+                            {
+                                string key = (string)col.DynamicKey;
+                                dynamicFields.TryGetValue(key, out dynamicField);
+                                if (item is IDynamicValues dynItem && dynItem.DynamicValues != null && dynItem.DynamicValues.TryGetValue(key, out var dVal))
+                                    val = dVal;
+                            }
+                            else
+                            {
+                                var provider = col.ValueProvider as Delegate;
+                                if (provider != null) val = provider.DynamicInvoke(item);
+                            }
+                        td.InnerHtml.AppendHtml(RenderValue(val, type, dynamicField, lookupData));
                     }
                     tr.InnerHtml.AppendHtml(td);
                 }
@@ -202,26 +210,36 @@ namespace CRM.TagHelpers
             return request.Path + qb.ToQueryString();
         }
 
-        private string RenderValue(object? value, GridColumnType type)
+        private IHtmlContent RenderValue(
+            object? value,
+            GridColumnType type,
+            AppFieldDefinition? dynamicField,
+            IReadOnlyDictionary<string, List<SelectListItem>> lookupData)
         {
-            if (value == null) return "<span class='text-muted small'>—</span>";
+            if (value == null)
+            {
+                return TableCellDisplayFormatter.FormatRawValue(null, dynamicField, lookupData);
+            }
 
             switch (type)
             {
-                case GridColumnType.Text: return value.ToString();
-                case GridColumnType.LinkBold: return $"<div class='fw-bold text-dark'>{value}</div>";
-                case GridColumnType.Link: return $"<span class='text-primary'>{value}</span>";
+                case GridColumnType.Text:
+                case GridColumnType.LinkBold:
+                case GridColumnType.Link:
+                    return TableCellDisplayFormatter.FormatStringCollection(new[] { value.ToString() ?? string.Empty });
                 case GridColumnType.List:
                 case GridColumnType.PhoneList:
-                    if (value is IEnumerable<string> list) return string.Join(", ", list);
-                    return value.ToString();
+                    return value is IEnumerable<string> list
+                        ? TableCellDisplayFormatter.FormatStringCollection(list)
+                        : TableCellDisplayFormatter.FormatStringCollection(new[] { value.ToString() ?? string.Empty });
                 case GridColumnType.EmailList:
-                    if (value is IEnumerable<string> emails) return string.Join(", ", emails); 
-                    return value.ToString();
+                    return value is IEnumerable<string> emails
+                        ? TableCellDisplayFormatter.FormatStringCollection(emails)
+                        : TableCellDisplayFormatter.FormatStringCollection(new[] { value.ToString() ?? string.Empty });
                 case GridColumnType.Dynamic:
-                    if (value is ICollection collection) return $"<span class='badge bg-light text-dark border'>{collection.Count} зап.</span>";
-                    return value.ToString();
-                default: return value.ToString();
+                    return TableCellDisplayFormatter.FormatRawValue(value, dynamicField, lookupData);
+                default:
+                    return TableCellDisplayFormatter.FormatStringCollection(new[] { value.ToString() ?? string.Empty });
             }
         }
 
@@ -229,9 +247,9 @@ namespace CRM.TagHelpers
         {
             var editUrl = url.Action("Edit", new { id });
             var deleteUrl = url.Action("Delete", new { id });
-            string html = $@"<div class='btn-group btn-group-sm shadow-sm crm-hover-actions'>
-                    <a href='{editUrl}' class='btn btn-white border' title='Редактировать'><i class='bi bi-pencil-fill text-primary'></i></a>
-                    <a href='{deleteUrl}' class='btn btn-white border' title='Удалить'><i class='bi bi-trash-fill text-danger'></i></a>
+            string html = $@"<div class='btn-group btn-group-sm shadow-sm crm-hover-actions crm-table-actions'>
+                    <a href='{editUrl}' class='btn btn-white border crm-table-action' title='Редактировать'><i class='bi bi-pencil-fill text-primary'></i></a>
+                    <a href='{deleteUrl}' class='btn btn-white border crm-table-action' title='Удалить'><i class='bi bi-trash-fill text-danger'></i></a>
                 </div>";
             return new HtmlString(html);
         }

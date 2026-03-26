@@ -1,12 +1,13 @@
 ﻿@using Core.Entities.Platform
-@using Newtonsoft.Json
-@using Microsoft.AspNetCore.Html
-@model IEnumerable<Core.Entities.Platform.GenericObject>
+@using CRM.Infrastructure
+@using Microsoft.AspNetCore.Mvc.Rendering
+@model IEnumerable<Core.DTOs.Platform.GenericObjectListDto>
 
 @{
     var definition = ViewBag.Definition as AppDefinition;
     var dynamicFields = ViewBag.DynamicFields as List<AppFieldDefinition> ?? new List<AppFieldDefinition>();
     var namesMap = ViewBag.NamesMap as Dictionary<Guid, string> ?? new Dictionary<Guid, string>();
+    var lookupData = ViewBag.LookupData as Dictionary<string, List<SelectListItem>> ?? new Dictionary<string, List<SelectListItem>>();
     
     ViewData["Title"] = definition?.Name ?? "Объекты";
 
@@ -17,53 +18,6 @@
     int totalPages = ViewBag.TotalPages ?? 1;
     string currentSearch = ViewBag.CurrentSearch;
     var currentFilters = ViewBag.CurrentFilters as Dictionary<string, string> ?? new Dictionary<string, string>();
-}
-
-@functions {
-    string Truncate(string value) {
-        if (string.IsNullOrEmpty(value)) return value;
-        return value.Length <= 25 ? value : value.Substring(0, 25) + "...";
-    }
-
-    // --- ЛОГИКА ОТОБРАЖЕНИЯ ЗНАЧЕНИЙ СОХРАНЕНА ПОЛНОСТЬЮ ---
-    IHtmlContent renderValue(AppFieldDefinition field, string strVal, Dictionary<Guid, string> namesMap)
-    {
-        if (string.IsNullOrWhiteSpace(strVal)) return HtmlString.Empty;
-        var cleanVal = strVal.Trim('[', ']', '"', ' ');
-
-        if (Guid.TryParse(cleanVal, out Guid id))
-        {
-            if (namesMap != null && namesMap.TryGetValue(id, out var objectName))
-            {
-                return new HtmlString($@"<span class=""badge bg-info text-dark border border-info"" title=""{objectName}""><i class=""bi bi-link-45deg""></i> {objectName}</span>");
-            }
-            return new HtmlString($@"<span class=""badge bg-light text-muted border"" title=""ID не найден""><i class=""bi bi-question-circle""></i> {cleanVal.Substring(0, 8)}...</span>");
-        }
-
-        if (field.DataType == FieldDataType.File)
-        {
-            var fileName = System.IO.Path.GetFileName(cleanVal);
-            return new HtmlString($@"<a href=""{cleanVal}"" target=""_blank"" class=""badge bg-light text-primary border text-decoration-none"" onclick=""event.stopPropagation();"" title=""{fileName}""><i class=""bi bi-paperclip""></i> {Truncate(fileName)}</a>");
-        }
-        
-        if (field.DataType == FieldDataType.Boolean)
-        {
-            return cleanVal.ToLower() == "true" 
-                ? new HtmlString(@"<span class=""badge bg-success-subtle text-success border border-success-subtle"">Да</span>")
-                : new HtmlString(@"<span class=""badge bg-light text-muted border"">Нет</span>");
-        }
-
-        if (field.DataType == FieldDataType.Date || field.DataType == FieldDataType.DateTime)
-        {
-            if (DateTime.TryParse(cleanVal, out DateTime dt))
-            {
-                var fmt = field.DataType == FieldDataType.Date ? "dd.MM.yyyy" : "dd.MM.yyyy HH:mm";
-                return new HtmlString($@"<span class=""badge bg-light text-dark border"">{dt.ToString(fmt)}</span>");
-            }
-        }
-
-        return new HtmlString($@"<span class=""badge bg-light text-dark border"" title=""{cleanVal}"">{Truncate(cleanVal)}</span>");
-    }
 }
 
 <div class="container-fluid px-4">
@@ -111,12 +65,12 @@
                     <div class="pt-4 mt-3 border-top">
                         <div class="row row-cols-1 row-cols-md-3 row-cols-lg-4 g-3">
                             <div class="col">
-                                <crm-input label="Название" name="filters[f_Name]" value="@(currentFilters.GetValueOrDefault("filters[f_Name]"))" class="instant-filter" />
+                                <crm-input label="Название" name="filters[f_Name]" value="@(currentFilters.GetValueOrDefault("f_Name"))" class="instant-filter" />
                             </div>
                             @foreach (var field in dynamicFields)
                             {
                                 <div class="col">
-                                    <crm-input label="@field.Label" name="filters[f_dyn_@field.SystemName]" value="@(currentFilters.GetValueOrDefault("filters[f_dyn_" + field.SystemName + "]"))" class="instant-filter" />
+                                    <crm-input label="@field.Label" name="filters[f_dyn_@field.SystemName]" value="@(currentFilters.GetValueOrDefault("f_dyn_" + field.SystemName))" class="instant-filter" />
                                 </div>
                             }
                         </div>
@@ -153,38 +107,23 @@
                     {
                         @foreach (var item in Model)
                         {
-                            var dynamicValues = new Dictionary<string, object>();
-                            if (!string.IsNullOrEmpty(item.Properties)) {
-                                try { dynamicValues = JsonConvert.DeserializeObject<Dictionary<string, object>>(item.Properties) ?? new Dictionary<string, object>(); } catch { }
-                            }
                             <tr>
                                 <td class="ps-4 col-name fw-bold text-dark">@item.Name</td>
                                 @foreach (var field in dynamicFields)
                                 {
                                     <td class="col-dyn-@field.SystemName">
-                                        @if (dynamicValues.TryGetValue(field.SystemName, out var val) && val != null)
-                                        {
-                                            <div class="d-flex flex-column align-items-start gap-1">
-                                                @if (field.IsArray && val is Newtonsoft.Json.Linq.JArray jArray)
-                                                {
-                                                    @foreach (var subVal in jArray) { @renderValue(field, subVal.ToString(), namesMap) }
-                                                }
-                                                else
-                                                {
-                                                    @renderValue(field, val.ToString(), namesMap)
-                                                }
-                                            </div>
-                                        }
-                                        else { <span class="text-muted small">—</span> }
+                                        @(item.DynamicValues.TryGetValue(field.SystemName, out var val)
+                                            ? TableCellDisplayFormatter.FormatRawValue(val, field, lookupData, namesMap)
+                                            : TableCellDisplayFormatter.FormatRawValue(null, field, lookupData, namesMap))
                                     </td>
                                 }
                                 <td class="col-created text-muted small">@item.CreatedAt.ToString("g")</td>
                                 <td class="text-end pe-4">
-                                    <div class="btn-group btn-group-sm shadow-sm" onclick="event.stopPropagation();">
-                                        <a asp-action="Edit" asp-route-id="@item.Id" crm-button variant="white" icon="pencil" icon-class="text-primary" class="border"></a>
+                                    <div class="btn-group btn-group-sm shadow-sm crm-table-actions" onclick="event.stopPropagation();">
+                                        <a asp-action="Edit" asp-route-id="@item.Id" crm-button variant="white" icon="pencil-fill" icon-class="text-primary" class="border crm-table-action" title="Редактировать"></a>
                                         <form asp-action="Delete" asp-route-id="@item.Id" method="post" onsubmit="return confirm('Удалить запись?');" style="display:inline;">
                                             @Html.AntiForgeryToken()
-                                            <button type="submit" crm-button variant="white" icon="trash" icon-class="text-danger" class="border"></button>
+                                            <button type="submit" crm-button variant="white" icon="trash-fill" icon-class="text-danger" class="border crm-table-action" title="Удалить"></button>
                                         </form>
                                     </div>
                                 </td>

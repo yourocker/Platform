@@ -102,7 +102,7 @@ namespace CRM.Controllers
         }
 
         [HttpPost] [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(Guid id, Position position, IFormCollection form)
+        public async Task<IActionResult> Edit(Guid id, Position position, IFormCollection form, bool modal = false)
         {
             if (id != position.Id) return NotFound();
             await SaveDynamicProperties(position, form, "Position");
@@ -115,6 +115,11 @@ namespace CRM.Controllers
                 } catch (DbUpdateConcurrencyException) {
                     if (!PositionExists(position.Id)) return NotFound(); else throw;
                 }
+                if (modal)
+                {
+                    return BuildModalUpdatedContentResult("Position", position.Id, position.Name);
+                }
+
                 return RedirectToAction(nameof(Index));
             }
             await LoadDynamicFields("Position");

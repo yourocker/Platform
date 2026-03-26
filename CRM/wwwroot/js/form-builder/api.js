@@ -20,6 +20,19 @@
         return await response.json();
     },
 
+    async updateField(data) {
+        const response = await fetch(`${this.baseUrl}/UpdateField`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(data)
+        });
+        if (!response.ok) {
+            const err = await response.text();
+            throw new Error(err || 'Ошибка обновления поля');
+        }
+        return await response.json();
+    },
+
     async deleteField(id) {
         const response = await fetch(`${this.baseUrl}/DeleteField?id=${id}`, { method: 'POST' });
         if (!response.ok) throw new Error('Ошибка удаления');

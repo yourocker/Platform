@@ -1,6 +1,8 @@
-﻿using System.Linq;
+﻿using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Core.Data;
+using Core.Services.Platform;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Hosting;
@@ -29,8 +31,16 @@ namespace CRM.Controllers
                 .ToListAsync();
 
             ViewBag.Definition = definition;
+            ViewBag.EntityCode = entityCode;
+            ViewBag.DynamicFields = definition.Fields.OrderBy(f => f.SortOrder).ToList();
+            ViewBag.NamesMap = new Dictionary<System.Guid, string>();
+            ViewBag.TotalItems = objects.Count;
+            ViewBag.PageNumber = 1;
+            ViewBag.PageSize = 10;
+            ViewBag.TotalPages = 1;
+            ViewBag.CurrentFilters = new Dictionary<string, string>();
             
-            return View("~/Views/GenericObjects/Index.cshtml", objects);
+            return View("~/Views/GenericObjects/Index.cshtml", objects.Select(GenericObjectMapper.ToListDto).ToList());
         }
     }
 }

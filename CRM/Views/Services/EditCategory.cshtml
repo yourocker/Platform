@@ -1,4 +1,4 @@
-﻿@model Core.Entities.CRM.ServiceCategory
+﻿@model Core.DTOs.CRM.ServiceCategoryFormDto
 @{
     ViewData["Title"] = "Редактирование раздела";
 }
@@ -12,10 +12,9 @@
 
     <div class="card shadow-sm border-0">
         <div class="card-body p-4">
-            <form asp-action="EditCategory" method="post">
+            <form asp-action="EditCategory" method="post" enctype="multipart/form-data">
                 <div asp-validation-summary="ModelOnly" class="text-danger"></div>
                 <input type="hidden" asp-for="Id" />
-                <input type="hidden" asp-for="CreatedAt" />
 
                 <div class="row">
                     @* Основная информация *@
@@ -41,7 +40,7 @@
                         <h5 class="mb-3 text-success">Дополнительные поля (конструктор)</h5>
                         @if (ViewBag.DynamicFields != null && ((List<Core.Entities.Platform.AppFieldDefinition>)ViewBag.DynamicFields).Any())
                         {
-                            <partial name="_DynamicFields" model="Model.Properties" />
+                            <partial name="_DynamicFields" model="Model" />
                         }
                         else
                         {

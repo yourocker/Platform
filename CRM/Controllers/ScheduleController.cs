@@ -8,7 +8,9 @@ using Core.Entities.System;
 using Core.Interfaces.CRM;
 using Core.Interfaces.Platform;
 using CRM.Infrastructure;
+using CRM.ViewModels.Schedule;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Primitives;
 
@@ -587,6 +589,50 @@ namespace CRM.Controllers
                         .ToList()
                 }
             });
+        }
+
+        public async Task<IActionResult> Details(Guid id)
+        {
+            ViewData["ModalSize"] = "xl";
+
+            var booking = await _context.CrmResourceBookings
+                .AsNoTracking()
+                .Include(b => b.Resource)
+                .Include(b => b.PerformerEmployee)
+                .Include(b => b.CreatedByEmployee)
+                .Include(b => b.BookingItems)
+                    .ThenInclude(i => i.ServiceItem)
+                .Include(b => b.BookingContacts)
+                    .ThenInclude(c => c.Contact)
+                .Include(b => b.Status)
+                .FirstOrDefaultAsync(b => b.Id == id);
+
+            if (booking == null)
+            {
+                return NotFound();
+            }
+
+            var bookingDefinition = await _context.AppDefinitions
+                .AsNoTracking()
+                .Include(d => d.Fields)
+                .FirstOrDefaultAsync(d => d.EntityCode == BookingEntityCode);
+
+            var customFields = bookingDefinition?.Fields
+                .Where(f => !f.IsDeleted && !string.Equals(f.SystemName, "Name", StringComparison.OrdinalIgnoreCase))
+                .OrderBy(f => f.SortOrder)
+                .ToList() ?? new List<AppFieldDefinition>();
+
+            var lookupData = await BuildEntityLinkLookupDataAsync(customFields);
+            var timelineEvents = await _timelineService.GetEventsAsync(booking.Id, BookingEntityCode);
+
+            var model = new BookingDetailsViewModel
+            {
+                Booking = booking,
+                CustomFields = BuildBookingDetailsCustomFields(booking, customFields, lookupData),
+                TimelineEvents = timelineEvents
+            };
+
+            return View(model);
         }
 
         [HttpPost]
@@ -1374,9 +1420,16 @@ namespace CRM.Controllers
         {
             var backgroundColor = decoration.Kind switch
             {
-                BookingCalendarDecorationKind.CompanyLunch => "#dee2e6",
-                BookingCalendarDecorationKind.EmployeeAbsence => "rgba(220, 53, 69, 0.22)",
-                _ => "rgba(108, 117, 125, 0.28)"
+                BookingCalendarDecorationKind.CompanyLunch => "var(--schedule-company-lunch-color)",
+                BookingCalendarDecorationKind.EmployeeAbsence => "var(--schedule-employee-absence-color)",
+                _ => "var(--schedule-company-closed-color)"
+            };
+
+            var textColor = decoration.Kind switch
+            {
+                BookingCalendarDecorationKind.CompanyLunch => "var(--schedule-company-lunch-text-color)",
+                BookingCalendarDecorationKind.EmployeeAbsence => "var(--schedule-employee-absence-text-color)",
+                _ => "var(--schedule-company-closed-text-color)"
             };
 
             var cssClass = decoration.Kind switch
@@ -1394,6 +1447,7 @@ namespace CRM.Controllers
                 end = decoration.End.ToString("yyyy-MM-ddTHH:mm:ss"),
                 display = "background",
                 backgroundColor,
+                textColor,
                 classNames = new[] { cssClass },
                 overlap = false,
                 editable = false,
@@ -1676,6 +1730,174 @@ namespace CRM.Controllers
                 key => fieldLabels.TryGetValue(key, out var label) ? label : key);
 
             return TimelineChangeFormatter.BuildSummary(changes);
+        }
+
+        private static IReadOnlyList<BookingDetailsFieldViewModel> BuildBookingDetailsCustomFields(
+            CrmResourceBooking booking,
+            IReadOnlyCollection<AppFieldDefinition> customFields,
+            IReadOnlyDictionary<string, List<SelectListItem>> lookupData)
+        {
+            if (customFields.Count == 0 || string.IsNullOrWhiteSpace(booking.Properties))
+            {
+                return Array.Empty<BookingDetailsFieldViewModel>();
+            }
+
+            Dictionary<string, JsonElement>? rawValues;
+            try
+            {
+                rawValues = JsonSerializer.Deserialize<Dictionary<string, JsonElement>>(booking.Properties);
+            }
+            catch
+            {
+                rawValues = null;
+            }
+
+            if (rawValues == null || rawValues.Count == 0)
+            {
+                return Array.Empty<BookingDetailsFieldViewModel>();
+            }
+
+            var result = new List<BookingDetailsFieldViewModel>();
+
+            foreach (var field in customFields)
+            {
+                if (!rawValues.TryGetValue(field.SystemName, out var rawValue))
+                {
+                    continue;
+                }
+
+                var values = BuildBookingFieldValues(field, rawValue, lookupData);
+                if (values.Count == 0)
+                {
+                    continue;
+                }
+
+                result.Add(new BookingDetailsFieldViewModel
+                {
+                    Label = field.Label,
+                    Values = values
+                });
+            }
+
+            return result;
+        }
+
+        private static IReadOnlyList<BookingDetailsFieldValueViewModel> BuildBookingFieldValues(
+            AppFieldDefinition field,
+            JsonElement value,
+            IReadOnlyDictionary<string, List<SelectListItem>> lookupData)
+        {
+            if (value.ValueKind == JsonValueKind.Null || value.ValueKind == JsonValueKind.Undefined)
+            {
+                return Array.Empty<BookingDetailsFieldValueViewModel>();
+            }
+
+            if (value.ValueKind == JsonValueKind.Array)
+            {
+                return value.EnumerateArray()
+                    .Select(item => BuildBookingFieldValue(field, item, lookupData))
+                    .Where(item => item != null)
+                    .Cast<BookingDetailsFieldValueViewModel>()
+                    .ToList();
+            }
+
+            var scalar = BuildBookingFieldValue(field, value, lookupData);
+            return scalar == null
+                ? Array.Empty<BookingDetailsFieldValueViewModel>()
+                : new[] { scalar };
+        }
+
+        private static BookingDetailsFieldValueViewModel? BuildBookingFieldValue(
+            AppFieldDefinition field,
+            JsonElement value,
+            IReadOnlyDictionary<string, List<SelectListItem>> lookupData)
+        {
+            string? text = field.DataType switch
+            {
+                FieldDataType.Boolean => value.ValueKind switch
+                {
+                    JsonValueKind.True => "Да",
+                    JsonValueKind.False => "Нет",
+                    _ => null
+                },
+                FieldDataType.Date => TryFormatJsonDate(value, "dd.MM.yyyy"),
+                FieldDataType.DateTime => TryFormatJsonDate(value, "dd.MM.yyyy HH:mm"),
+                FieldDataType.Money => TryFormatJsonDecimal(value, " ₽"),
+                FieldDataType.Number => TryFormatJsonDecimal(value),
+                FieldDataType.EntityLink => ResolveEntityLinkLabel(field, value, lookupData),
+                FieldDataType.Select => ResolveEntityLinkLabel(field, value, lookupData),
+                FieldDataType.File => value.GetString(),
+                _ => value.ToString()
+            };
+
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return null;
+            }
+
+            if (field.DataType == FieldDataType.File)
+            {
+                return new BookingDetailsFieldValueViewModel
+                {
+                    Text = Path.GetFileName(text),
+                    Url = text
+                };
+            }
+
+            return new BookingDetailsFieldValueViewModel
+            {
+                Text = text
+            };
+        }
+
+        private static string? ResolveEntityLinkLabel(
+            AppFieldDefinition field,
+            JsonElement value,
+            IReadOnlyDictionary<string, List<SelectListItem>> lookupData)
+        {
+            var rawId = value.ToString();
+            if (string.IsNullOrWhiteSpace(rawId))
+            {
+                return null;
+            }
+
+            if (lookupData.TryGetValue(field.SystemName, out var options))
+            {
+                var option = options.FirstOrDefault(x => string.Equals(x.Value, rawId, StringComparison.OrdinalIgnoreCase));
+                if (!string.IsNullOrWhiteSpace(option?.Text))
+                {
+                    return option.Text;
+                }
+            }
+
+            return rawId;
+        }
+
+        private static string? TryFormatJsonDate(JsonElement value, string format)
+        {
+            if (value.ValueKind == JsonValueKind.String &&
+                DateTime.TryParse(value.GetString(), out var parsed))
+            {
+                return parsed.ToString(format);
+            }
+
+            return value.ToString();
+        }
+
+        private static string? TryFormatJsonDecimal(JsonElement value, string suffix = "")
+        {
+            if (value.ValueKind == JsonValueKind.Number && value.TryGetDecimal(out var number))
+            {
+                return $"{number:0.##}{suffix}";
+            }
+
+            if (value.ValueKind == JsonValueKind.String &&
+                decimal.TryParse(value.GetString(), NumberStyles.Any, CultureInfo.InvariantCulture, out number))
+            {
+                return $"{number:0.##}{suffix}";
+            }
+
+            return value.ToString();
         }
 
         private static string FormatBookingPeriod(DateTime start, DateTime end)

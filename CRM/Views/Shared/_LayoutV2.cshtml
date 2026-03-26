@@ -1,16 +1,19 @@
 ﻿@using Core.Data
 @using Microsoft.EntityFrameworkCore
 @using Microsoft.AspNetCore.Identity
+@using Microsoft.AspNetCore.Antiforgery
 @using Core.Entities.Company
 @using Core.Entities.System
 @using Core.Services
 
 @inject ICrmStyleService StyleService
 @inject UserManager<Employee> UserManager
+@inject IAntiforgery Antiforgery
 
 @{
 // Загружаем настройки интерфейса через сервис (с кэшированием).
 var ui = StyleService.GetSettings();
+var antiforgeryToken = Antiforgery.GetAndStoreTokens(Context).RequestToken;
 }
 
 <!DOCTYPE html>
@@ -158,6 +161,37 @@ var ui = StyleService.GetSettings();
             max-width: min(var(--crm-modal-dialog-width), calc(100vw - 2rem));
         }
 
+        .crm-entity-modal-content {
+            position: relative;
+            border-radius: 20px;
+            overflow: hidden;
+            background: #fff;
+        }
+
+        .crm-entity-modal-header {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            z-index: 5;
+            padding: 0;
+            border: 0;
+            background: transparent;
+            min-height: 0;
+        }
+
+        .crm-entity-modal-header .btn-close {
+            margin: 0;
+            padding: 0.7rem;
+            border-radius: 999px;
+            background-color: rgba(255, 255, 255, 0.96);
+            box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+            opacity: 1;
+        }
+
+        .crm-entity-modal-header .btn-close:hover {
+            filter: brightness(0.97);
+        }
+
         .crm-entity-modal-frame {
             display: block;
             background: transparent;
@@ -189,7 +223,7 @@ var ui = StyleService.GetSettings();
             var displayName = user != null ? $"{user.FirstName} {user.LastName}" : User.Identity.Name;
             var timezone = user?.TimezoneId ?? "UTC";
 
-            <input type="hidden" id="currentUserId" value="@user?.Id" />
+            <input type="hidden" id="notificationAntiforgeryToken" value="@antiforgeryToken" />
             <input type="hidden" id="user-timezone" value="@timezone" />
 
             <div class="dropdown">
@@ -251,9 +285,9 @@ var ui = StyleService.GetSettings();
 
 <div class="modal fade" id="globalCreateModal" tabindex="-1" aria-hidden="true" data-bs-backdrop="static">
     <div class="modal-dialog modal-dialog-centered modal-dialog-scrollable crm-entity-modal-dialog" id="globalCreateModalDialog">
-        <div class="modal-content border-0 shadow">
-            <div class="modal-header">
-                <h5 class="modal-title" id="globalCreateModalTitle">
+        <div class="modal-content border-0 shadow crm-entity-modal-content">
+            <div class="modal-header crm-entity-modal-header">
+                <h5 class="modal-title visually-hidden" id="globalCreateModalTitle">
                     <i class="bi bi-window me-2"></i> Форма
                 </h5>
                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>

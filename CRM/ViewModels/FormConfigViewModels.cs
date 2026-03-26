@@ -19,6 +19,7 @@ public class FieldDto
     public bool IsDeleted { get; set; }
     public string? Description { get; set; }
     public string? TargetEntityCode { get; set; }
+    public List<FieldSelectOption> SelectOptions { get; set; } = new();
     public int SortOrder { get; set; }
 }
 
@@ -45,6 +46,7 @@ public class CreateFieldRequest
     public bool IsRequired { get; set; }
     public string? Description { get; set; }
     public string? TargetEntityCode { get; set; }
+    public List<FieldSelectOption> SelectOptions { get; set; } = new();
 }
 
 /// <summary>
@@ -59,7 +61,11 @@ public class UpdateFieldRequest
     public string Label { get; set; } = string.Empty;
 
     public string? Description { get; set; }
+    public FieldDataType DataType { get; set; }
     public bool IsRequired { get; set; }
+    public bool IsArray { get; set; }
+    public string? TargetEntityCode { get; set; }
+    public List<FieldSelectOption> SelectOptions { get; set; } = new();
 }
 
 /// <summary>

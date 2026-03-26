@@ -2,6 +2,7 @@
 using System.Linq;
 using System.Threading.Tasks;
 using Core.Data;
+using Core.DTOs.Platform;
 using Core.Entities.Platform;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -14,6 +15,7 @@ using Core.Entities.Platform.Form;
 using System.Text.Json;
 using Core.Entities.CRM;
 using Core.Interfaces.Platform;
+using Core.Services.Platform;
 using CRM.Infrastructure;
 
 namespace CRM.Controllers;
@@ -26,6 +28,31 @@ public class GenericObjectsController(
     IEntityTimelineService timelineService) : BasePlatformController(context, hostingEnvironment)
 {
     private readonly IEntityTimelineService _timelineService = timelineService;
+
+    private static Dictionary<Guid, string> BuildNamesMap(
+        IEnumerable<(Guid Id, string Name)> genericObjects,
+        IEnumerable<(Guid Id, string Name)> employees,
+        IEnumerable<(Guid Id, string Name)> departments)
+    {
+        var namesMap = new Dictionary<Guid, string>();
+
+        foreach (var item in genericObjects)
+        {
+            namesMap[item.Id] = item.Name;
+        }
+
+        foreach (var item in employees)
+        {
+            namesMap[item.Id] = item.Name;
+        }
+
+        foreach (var item in departments)
+        {
+            namesMap[item.Id] = item.Name;
+        }
+
+        return namesMap;
+    }
 
     private async Task LoadDefinitionWithFields(string entityCode, FormType? formType = null)
     {
@@ -161,6 +188,7 @@ public class GenericObjectsController(
         int totalItems = await query.CountAsync();
 
         var objects = await query
+            .AsNoTracking()
             .OrderByDescending(o => o.CreatedAt)
             .Skip((actualPageNumber - 1) * actualPageSize)
             .Take(actualPageSize)
@@ -182,15 +210,28 @@ public class GenericObjectsController(
         var namesMap = new Dictionary<Guid, string>();
         if (allGuids.Count > 0)
         {
-            var genericNames = await _context.GenericObjects.Where(g => allGuids.Contains(g.Id)).Select(g => new { g.Id, g.Name }).ToListAsync();
-            foreach (var n in genericNames) namesMap[n.Id] = n.Name;
+            var genericNames = await _context.GenericObjects
+                .Where(g => allGuids.Contains(g.Id))
+                .Select(g => new { g.Id, g.Name })
+                .ToListAsync();
 
-            var employeeNames = await _context.Employees.Where(e => allGuids.Contains(e.Id)).Select(e => new { e.Id, Name = e.FullName }).ToListAsync();
-            foreach (var n in employeeNames) namesMap[n.Id] = n.Name;
+            var employeeNames = await _context.Employees
+                .Where(e => allGuids.Contains(e.Id))
+                .Select(e => new { e.Id, Name = e.FullName })
+                .ToListAsync();
 
-            var deptNames = await _context.Departments.Where(d => allGuids.Contains(d.Id)).Select(d => new { d.Id, d.Name }).ToListAsync();
-            foreach (var n in deptNames) namesMap[n.Id] = n.Name;
+            var deptNames = await _context.Departments
+                .Where(d => allGuids.Contains(d.Id))
+                .Select(d => new { d.Id, d.Name })
+                .ToListAsync();
+
+            namesMap = BuildNamesMap(
+                genericNames.Select(x => (x.Id, x.Name)),
+                employeeNames.Select(x => (x.Id, x.Name)),
+                deptNames.Select(x => (x.Id, x.Name)));
         }
+
+        var objectDtos = objects.Select(GenericObjectMapper.ToListDto).ToList();
 
         ViewBag.NamesMap = namesMap;
         ViewBag.TotalItems = totalItems;
@@ -200,7 +241,7 @@ public class GenericObjectsController(
         ViewBag.CurrentSearch = searchString;
         ViewBag.CurrentFilters = filters ?? new Dictionary<string, string>();
 
-        return View(objects);
+        return View(objectDtos);
     }
 
     // Маршрут: /Data/{entityCode}/Create
@@ -211,14 +252,16 @@ public class GenericObjectsController(
         await LoadDefinitionWithFields(entityCode, FormType.Create);
         ViewBag.EntityCode = entityCode;
         ViewBag.IsModal = modal;
-        return View();
+        return View(new GenericObjectDto { EntityCode = entityCode });
     }
 
     [HttpPost("{entityCode}/Create")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Create(string entityCode, GenericObject obj, IFormCollection form, bool modal = false)
+    public async Task<IActionResult> Create(string entityCode, GenericObjectDto dto, IFormCollection form, bool modal = false)
     {
-        obj.EntityCode = entityCode;
+        if (string.IsNullOrEmpty(entityCode)) return NotFound();
+
+        var obj = GenericObjectMapper.ToEntity(dto, entityCode);
         obj.CreatedAt = DateTime.UtcNow;
         await SaveDynamicProperties(obj, form, obj.EntityCode);
         if (ModelState.IsValid)
@@ -244,10 +287,13 @@ public class GenericObjectsController(
 
             return Redirect($"/Data/{obj.EntityCode}");
         }
-        await LoadDefinitionWithFields(obj.EntityCode, FormType.Create);
-        ViewBag.EntityCode = obj.EntityCode;
+        dto.EntityCode = entityCode;
+        dto.CreatedAt = obj.CreatedAt;
+        dto.DynamicValues = GenericObjectMapper.ToDto(obj).DynamicValues;
+        await LoadDefinitionWithFields(entityCode, FormType.Create);
+        ViewBag.EntityCode = entityCode;
         ViewBag.IsModal = modal;
-        return View(obj);
+        return View(dto);
     }
     
     // Маршрут: /Data/Edit/{id}
@@ -258,21 +304,21 @@ public class GenericObjectsController(
         if (obj == null) return NotFound();
         await LoadDefinitionWithFields(obj.EntityCode, FormType.Edit);
         ViewBag.EntityCode = obj.EntityCode;
-        return View(obj);
+        return View(GenericObjectMapper.ToDto(obj));
     }
 
     [HttpPost("Edit/{id}")]
     [ValidateAntiForgeryToken]
-    public async Task<IActionResult> Edit(Guid id, GenericObject incomingObj, IFormCollection form)
+    public async Task<IActionResult> Edit(Guid id, GenericObjectDto dto, IFormCollection form, bool modal = false)
     {
-        if (id != incomingObj.Id) return NotFound();
+        if (id != dto.Id) return NotFound();
         var dbObj = await _context.GenericObjects.FindAsync(id);
         if (dbObj == null) return NotFound();
 
         var beforeName = dbObj.Name;
         var beforeProps = TimelineChangeFormatter.ParseDynamicProperties(dbObj.Properties);
 
-        dbObj.Name = incomingObj.Name;
+        GenericObjectMapper.UpdateEntity(dbObj, dto);
         await SaveDynamicProperties(dbObj, form, dbObj.EntityCode);
         if (ModelState.IsValid)
         {
@@ -299,11 +345,19 @@ public class GenericObjectsController(
                 if (!_context.GenericObjects.Any(e => e.Id == id)) return NotFound();
                 else throw;
             }
+            if (modal)
+            {
+                return BuildModalUpdatedContentResult(dbObj.EntityCode, dbObj.Id, dbObj.Name);
+            }
+
             return Redirect($"/Data/{dbObj.EntityCode}");
         }
+        dto.EntityCode = dbObj.EntityCode;
+        dto.CreatedAt = dbObj.CreatedAt;
+        dto.DynamicValues = GenericObjectMapper.ToDto(dbObj).DynamicValues;
         await LoadDefinitionWithFields(dbObj.EntityCode, FormType.Edit);
         ViewBag.EntityCode = dbObj.EntityCode;
-        return View(dbObj);
+        return View(dto);
     }
 
     [HttpGet("Details/{id}")]
@@ -315,7 +369,7 @@ public class GenericObjectsController(
         await LoadDefinitionWithFields(obj.EntityCode, FormType.View);
         ViewBag.TimelineEvents = await _timelineService.GetEventsAsync(obj.Id, obj.EntityCode);
         ViewBag.EntityCode = obj.EntityCode;
-        return View(obj);
+        return View(GenericObjectMapper.ToDto(obj));
     }
 
     // Маршрут: /Data/Delete/{id}

@@ -1,4 +1,4 @@
-﻿@model Core.Entities.Platform.GenericObject
+﻿@model Core.DTOs.Platform.GenericObjectDto
 @{
     ViewData["Title"] = "Новая запись";
     var isModal = ViewBag.IsModal as bool? ?? false;
@@ -14,7 +14,6 @@
     <div class="row justify-content-center">
         <div class="col-lg-10">
             <form asp-action="Create" asp-route-entityCode="@ViewBag.EntityCode" method="post" enctype="multipart/form-data">
-                <input type="hidden" name="EntityCode" value="@ViewBag.EntityCode" />
                 @if (isModal)
                 {
                     <input type="hidden" name="modal" value="true" />
@@ -29,7 +28,7 @@
                         
                         @* Динамические поля через partial [cite: 9] *@
                         <div class="mt-4 pt-4 border-top">
-                            <partial name="_DynamicFields" />
+                            <partial name="_DynamicFields" model="Model" />
                         </div>
                     </div>
                 </div>

@@ -1,9 +1,12 @@
-﻿@using Core.Entities.Platform
+﻿@using CRM.Infrastructure
+@using Core.Entities.Platform
+@using Microsoft.AspNetCore.Mvc.Rendering
 @using System.Text.Json
 @model IEnumerable<Core.Entities.Company.Position>
 @{
 ViewData["Title"] = "Должности";
 var dynamicFields = ViewBag.DynamicFields as List<AppFieldDefinition> ?? new List<AppFieldDefinition>();
+var lookupData = ViewBag.LookupData as Dictionary<string, List<SelectListItem>> ?? new Dictionary<string, List<SelectListItem>>();
 
 int totalItems = ViewBag.TotalItems ?? 0;
 int pageNumber = ViewBag.PageNumber ?? 1;
@@ -71,11 +74,11 @@ var currentFilters = ViewBag.CurrentFilters as Dictionary<string, string> ?? new
                 var props = string.IsNullOrEmpty(item.Properties) ? new Dictionary<string, object>() : JsonSerializer.Deserialize<Dictionary<string, object>>(item.Properties);
                 <tr>
                     <td class="ps-4 col-name fw-bold text-dark">@item.Name</td>
-                    @foreach (var field in dynamicFields) { <td class="col-dyn-@field.SystemName small">@(props.TryGetValue(field.SystemName, out var val) ? val : "—")</td> }
+                    @foreach (var field in dynamicFields) { <td class="col-dyn-@field.SystemName small">@(props.TryGetValue(field.SystemName, out var val) ? TableCellDisplayFormatter.FormatRawValue(val, field, lookupData) : TableCellDisplayFormatter.FormatRawValue(null, field, lookupData))</td> }
                     <td class="text-end pe-4">
-                        <div class="btn-group btn-group-sm shadow-sm" onclick="event.stopPropagation();">
-                            <a asp-action="Edit" asp-route-id="@item.Id" crm-button variant="white" icon="pencil" icon-class="text-primary" class="border"></a>
-                            <a asp-action="Delete" asp-route-id="@item.Id" crm-button variant="white" icon="trash" icon-class="text-danger" class="border"></a>
+                        <div class="btn-group btn-group-sm shadow-sm crm-table-actions" onclick="event.stopPropagation();">
+                            <a asp-action="Edit" asp-route-id="@item.Id" crm-button variant="white" icon="pencil-fill" icon-class="text-primary" class="border crm-table-action" title="Редактировать"></a>
+                            <a asp-action="Delete" asp-route-id="@item.Id" crm-button variant="white" icon="trash-fill" icon-class="text-danger" class="border crm-table-action" title="Удалить"></a>
                         </div>
                     </td>
                 </tr>

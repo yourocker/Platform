@@ -1,6 +1,10 @@
-﻿@model Core.Entities.Company.Employee
+﻿@using Core.DTOs.Company
+@model EmployeeCreateDto
 @{
     ViewData["Title"] = "Новый сотрудник";
+    var appointments = Model.Appointments.Any()
+        ? Model.Appointments
+        : new List<EmployeeAppointmentDto> { new() };
 }
 
 <script src="https://cdn.jsdelivr.net/npm/inputmask@5.0.8/dist/inputmask.min.js"></script>
@@ -10,15 +14,15 @@
 
     <div class="row justify-content-center">
         <div class="col-lg-10">
-            <form asp-action="Create" method="post">
+            <form asp-action="Create" method="post" enctype="multipart/form-data">
                 @* 1. Личные данные *@
                 <div crm-card>
                     <div class="card-header bg-transparent border-0 pt-3 px-4"><h5 class="mb-0 fw-bold text-muted text-uppercase small">Личные данные</h5></div>
                     <div class="card-body p-4">
                         <div class="row g-3">
-                            <div class="col-md-4"><crm-input label="Фамилия" name="LastName" required="required" /></div>
-                            <div class="col-md-4"><crm-input label="Имя" name="FirstName" required="required" /></div>
-                            <div class="col-md-4"><crm-input label="Отчество" name="MiddleName" /></div>
+                            <div class="col-md-4"><crm-input label="Фамилия" asp-for="LastName" required="required" /></div>
+                            <div class="col-md-4"><crm-input label="Имя" asp-for="FirstName" required="required" /></div>
+                            <div class="col-md-4"><crm-input label="Отчество" asp-for="MiddleName" /></div>
                         </div>
                     </div>
                 </div>
@@ -32,9 +36,22 @@
                                 <button type="button" crm-button variant="white" icon="plus-circle" class="btn-sm border-0 text-primary shadow-none" onclick="addInput('phone-list', 'Phones')"></button>
                             </div>
                             <div class="card-body p-3 pt-0" id="phone-list">
-                                <div class="input-group mb-2">
-                                    <input name="Phones" class="form-control form-control-sm shadow-none" placeholder="+7..." />
-                                </div>
+                                @if (Model.Phones.Any())
+                                {
+                                    @foreach (var phone in Model.Phones)
+                                    {
+                                        <div class="input-group mb-2">
+                                            <input name="Phones" class="form-control form-control-sm shadow-none" placeholder="+7..." value="@phone" />
+                                            <button type="button" class="btn btn-sm btn-outline-danger shadow-none border-0" onclick="this.parentElement.remove()"><i class="bi bi-trash"></i></button>
+                                        </div>
+                                    }
+                                }
+                                else
+                                {
+                                    <div class="input-group mb-2">
+                                        <input name="Phones" class="form-control form-control-sm shadow-none" placeholder="+7..." />
+                                    </div>
+                                }
                             </div>
                         </div>
                     </div>
@@ -45,9 +62,22 @@
                                 <button type="button" crm-button variant="white" icon="plus-circle" class="btn-sm border-0 text-primary shadow-none" onclick="addInput('email-list', 'Emails')"></button>
                             </div>
                             <div class="card-body p-3 pt-0" id="email-list">
-                                <div class="input-group mb-2">
-                                    <input name="Emails" class="form-control form-control-sm shadow-none" placeholder="example@mail.com" />
-                                </div>
+                                @if (Model.Emails.Any())
+                                {
+                                    @foreach (var email in Model.Emails)
+                                    {
+                                        <div class="input-group mb-2">
+                                            <input name="Emails" class="form-control form-control-sm shadow-none" placeholder="example@mail.com" value="@email" />
+                                            <button type="button" class="btn btn-sm btn-outline-danger shadow-none border-0" onclick="this.parentElement.remove()"><i class="bi bi-trash"></i></button>
+                                        </div>
+                                    }
+                                }
+                                else
+                                {
+                                    <div class="input-group mb-2">
+                                        <input name="Emails" class="form-control form-control-sm shadow-none" placeholder="example@mail.com" />
+                                    </div>
+                                }
                             </div>
                         </div>
                     </div>
@@ -58,23 +88,32 @@
                     <div class="card-header bg-transparent border-0 pt-3 px-4"><h5 class="mb-0 fw-bold text-muted text-uppercase small">Место работы</h5></div>
                     <div class="card-body p-4 pt-0">
                         <div id="appointments-container">
-                            <div class="row appointment-row mb-3 align-items-end g-2">
-                                <div class="col-md-5">
-                                    <label class="small text-muted mb-1 d-block fw-bold">Должность</label>
-                                    <select name="selectedPositions" class="form-select form-select-sm shadow-none" required>
-                                        @foreach(var p in (ViewBag.Positions as List<Core.Entities.Company.Position>)) { <option value="@p.Id">@p.Name</option> }
-                                    </select>
+                            @foreach (var appointment in appointments)
+                            {
+                                <div class="row appointment-row mb-3 align-items-end g-2">
+                                    <div class="col-md-5">
+                                        <label class="small text-muted mb-1 d-block fw-bold">Должность</label>
+                                        <select name="selectedPositions" class="form-select form-select-sm shadow-none" required>
+                                            @foreach(var p in (ViewBag.Positions as List<Core.Entities.Company.Position>))
+                                            {
+                                                <option value="@p.Id" selected="@(p.Id == appointment.PositionId)">@p.Name</option>
+                                            }
+                                        </select>
+                                    </div>
+                                    <div class="col-md-5">
+                                        <label class="small text-muted mb-1 d-block fw-bold">Подразделение</label>
+                                        <select name="selectedDepartments" class="form-select form-select-sm shadow-none" required>
+                                            @foreach(var d in (ViewBag.Departments as List<Core.Entities.Company.Department>))
+                                            {
+                                                <option value="@d.Id" selected="@(d.Id == appointment.DepartmentId)">@d.Name</option>
+                                            }
+                                        </select>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <button type="button" class="btn btn-outline-danger btn-sm w-100 @(appointments.Count == 1 ? "disabled" : string.Empty) shadow-none border-0" onclick="this.closest('.row').remove()"><i class="bi bi-trash"></i></button>
+                                    </div>
                                 </div>
-                                <div class="col-md-5">
-                                    <label class="small text-muted mb-1 d-block fw-bold">Подразделение</label>
-                                    <select name="selectedDepartments" class="form-select form-select-sm shadow-none" required>
-                                        @foreach(var d in (ViewBag.Departments as List<Core.Entities.Company.Department>)) { <option value="@d.Id">@d.Name</option> }
-                                    </select>
-                                </div>
-                                <div class="col-md-2">
-                                    <button type="button" class="btn btn-outline-danger btn-sm w-100 disabled shadow-none border-0" onclick="this.closest('.row').remove()"><i class="bi bi-trash"></i></button>
-                                </div>
-                            </div>
+                            }
                         </div>
                         <button type="button" crm-button variant="outline-primary" icon="plus-lg" class="btn-sm mt-2" onclick="addAppointment()">Добавить совмещение</button>
                     </div>
@@ -83,7 +122,7 @@
                 @* 4. Динамические поля *@
                 <div crm-card>
                     <div class="card-body p-4">
-                        <partial name="_DynamicFields" model="null" />
+                        <partial name="_DynamicFields" model="Model" />
                     </div>
                 </div>
 
@@ -94,8 +133,8 @@
                         <div class="card-header bg-transparent border-0 pt-3 px-4"><h5 class="mb-0 fw-bold text-muted text-uppercase small">Доступ в систему</h5></div>
                         <div class="card-body p-4 pt-2">
                             <div class="row g-3">
-                                <div class="col-md-6"><crm-input label="Логин (Email)" name="Login" autocomplete="off" /></div>
-                                <div class="col-md-6"><crm-input label="Пароль" name="Password" type="password" autocomplete="new-password" /></div>
+                                <div class="col-md-6"><crm-input label="Логин (Email)" asp-for="Login" autocomplete="off" /></div>
+                                <div class="col-md-6"><crm-input label="Пароль" asp-for="Password" type="password" autocomplete="new-password" /></div>
                             </div>
                         </div>
                     </div>

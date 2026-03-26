@@ -87,7 +87,7 @@ namespace CRM.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(Guid id, AppCategory category)
+        public async Task<IActionResult> Edit(Guid id, AppCategory category, bool modal = false)
         {
             if (id != category.Id) return NotFound();
 
@@ -103,6 +103,11 @@ namespace CRM.Controllers
                     if (!CategoryExists(category.Id)) return NotFound();
                     else throw;
                 }
+                if (modal)
+                {
+                    return BuildModalUpdatedContentResult("AppCategory", category.Id, category.Name);
+                }
+
                 return RedirectToAction(nameof(Index));
             }
             return View(category);

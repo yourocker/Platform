@@ -12,6 +12,11 @@ using Core.Services;
 using Core.Interfaces.Platform;
 using Core.Services.Platform;
 using CRM.Infrastructure;
+using CRM.Modules.Notifications.Hubs;
+using CRM.Modules.Notifications.Infrastructure;
+using CRM.Modules.Notifications.Workers;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.SignalR;
 
 #pragma warning disable CS0618
 // Поддержка работы с jsonb в PostgreSQL
@@ -19,6 +24,8 @@ NpgsqlConnection.GlobalTypeMapper.EnableDynamicJson();
 #pragma warning restore CS0618
 
 var builder = WebApplication.CreateBuilder(args);
+
+builder.Services.AddAntiforgery(options => options.HeaderName = "X-CSRF-TOKEN");
 
 // 1. Настройка контроллеров и глобальная политика авторизации
 builder.Services.AddControllersWithViews(options =>
@@ -49,11 +56,16 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 // 3. Настройка Identity (Аутентификация и пользователи)
 builder.Services.AddIdentity<Employee, IdentityRole<Guid>>(options => 
     {
-        options.Password.RequireDigit = false;
-        options.Password.RequiredLength = 4; 
-        options.Password.RequireNonAlphanumeric = false;
-        options.Password.RequireUppercase = false;
-        options.Password.RequireLowercase = false;
+        options.Password.RequireDigit = true;
+        options.Password.RequiredLength = 12;
+        options.Password.RequireNonAlphanumeric = true;
+        options.Password.RequireUppercase = true;
+        options.Password.RequireLowercase = true;
+        options.Password.RequiredUniqueChars = 4;
+
+        options.Lockout.AllowedForNewUsers = true;
+        options.Lockout.MaxFailedAccessAttempts = 5;
+        options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
     })
     .AddEntityFrameworkStores<AppDbContext>()
     .AddDefaultTokenProviders();
@@ -63,9 +75,17 @@ builder.Services.ConfigureApplicationCookie(options =>
 {
     options.LoginPath = "/Account/Login";
     options.ExpireTimeSpan = TimeSpan.FromHours(24);
+    options.SlidingExpiration = true;
+    options.Cookie.HttpOnly = true;
+    options.Cookie.SecurePolicy = builder.Environment.IsDevelopment()
+        ? CookieSecurePolicy.SameAsRequest
+        : CookieSecurePolicy.Always;
+    options.Cookie.SameSite = SameSiteMode.Lax;
 });
 
 builder.Services.AddHttpContextAccessor();
+builder.Services.AddSignalR();
+builder.Services.AddSingleton<IUserIdProvider, NameIdentifierUserIdProvider>();
 
 builder.Services.AddScoped<IContactService, ContactService>();
 builder.Services.AddScoped<ICrmService, CrmService>();
@@ -78,6 +98,7 @@ builder.Services.AddScoped<FeatureGateFilter>();
 builder.Services.AddScoped<ModalRedirectFilter>();
 
 builder.Services.AddScoped<Core.Services.ICrmStyleService, Core.Services.CrmStyleService>();
+builder.Services.AddHostedService<NotificationWorker>();
 
 var app = builder.Build();
 
@@ -96,6 +117,8 @@ app.UseRouting();
 app.UseAuthentication(); 
 app.UseAuthorization();
 
+app.MapControllers();
+app.MapHub<NotificationHub>("/hubs/notifications").RequireAuthorization();
 app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}");

@@ -41,18 +41,6 @@
                 <div class="card-body">
                     <h6 class="text-muted fw-bold">Описание</h6>
                     <p class="card-text text-break" style="white-space: pre-line;">@(Model.Description ?? "Нет описания")</p>
-
-                    @if(Model.Relations.Any())
-                    {
-                        <hr />
-                        <h6 class="text-muted fw-bold mb-3">Связанные объекты</h6>
-                        <div class="d-flex flex-wrap gap-2">
-                            @foreach(var rel in Model.Relations)
-                            {
-                                <span class="badge bg-light text-dark border p-2"><i class="bi bi-link-45deg"></i> @rel.EntityName</span>
-                            }
-                        </div>
-                    }
                 </div>
                 <div class="card-footer bg-light text-muted small">
                     Создана: @Model.CreatedAt.ToString("f")

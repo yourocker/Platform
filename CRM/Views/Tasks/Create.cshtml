@@ -31,7 +31,6 @@
                             <div class="col-md-6 mb-4">
                                 <label class="form-label fw-bold">Постановщик</label>
                                 <input type="text" class="form-control bg-light" value="@ViewBag.CurrentUserName" readonly tabindex="-1" />
-                                <input type="hidden" asp-for="AuthorId" value="@ViewBag.CurrentUserId" />
                             </div>
                             
                             <div class="col-md-6 mb-4">
@@ -43,23 +42,6 @@
                         <div class="mb-4">
                             <label asp-for="Deadline" class="form-label fw-bold">Срок выполнения</label>
                             <input asp-for="Deadline" type="datetime-local" class="form-control" />
-                        </div>
-
-                        <div class="mb-4">
-                            <button class="btn btn-outline-secondary btn-sm" type="button" data-bs-toggle="collapse" data-bs-target="#relationSection">
-                                <i class="bi bi-share"></i> Связать с объектами системы
-                            </button>
-                            
-                            <div class="collapse mt-3" id="relationSection">
-                                <div class="card card-body bg-light border-0">
-                                    <h6 class="fw-bold small mb-3">Связанные объекты</h6>
-                                    <div id="relations-container">
-                                        </div>
-                                    <button type="button" class="btn btn-sm btn-success mt-2" onclick="addRelationRow()">
-                                        <i class="bi bi-plus-lg"></i> Добавить объект
-                                    </button>
-                                </div>
-                            </div>
                         </div>
 
                         <div class="d-flex justify-content-between pt-4 border-top">
@@ -75,64 +57,4 @@
 
 @section Scripts {
     @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
-
-    <script>
-        const availableObjects = @Html.Raw(ViewBag.AllObjectsJson ?? "[]");
-        const entityTypes = @Html.Raw(Json.Serialize(ViewBag.EntityTypes));
-
-        function addRelationRow() {
-            const container = document.getElementById('relations-container');
-            
-            const row = document.createElement('div');
-            row.className = 'row g-2 mb-2 relation-row align-items-center';
-            
-            let typeOptions = '<option value="">-- Тип --</option>';
-            if(entityTypes) {
-                entityTypes.forEach(t => {
-                    typeOptions += `<option value="${t.value}">${t.text}</option>`;
-                });
-            }
-            
-            row.innerHTML = `
-                <div class="col-md-5">
-                    <select class="form-select form-select-sm entity-type-select" onchange="updateObjectSelect(this)">
-                        ${typeOptions}
-                    </select>
-                </div>
-                <div class="col-md-6">
-                    <select name="selectedObjects" class="form-select form-select-sm entity-object-select">
-                        <option value="">-- Сначала выберите тип --</option>
-                    </select>
-                </div>
-                <div class="col-md-1 text-end">
-                    <button type="button" class="btn btn-sm btn-link text-danger p-0" onclick="this.closest('.row').remove()">
-                        <i class="bi bi-x-circle-fill fs-5"></i>
-                    </button>
-                </div>
-            `;
-            container.appendChild(row);
-        }
-
-        function updateObjectSelect(typeSelect) {
-            const row = typeSelect.closest('.row');
-            const objectSelect = row.querySelector('.entity-object-select');
-            const selectedType = typeSelect.value;
-            
-            objectSelect.innerHTML = '<option value="">-- Выберите запись --</option>';
-            
-            if (selectedType && availableObjects) {
-                const filtered = availableObjects.filter(o => o.Type === selectedType);
-                filtered.forEach(o => {
-                    const opt = document.createElement('option');
-                    opt.value = selectedType + "|" + o.Id;
-                    opt.textContent = o.Name;
-                    objectSelect.appendChild(opt);
-                });
-            }
-        }
-
-        document.addEventListener('DOMContentLoaded', function() {
-            addRelationRow();
-        });
-    </script>
 }

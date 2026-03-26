@@ -6,7 +6,6 @@ using Core.Entities.Company;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
@@ -21,13 +20,6 @@ namespace CRM.Controllers
         {
         }
 
-        private class ObjectLookupDto
-        {
-            public Guid Id { get; set; }
-            public string Name { get; set; } = string.Empty;
-            public string Type { get; set; } = string.Empty;
-        }
-
         // --- СПИСКИ (VIEWS) ---
 
         public async Task<IActionResult> Index()
@@ -36,12 +28,10 @@ namespace CRM.Controllers
             var tasks = await _context.EmployeeTasks
                 .Include(t => t.Author)
                 .Include(t => t.Assignee)
-                .Include(t => t.Relations)
                 .Where(t => !t.IsDeleted && t.Status != Core.Entities.Tasks.TaskStatus.Completed)
                 .OrderByDescending(t => t.CreatedAt)
                 .ToListAsync();
 
-            await ResolveRelatedEntityNames(tasks);
             return View(tasks);
         }
 
@@ -53,14 +43,12 @@ namespace CRM.Controllers
             var tasks = await _context.EmployeeTasks
                 .Include(t => t.Author)
                 .Include(t => t.Assignee)
-                .Include(t => t.Relations)
                 .Where(t => t.AuthorId == user.Id 
                             && !t.IsDeleted 
                             && t.Status != Core.Entities.Tasks.TaskStatus.Completed)
                 .OrderByDescending(t => t.CreatedAt)
                 .ToListAsync();
 
-            await ResolveRelatedEntityNames(tasks);
             ViewData["Title"] = "Поставленные мной";
             return View("Index", tasks);
         }
@@ -73,14 +61,12 @@ namespace CRM.Controllers
             var tasks = await _context.EmployeeTasks
                 .Include(t => t.Author)
                 .Include(t => t.Assignee)
-                .Include(t => t.Relations)
                 .Where(t => t.AssigneeId == user.Id 
                             && !t.IsDeleted 
                             && t.Status != Core.Entities.Tasks.TaskStatus.Completed)
                 .OrderByDescending(t => t.CreatedAt)
                 .ToListAsync();
 
-            await ResolveRelatedEntityNames(tasks);
             ViewData["Title"] = "Назначенные мне";
             return View("Index", tasks);
         }
@@ -94,14 +80,12 @@ namespace CRM.Controllers
             var tasks = await _context.EmployeeTasks
                 .Include(t => t.Author)
                 .Include(t => t.Assignee)
-                .Include(t => t.Relations)
                 .Where(t => (t.AuthorId == user.Id || t.AssigneeId == user.Id)
                             && t.Status == Core.Entities.Tasks.TaskStatus.Completed 
                             && !t.IsDeleted)
                 .OrderByDescending(t => t.CreatedAt)
                 .ToListAsync();
 
-            await ResolveRelatedEntityNames(tasks);
             ViewData["Title"] = "Выполненные задачи";
             return View("Index", tasks);
         }
@@ -115,7 +99,6 @@ namespace CRM.Controllers
             var tasks = await _context.EmployeeTasks
                 .Include(t => t.Author)
                 .Include(t => t.Assignee)
-                .Include(t => t.Relations)
                 .Where(t => (t.AuthorId == user.Id || t.AssigneeId == user.Id)
                             && t.Deadline < DateTime.UtcNow
                             && t.Status != Core.Entities.Tasks.TaskStatus.Completed
@@ -123,7 +106,6 @@ namespace CRM.Controllers
                 .OrderByDescending(t => t.CreatedAt)
                 .ToListAsync();
 
-            await ResolveRelatedEntityNames(tasks);
             ViewData["Title"] = "Просроченные задачи";
             return View("Index", tasks);
         }
@@ -136,7 +118,6 @@ namespace CRM.Controllers
             var task = await _context.EmployeeTasks
                 .Include(t => t.Author)
                 .Include(t => t.Assignee)
-                .Include(t => t.Relations)
                 .Include(t => t.Comments.OrderBy(c => c.CreatedAt))
                     .ThenInclude(c => c.Author) 
                 .FirstOrDefaultAsync(m => m.Id == id);
@@ -144,7 +125,6 @@ namespace CRM.Controllers
             if (task == null) return NotFound();
 
             ViewBag.CurrentUserId = user.Id;
-            await ResolveRelatedEntityNames(new List<EmployeeTask> { task });
             return View(task);
         }
 
@@ -214,7 +194,6 @@ namespace CRM.Controllers
         public async Task<IActionResult> Create(bool modal = false)
         {
             var user = await GetCurrentUser();
-            ViewBag.CurrentUserId = user.Id;
             ViewBag.CurrentUserName = user.FullName;
             ViewBag.IsModal = modal;
             await PrepareViewBags();
@@ -223,7 +202,7 @@ namespace CRM.Controllers
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create(EmployeeTask task, string[] selectedObjects, bool modal = false)
+        public async Task<IActionResult> Create(EmployeeTask task, bool modal = false)
         {
             var user = await GetCurrentUser();
             
@@ -233,22 +212,6 @@ namespace CRM.Controllers
             task.Status = Core.Entities.Tasks.TaskStatus.Created;
             task.Name = task.Title; 
             task.EntityCode = "EmployeeTask"; 
-
-            if (selectedObjects != null)
-            {
-                foreach (var item in selectedObjects.Where(s => !string.IsNullOrEmpty(s)))
-                {
-                    var parts = item.Split('|');
-                    if (parts.Length == 2)
-                    {
-                        task.Relations.Add(new TaskEntityRelation
-                        {
-                            EntityCode = parts[0],
-                            EntityId = Guid.Parse(parts[1])
-                        });
-                    }
-                }
-            }
 
             ModelState.Remove("Author");
             ModelState.Remove("AuthorId");
@@ -269,7 +232,6 @@ namespace CRM.Controllers
                 return RedirectToAction(nameof(CreatedByMe));
             }
             
-            ViewBag.CurrentUserId = user.Id;
             ViewBag.CurrentUserName = user.FullName;
             ViewBag.IsModal = modal;
             await PrepareViewBags();
@@ -327,22 +289,25 @@ namespace CRM.Controllers
         private async Task PrepareViewBags()
         {
             ViewBag.Employees = await _context.Employees.Select(e => new SelectListItem { Value = e.Id.ToString(), Text = e.FullName }).ToListAsync();
-            var definitions = await _context.AppDefinitions.ToListAsync();
-            ViewBag.EntityTypes = definitions.Select(d => new SelectListItem { Value = d.EntityCode, Text = d.Name }).ToList();
-            var allObjects = await _context.GenericObjects.Select(o => new ObjectLookupDto { Id = o.Id, Name = o.Name ?? "Без названия", Type = o.EntityCode }).ToListAsync();
-            ViewBag.AllObjectsJson = System.Text.Json.JsonSerializer.Serialize(allObjects);
-        } 
+        }
 
         private async Task<Employee> GetCurrentUser()
         {
-            var email = User.Identity?.Name;
-            if (string.IsNullOrEmpty(email)) throw new Exception("User not authorized");
-            
-            var employee = await _context.Employees.FirstOrDefaultAsync(e => e.Email == email);
-            if (employee == null) 
+            var employeeId = TryGetCurrentEmployeeId();
+            if (!employeeId.HasValue)
             {
-                 return await _context.Employees.FirstAsync(); 
+                throw new InvalidOperationException("Не удалось определить пользователя текущей сессии.");
             }
+
+            var employee = await _context.Employees
+                .AsNoTracking()
+                .FirstOrDefaultAsync(e => e.Id == employeeId.Value);
+
+            if (employee == null)
+            {
+                throw new InvalidOperationException("Пользователь текущей сессии не найден среди сотрудников.");
+            }
+
             return employee;
         }
 

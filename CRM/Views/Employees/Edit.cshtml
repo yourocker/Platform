@@ -1,4 +1,5 @@
-﻿@model Core.Entities.Company.Employee
+﻿@using Core.DTOs.Company
+@model EmployeeEditDto
 @{
     ViewData["Title"] = "Редактирование сотрудника";
     bool isLocked = Model.IsDismissed;
@@ -82,7 +83,7 @@
                                     @if(!isLocked){ <button type="button" crm-button variant="white" icon="plus-circle" class="btn-sm border-0 text-primary shadow-none" onclick="addInput('phone-list', 'Phones')"></button> }
                                 </div>
                                 <div class="card-body p-3 pt-0" id="phone-list">
-                                    @foreach (var phone in Model.Phones)
+                                    @foreach (var phone in Model.Phones.DefaultIfEmpty(string.Empty))
                                     {
                                         <div class="input-group mb-2">
                                             <input name="Phones" class="form-control form-control-sm shadow-none" value="@phone" />
@@ -99,7 +100,7 @@
                                     @if(!isLocked){ <button type="button" crm-button variant="white" icon="plus-circle" class="btn-sm border-0 text-primary shadow-none" onclick="addInput('email-list', 'Emails')"></button> }
                                 </div>
                                 <div class="card-body p-3 pt-0" id="email-list">
-                                    @foreach (var email in Model.Emails)
+                                    @foreach (var email in Model.Emails.DefaultIfEmpty(string.Empty))
                                     {
                                         <div class="input-group mb-2">
                                             <input name="Emails" class="form-control form-control-sm shadow-none" value="@email" />
@@ -123,7 +124,7 @@
                         <div class="card-header bg-transparent border-0 pt-3 px-4"><h5 class="mb-0 fw-bold text-muted text-uppercase small">Место работы</h5></div>
                         <div class="card-body p-4 pt-0">
                             <div id="appointments-container">
-                                @foreach (var app in Model.StaffAppointments)
+                                @foreach (var app in Model.Appointments.DefaultIfEmpty(new EmployeeAppointmentDto()))
                                 {
                                     <div class="row appointment-row mb-3 align-items-end g-2">
                                         <div class="col-md-5">
@@ -154,10 +155,10 @@
                             <h5 class="mb-0 fw-bold text-muted text-uppercase small"><i class="bi bi-shield-lock me-1"></i> Доступ в систему</h5>
                         </div>
                         <div class="card-body p-4 pt-2">
-                            @if (ViewBag.HasLogin == true)
+                            @if (Model.HasLogin)
                             {
                                 <div class="row g-3 align-items-end">
-                                    <div class="col-md-5"><crm-input label="Логин (Email)" name="Login" value="@Model.UserName" autocomplete="off" /></div>
+                                    <div class="col-md-5"><crm-input label="Логин (Email)" asp-for="Login" autocomplete="off" /></div>
                                     <div class="col-md-4"><crm-input label="Пароль" name="PassFake" value="********" readonly="readonly" /></div>
                                     <div class="col-md-3">
                                         <button type="button" crm-button variant="outline-danger" icon="key" class="w-100" data-bs-toggle="modal" data-bs-target="#resetPasswordModal">Сменить пароль</button>
@@ -168,8 +169,8 @@
                             {
                                 <div class="alert alert-warning border-0 small shadow-sm"><i class="bi bi-exclamation-circle me-1"></i> У сотрудника нет доступа. Заполните поля ниже для создания записи.</div>
                                 <div class="row g-3">
-                                    <div class="col-md-6"><crm-input label="Логин (Email)" name="Login" placeholder="ivanov@example.com" autocomplete="off" /></div>
-                                    <div class="col-md-6"><crm-input label="Создайте Пароль" name="NewPassword" type="password" autocomplete="new-password" /></div>
+                                    <div class="col-md-6"><crm-input label="Логин (Email)" asp-for="Login" placeholder="ivanov@example.com" autocomplete="off" /></div>
+                                    <div class="col-md-6"><crm-input label="Создайте Пароль" asp-for="NewPassword" type="password" autocomplete="new-password" /></div>
                                 </div>
                             }
                         </div>

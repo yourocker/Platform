@@ -86,6 +86,17 @@ public static class ModalRequestHelper
         });
     }
 
+    public static ContentResult BuildEntityUpdatedContent(string entityCode, Guid id, string? name)
+    {
+        return BuildParentMessageContent(new
+        {
+            type = "crm-entity-updated",
+            entityCode,
+            id,
+            name = name ?? string.Empty
+        });
+    }
+
     public static ContentResult BuildRedirectContent(string? url)
     {
         return BuildParentMessageContent(new
