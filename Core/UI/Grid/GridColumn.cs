@@ -35,7 +35,7 @@ namespace Core.UI.Grid
         public string? DynamicKey { get; set; }
         
         /// <summary>
-        /// Ключ сортировки
+        /// Ключ сортировки полей
         /// </summary>
         public string? SortKey { get; set; }
     }
