@@ -9,6 +9,8 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
+using System.Collections.Generic;
+using CRM.ViewModels.Filters;
 
 namespace CRM.Controllers
 {
@@ -20,94 +22,172 @@ namespace CRM.Controllers
         {
         }
 
+        private IQueryable<EmployeeTask> BuildTaskQuery(string filterType, Guid currentUserId)
+        {
+            var query = _context.EmployeeTasks
+                .Include(t => t.Author)
+                .Include(t => t.Assignee)
+                .Where(t => !t.IsDeleted);
+
+            return filterType switch
+            {
+                "CreatedByMe" => query.Where(t => t.AuthorId == currentUserId && t.Status != Core.Entities.Tasks.TaskStatus.Completed),
+                "AssignedToMe" => query.Where(t => t.AssigneeId == currentUserId && t.Status != Core.Entities.Tasks.TaskStatus.Completed),
+                "Completed" => query.Where(t => (t.AuthorId == currentUserId || t.AssigneeId == currentUserId) && t.Status == Core.Entities.Tasks.TaskStatus.Completed),
+                "Overdue" => query.Where(t => (t.AuthorId == currentUserId || t.AssigneeId == currentUserId) && t.Deadline < DateTime.UtcNow && t.Status != Core.Entities.Tasks.TaskStatus.Completed),
+                _ => query.Where(t => t.Status != Core.Entities.Tasks.TaskStatus.Completed)
+            };
+        }
+
+        private static IQueryable<EmployeeTask> ApplyTaskFilters(
+            IQueryable<EmployeeTask> query,
+            string? searchString,
+            IDictionary<string, string>? filters)
+        {
+            if (!string.IsNullOrWhiteSpace(searchString))
+            {
+                var search = searchString.Trim();
+                query = query.Where(t =>
+                    EF.Functions.ILike(t.Title, $"%{search}%") ||
+                    (t.Description != null && EF.Functions.ILike(t.Description, $"%{search}%")) ||
+                    EF.Functions.ILike(t.Author.FullName, $"%{search}%") ||
+                    EF.Functions.ILike(t.Assignee.FullName, $"%{search}%"));
+            }
+
+            if (filters == null || !filters.Any())
+            {
+                return query;
+            }
+
+            if (filters.TryGetValue("f_Status", out var statusRaw) &&
+                int.TryParse(statusRaw, out var statusValue))
+            {
+                query = query.Where(t => (int)t.Status == statusValue);
+            }
+
+            if (filters.TryGetValue("f_AuthorId", out var authorRaw) &&
+                Guid.TryParse(authorRaw, out var authorId))
+            {
+                query = query.Where(t => t.AuthorId == authorId);
+            }
+
+            if (filters.TryGetValue("f_AssigneeId", out var assigneeRaw) &&
+                Guid.TryParse(assigneeRaw, out var assigneeId))
+            {
+                query = query.Where(t => t.AssigneeId == assigneeId);
+            }
+
+            if (filters.TryGetValue("f_DeadlineFrom", out var deadlineFromRaw) &&
+                DateTime.TryParse(deadlineFromRaw, out var deadlineFrom))
+            {
+                var fromDate = deadlineFrom.Date;
+                query = query.Where(t => t.Deadline.HasValue && t.Deadline.Value >= fromDate);
+            }
+
+            if (filters.TryGetValue("f_DeadlineTo", out var deadlineToRaw) &&
+                DateTime.TryParse(deadlineToRaw, out var deadlineTo))
+            {
+                var toDateExclusive = deadlineTo.Date.AddDays(1);
+                query = query.Where(t => t.Deadline.HasValue && t.Deadline.Value < toDateExclusive);
+            }
+
+            return query;
+        }
+
+        private FilterPanelViewModel BuildTaskFilterPanelModel(
+            IEnumerable<SelectListItem> employees,
+            IDictionary<string, string> currentFilters)
+        {
+            var statusOptions = new List<FilterOptionViewModel>
+            {
+                new() { Value = ((int)Core.Entities.Tasks.TaskStatus.Created).ToString(), Label = "Новая" },
+                new() { Value = ((int)Core.Entities.Tasks.TaskStatus.InProgress).ToString(), Label = "В работе" },
+                new() { Value = ((int)Core.Entities.Tasks.TaskStatus.InReview).ToString(), Label = "На проверке" },
+                new() { Value = ((int)Core.Entities.Tasks.TaskStatus.Completed).ToString(), Label = "Готова" }
+            };
+
+            var employeeOptions = employees
+                .Select(item => new FilterOptionViewModel { Value = item.Value, Label = item.Text })
+                .ToList();
+
+            return new FilterPanelViewModel
+            {
+                ActionUrl = Url.Action(RouteData.Values["Action"]?.ToString() ?? nameof(Index)) ?? "/Tasks",
+                ResetUrl = Url.Action(RouteData.Values["Action"]?.ToString() ?? nameof(Index)) ?? "/Tasks",
+                EntityCode = "EmployeeTask",
+                ViewCode = RouteData.Values["Action"]?.ToString() ?? "Index",
+                SearchValue = ViewBag.CurrentSearch as string ?? string.Empty,
+                SearchPlaceholder = "Быстрый поиск",
+                PageSize = 20,
+                ExpandedByDefault = currentFilters.Any(),
+                Fields = new List<FilterFieldViewModel>
+                {
+                    new() { Key = "f_Status", Label = "Статус", Kind = FilterInputKind.Select, Value = TryGetFilterValue(currentFilters, "f_Status"), Options = statusOptions },
+                    new() { Key = "f_AuthorId", Label = "Постановщик", Kind = FilterInputKind.EntityLink, Value = TryGetFilterValue(currentFilters, "f_AuthorId"), Options = employeeOptions },
+                    new() { Key = "f_AssigneeId", Label = "Исполнитель", Kind = FilterInputKind.EntityLink, Value = TryGetFilterValue(currentFilters, "f_AssigneeId"), Options = employeeOptions },
+                    new() { Key = "f_DeadlineFrom", Label = "Срок с", Kind = FilterInputKind.Date, Value = TryGetFilterValue(currentFilters, "f_DeadlineFrom") },
+                    new() { Key = "f_DeadlineTo", Label = "Срок по", Kind = FilterInputKind.Date, Value = TryGetFilterValue(currentFilters, "f_DeadlineTo") }
+                }
+            };
+        }
+
+        private async Task<IActionResult> RenderTaskIndex(string filterType, string? searchString, Dictionary<string, string>? filters)
+        {
+            var user = await GetCurrentUser();
+            var employees = await _context.Employees
+                .AsNoTracking()
+                .OrderBy(e => e.LastName)
+                .ThenBy(e => e.FirstName)
+                .Select(e => new SelectListItem { Value = e.Id.ToString(), Text = e.FullName })
+                .ToListAsync();
+
+            filters ??= new Dictionary<string, string>();
+
+            var tasks = await ApplyTaskFilters(BuildTaskQuery(filterType, user.Id), searchString, filters)
+                .OrderByDescending(t => t.CreatedAt)
+                .ToListAsync();
+
+            ViewBag.FilterType = filterType;
+            ViewBag.CurrentSearch = searchString;
+            ViewBag.CurrentFilters = filters;
+            ViewBag.FilterPanelModel = BuildTaskFilterPanelModel(employees, filters);
+            ViewData["Title"] = filterType switch
+            {
+                "CreatedByMe" => "Поставленные мной",
+                "AssignedToMe" => "Назначенные мне",
+                "Completed" => "Выполненные",
+                "Overdue" => "Просроченные задачи",
+                _ => "Все задачи"
+            };
+
+            return View("Index", tasks);
+        }
+
         // --- СПИСКИ (VIEWS) ---
 
-        public async Task<IActionResult> Index()
+        public async Task<IActionResult> Index(string? searchString, [FromQuery] Dictionary<string, string>? filters = null)
         {
-            ViewBag.FilterType = "All";
-            var tasks = await _context.EmployeeTasks
-                .Include(t => t.Author)
-                .Include(t => t.Assignee)
-                .Where(t => !t.IsDeleted && t.Status != Core.Entities.Tasks.TaskStatus.Completed)
-                .OrderByDescending(t => t.CreatedAt)
-                .ToListAsync();
-
-            return View(tasks);
+            return await RenderTaskIndex("All", searchString, filters);
         }
 
-        public async Task<IActionResult> CreatedByMe()
+        public async Task<IActionResult> CreatedByMe(string? searchString, [FromQuery] Dictionary<string, string>? filters = null)
         {
-            var user = await GetCurrentUser();
-            ViewBag.FilterType = "CreatedByMe";
-            
-            var tasks = await _context.EmployeeTasks
-                .Include(t => t.Author)
-                .Include(t => t.Assignee)
-                .Where(t => t.AuthorId == user.Id 
-                            && !t.IsDeleted 
-                            && t.Status != Core.Entities.Tasks.TaskStatus.Completed)
-                .OrderByDescending(t => t.CreatedAt)
-                .ToListAsync();
-
-            ViewData["Title"] = "Поставленные мной";
-            return View("Index", tasks);
+            return await RenderTaskIndex("CreatedByMe", searchString, filters);
         }
 
-        public async Task<IActionResult> AssignedToMe()
+        public async Task<IActionResult> AssignedToMe(string? searchString, [FromQuery] Dictionary<string, string>? filters = null)
         {
-            var user = await GetCurrentUser();
-            ViewBag.FilterType = "AssignedToMe";
-
-            var tasks = await _context.EmployeeTasks
-                .Include(t => t.Author)
-                .Include(t => t.Assignee)
-                .Where(t => t.AssigneeId == user.Id 
-                            && !t.IsDeleted 
-                            && t.Status != Core.Entities.Tasks.TaskStatus.Completed)
-                .OrderByDescending(t => t.CreatedAt)
-                .ToListAsync();
-
-            ViewData["Title"] = "Назначенные мне";
-            return View("Index", tasks);
+            return await RenderTaskIndex("AssignedToMe", searchString, filters);
         }
         
-        // ИСПРАВЛЕНО: CompletedTasks вместо Completed
-        public async Task<IActionResult> CompletedTasks()
+        public async Task<IActionResult> CompletedTasks(string? searchString, [FromQuery] Dictionary<string, string>? filters = null)
         {
-            var user = await GetCurrentUser();
-            ViewBag.FilterType = "Completed";
-
-            var tasks = await _context.EmployeeTasks
-                .Include(t => t.Author)
-                .Include(t => t.Assignee)
-                .Where(t => (t.AuthorId == user.Id || t.AssigneeId == user.Id)
-                            && t.Status == Core.Entities.Tasks.TaskStatus.Completed 
-                            && !t.IsDeleted)
-                .OrderByDescending(t => t.CreatedAt)
-                .ToListAsync();
-
-            ViewData["Title"] = "Выполненные задачи";
-            return View("Index", tasks);
+            return await RenderTaskIndex("Completed", searchString, filters);
         }
 
-        // ИСПРАВЛЕНО: OverdueTasks вместо Overdue
-        public async Task<IActionResult> OverdueTasks()
+        public async Task<IActionResult> OverdueTasks(string? searchString, [FromQuery] Dictionary<string, string>? filters = null)
         {
-            var user = await GetCurrentUser();
-            ViewBag.FilterType = "Overdue";
-
-            var tasks = await _context.EmployeeTasks
-                .Include(t => t.Author)
-                .Include(t => t.Assignee)
-                .Where(t => (t.AuthorId == user.Id || t.AssigneeId == user.Id)
-                            && t.Deadline < DateTime.UtcNow
-                            && t.Status != Core.Entities.Tasks.TaskStatus.Completed
-                            && !t.IsDeleted)
-                .OrderByDescending(t => t.CreatedAt)
-                .ToListAsync();
-
-            ViewData["Title"] = "Просроченные задачи";
-            return View("Index", tasks);
+            return await RenderTaskIndex("Overdue", searchString, filters);
         }
         
         // --- ПРОСМОТР И ДЕЙСТВИЯ ---

@@ -17,6 +17,7 @@ using Microsoft.AspNetCore.Hosting;
 using System.Text.Json;
 using Core.Interfaces.Platform;
 using CRM.Infrastructure;
+using CRM.ViewModels.Filters;
 
 namespace CRM.Controllers
 {
@@ -53,6 +54,38 @@ namespace CRM.Controllers
             }
         }
 
+        private FilterPanelViewModel BuildFilterPanelModel(
+            Dictionary<string, string> currentFilters,
+            IReadOnlyCollection<AppFieldDefinition> dynamicFields)
+        {
+            var lookupData = ViewBag.LookupData as Dictionary<string, List<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>>
+                             ?? new Dictionary<string, List<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>>();
+
+            var fields = new List<FilterFieldViewModel>
+            {
+                new() { Key = "f_LastName", Label = "Фамилия", Kind = FilterInputKind.Text, Value = TryGetFilterValue(currentFilters, "f_LastName") },
+                new() { Key = "f_FirstName", Label = "Имя", Kind = FilterInputKind.Text, Value = TryGetFilterValue(currentFilters, "f_FirstName") },
+                new() { Key = "f_MiddleName", Label = "Отчество", Kind = FilterInputKind.Text, Value = TryGetFilterValue(currentFilters, "f_MiddleName") },
+                new() { Key = "f_Phone", Label = "Телефон", Kind = FilterInputKind.Text, Value = TryGetFilterValue(currentFilters, "f_Phone") },
+                new() { Key = "f_Email", Label = "Email", Kind = FilterInputKind.Text, Value = TryGetFilterValue(currentFilters, "f_Email") }
+            };
+
+            fields.AddRange(BuildDynamicFilterFields(dynamicFields, lookupData, currentFilters));
+
+            return new FilterPanelViewModel
+            {
+                ActionUrl = Url.Action(nameof(Index)) ?? "/Contacts",
+                ResetUrl = Url.Action(nameof(Index)) ?? "/Contacts",
+                EntityCode = "Contact",
+                ViewCode = "Index",
+                SearchValue = ViewBag.CurrentSearch as string ?? string.Empty,
+                SearchPlaceholder = "Быстрый поиск",
+                PageSize = ViewBag.PageSize is int pageSize ? pageSize : 10,
+                ExpandedByDefault = currentFilters.Any(),
+                Fields = fields
+            };
+        }
+
         /// <summary>
         /// Извлекает динамические поля из формы (Request.Form) в словарь.
         /// </summary>
@@ -74,13 +107,11 @@ namespace CRM.Controllers
 
         // GET: Contacts
         public async Task<IActionResult> Index(
-            string searchString, 
+            string? searchString, 
             int pageNumber = 1, 
-            int? pageSize = null, // <--- Изменили на nullable int, чтобы различать отсутствие параметра
-            string? sortOrder = null, // <--- НОВЫЙ ПАРАМЕТР СОРТИРОВКИ
-            string? f_LastName = null,
-            string? f_FirstName = null,
-            string? f_MiddleName = null)
+            int? pageSize = null,
+            string? sortOrder = null,
+            [FromQuery] Dictionary<string, string>? filters = null)
         {
             // 1. ЛОГИКА PAGE SIZE (COOKIE)
             // Если pageSize пришел в запросе - сохраняем в куки и используем.
@@ -110,34 +141,19 @@ namespace CRM.Controllers
             var dynamicFields = ViewBag.DynamicFields as List<AppFieldDefinition> ?? new List<AppFieldDefinition>();
 
             // 3. Сбор фильтров
-            var filters = new Dictionary<string, string>();
-            if (!string.IsNullOrEmpty(f_LastName)) filters.Add("LastName", f_LastName);
-            if (!string.IsNullOrEmpty(f_FirstName)) filters.Add("FirstName", f_FirstName);
-            if (!string.IsNullOrEmpty(f_MiddleName)) filters.Add("MiddleName", f_MiddleName);
-            
-            // Динамические фильтры из Query String
-            foreach (var key in Request.Query.Keys)
-            {
-                if (key.StartsWith("f_") && !new[] { "f_LastName", "f_FirstName", "f_MiddleName" }.Contains(key))
-                {
-                    var val = Request.Query[key].ToString();
-                    if (!string.IsNullOrEmpty(val))
-                    {
-                        var fieldName = key.Substring(2);
-                        filters.Add(fieldName, val);
-                    }
-                }
-            }
+            filters ??= new Dictionary<string, string>();
 
             // 4. Получение данных
             
             // 4.1. Подсчет общего количества (БЕЗ сортировки и пагинации)
-            var countSpec = new ContactSearchSpecification(searchString, filters);
+            var dynamicFieldMap = dynamicFields.ToDictionary(field => field.SystemName, field => field, StringComparer.OrdinalIgnoreCase);
+
+            var countSpec = new ContactSearchSpecification(searchString, filters, dynamicFieldMap);
             var totalItems = await SpecificationEvaluator.GetQuery<Contact>(_context.Contacts.AsQueryable(), countSpec).CountAsync();
 
             // 4.2. Получение страницы данных (С СОРТИРОВКОЙ и пагинацией)
             // Передаем sortOrder в спецификацию
-            var listSpec = new ContactSearchSpecification(searchString, filters, pageNumber, actualPageSize, sortOrder);
+            var listSpec = new ContactSearchSpecification(searchString, filters, dynamicFieldMap, pageNumber, actualPageSize, sortOrder);
             var contacts = await SpecificationEvaluator.GetQuery<Contact>(_context.Contacts.AsQueryable(), listSpec).ToListAsync();
 
             // Маппинг в DTO
@@ -164,7 +180,9 @@ namespace CRM.Controllers
             ViewBag.TotalPages = (int)Math.Ceiling(totalItems / (double)actualPageSize);
             
             // Возвращаем фильтры для восстановления в UI
-            ViewBag.CurrentFilters = filters.ToDictionary(k => "f_" + k.Key, v => v.Value);
+            var currentFilters = filters ?? new Dictionary<string, string>();
+            ViewBag.CurrentFilters = currentFilters;
+            ViewBag.FilterPanelModel = BuildFilterPanelModel(currentFilters, dynamicFields);
 
             return View(contactDtos);
         }

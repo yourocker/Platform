@@ -100,6 +100,14 @@ var antiforgeryToken = Antiforgery.GetAndStoreTokens(Context).RequestToken;
         .main-btn.active { color: var(--primary-text); background: var(--primary-color); opacity: 1; }
 
         /* Вспомогательное меню */
+        #nav-sub-shell {
+            position: relative;
+            width: 240px;
+            flex-shrink: 0;
+            transition: width 0.22s ease;
+            z-index: 1045;
+        }
+
         #nav-sub {
             width: 240px;
             background: var(--sub-bg);
@@ -108,12 +116,41 @@ var antiforgeryToken = Antiforgery.GetAndStoreTokens(Context).RequestToken;
             flex-direction: column;
             box-shadow: 2px 0 5px rgba(0,0,0,0.03);
             flex-shrink: 0;
+            height: 100vh;
+            transition: transform 0.22s ease, opacity 0.22s ease, box-shadow 0.22s ease;
         }
 
         .sub-header {
             padding: 25px 20px; font-weight: 700; font-size: 1.1rem;
             border-bottom: 1px solid rgba(0,0,0,0.05); height: 60px;
-            display: flex; align-items: center; color: var(--sub-text);
+            display: flex; align-items: center; justify-content: space-between; color: var(--sub-text);
+            gap: 12px;
+        }
+        .sub-header span {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .sub-header-toggle,
+        .nav-main-toggle {
+            border: 0;
+            background: transparent;
+            color: inherit;
+        }
+        .sub-header-toggle {
+            width: 28px;
+            height: 28px;
+            border-radius: 8px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            color: rgba(0,0,0,0.45);
+            transition: background 0.15s ease, color 0.15s ease;
+            flex-shrink: 0;
+        }
+        .sub-header-toggle:hover {
+            background: rgba(0,0,0,0.05);
+            color: rgba(0,0,0,0.7);
         }
         .sub-link {
             padding: 12px 20px; color: var(--sub-text); text-decoration: none;
@@ -195,6 +232,57 @@ var antiforgeryToken = Antiforgery.GetAndStoreTokens(Context).RequestToken;
         .crm-entity-modal-frame {
             display: block;
             background: transparent;
+        }
+
+        #nav-sub-hover-zone {
+            display: none;
+            position: absolute;
+            top: 0;
+            left: 100%;
+            width: 10px;
+            height: 100vh;
+        }
+
+        #nav-sub-expand-btn {
+            display: none;
+            margin-bottom: 18px;
+        }
+
+        body.subnav-collapsed #nav-sub-shell {
+            width: 0;
+            overflow: visible;
+        }
+
+        body.subnav-collapsed #nav-sub {
+            position: absolute;
+            top: 0;
+            left: 0;
+            opacity: 0;
+            pointer-events: none;
+            transform: translateX(-18px);
+            border-right-color: rgba(0,0,0,0.08);
+            background: rgba(255,255,255,0.82);
+            backdrop-filter: blur(14px);
+            box-shadow: 0 24px 56px rgba(15, 23, 42, 0.18);
+        }
+
+        body.subnav-collapsed.subnav-peeking #nav-sub {
+            opacity: 1;
+            pointer-events: auto;
+            transform: translateX(0);
+        }
+
+        body.subnav-collapsed #nav-sub-hover-zone {
+            display: block;
+        }
+
+        body.subnav-collapsed #nav-sub-expand-btn {
+            display: flex;
+        }
+
+        body.subnav-collapsed .sub-link.active {
+            border-right-width: 0;
+            box-shadow: inset 3px 0 0 var(--primary-color);
         }
     </style>
 </head>
@@ -323,6 +411,22 @@ var antiforgeryToken = Antiforgery.GetAndStoreTokens(Context).RequestToken;
 <script src="~/js/notifications.js" asp-append-version="true"></script>
 
 <script>
+    const subnavStorageKey = 'crm-subnav-collapsed';
+
+    function applySubnavState(collapsed) {
+        document.body.classList.toggle('subnav-collapsed', collapsed);
+        if (!collapsed) {
+            document.body.classList.remove('subnav-peeking');
+        }
+    }
+
+    function setSubnavCollapsed(collapsed) {
+        localStorage.setItem(subnavStorageKey, collapsed ? '1' : '0');
+        applySubnavState(collapsed);
+    }
+
+    applySubnavState(localStorage.getItem(subnavStorageKey) === '1');
+
     // Меню
     const el = document.getElementById('sortable-menu');
     if(el) {
@@ -363,6 +467,41 @@ var antiforgeryToken = Antiforgery.GetAndStoreTokens(Context).RequestToken;
         modal.show();
         $('#profileModalContent').load('/Profile/GetSettings');
     }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const collapseButtons = Array.from(document.querySelectorAll('.sub-header-toggle'));
+        const expandButton = document.getElementById('nav-sub-expand-btn');
+        const hoverZone = document.getElementById('nav-sub-hover-zone');
+        const subnav = document.getElementById('nav-sub');
+        let hoverLeaveTimer = null;
+
+        collapseButtons.forEach(button => {
+            button.addEventListener('click', () => setSubnavCollapsed(true));
+        });
+
+        expandButton?.addEventListener('click', () => setSubnavCollapsed(false));
+
+        const showPeek = () => {
+            if (!document.body.classList.contains('subnav-collapsed')) {
+                return;
+            }
+
+            window.clearTimeout(hoverLeaveTimer);
+            document.body.classList.add('subnav-peeking');
+        };
+
+        const hidePeek = () => {
+            window.clearTimeout(hoverLeaveTimer);
+            hoverLeaveTimer = window.setTimeout(() => {
+                document.body.classList.remove('subnav-peeking');
+            }, 120);
+        };
+
+        hoverZone?.addEventListener('mouseenter', showPeek);
+        hoverZone?.addEventListener('mouseleave', hidePeek);
+        subnav?.addEventListener('mouseenter', showPeek);
+        subnav?.addEventListener('mouseleave', hidePeek);
+    });
 </script>
 
 @await RenderSectionAsync("Scripts", required: false)

@@ -15,6 +15,7 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Core.Entities.Tasks;
 using CRM.Infrastructure;
+using CRM.ViewModels.Filters;
 using System.Security.Claims;
 
 namespace CRM.Controllers
@@ -137,6 +138,78 @@ namespace CRM.Controllers
             }
 
             return new List<SelectListItem>();
+        }
+
+        protected List<FilterFieldViewModel> BuildDynamicFilterFields(
+            IEnumerable<AppFieldDefinition>? fields,
+            IDictionary<string, List<SelectListItem>>? lookupData,
+            IDictionary<string, string>? currentFilters,
+            string keyPrefix = "f_dyn_")
+        {
+            var filterValues = currentFilters ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var optionsLookup = lookupData ?? new Dictionary<string, List<SelectListItem>>(StringComparer.OrdinalIgnoreCase);
+
+            return (fields ?? Enumerable.Empty<AppFieldDefinition>())
+                .Where(field => !field.IsDeleted && field.DataType != FieldDataType.File)
+                .OrderBy(field => field.SortOrder)
+                .Select(field => new FilterFieldViewModel
+                {
+                    Key = $"{keyPrefix}{field.SystemName}",
+                    Label = field.Label,
+                    Kind = MapFilterInputKind(field.DataType),
+                    Value = TryGetFilterValue(filterValues, $"{keyPrefix}{field.SystemName}"),
+                    Options = BuildFilterOptions(field, optionsLookup)
+                })
+                .ToList();
+        }
+
+        protected static string? TryGetFilterValue(IDictionary<string, string>? values, string key)
+        {
+            return values != null && values.TryGetValue(key, out var value)
+                ? value
+                : null;
+        }
+
+        protected static FilterInputKind MapFilterInputKind(FieldDataType dataType)
+        {
+            return dataType switch
+            {
+                FieldDataType.Number or FieldDataType.Money => FilterInputKind.Number,
+                FieldDataType.Date => FilterInputKind.Date,
+                FieldDataType.DateTime => FilterInputKind.DateTime,
+                FieldDataType.Boolean => FilterInputKind.Boolean,
+                FieldDataType.Select => FilterInputKind.Select,
+                FieldDataType.EntityLink => FilterInputKind.EntityLink,
+                _ => FilterInputKind.Text
+            };
+        }
+
+        protected static List<FilterOptionViewModel> BuildFilterOptions(
+            AppFieldDefinition field,
+            IDictionary<string, List<SelectListItem>> lookupData)
+        {
+            if (field.DataType == FieldDataType.Boolean)
+            {
+                return new List<FilterOptionViewModel>
+                {
+                    new() { Value = "true", Label = "Да" },
+                    new() { Value = "false", Label = "Нет" }
+                };
+            }
+
+            if ((field.DataType == FieldDataType.Select || field.DataType == FieldDataType.EntityLink) &&
+                lookupData.TryGetValue(field.SystemName, out var items))
+            {
+                return items
+                    .Select(item => new FilterOptionViewModel
+                    {
+                        Value = item.Value,
+                        Label = item.Text
+                    })
+                    .ToList();
+            }
+
+            return new List<FilterOptionViewModel>();
         }
 
         protected static List<string> BuildEntityCodeCandidates(string? entityCode)

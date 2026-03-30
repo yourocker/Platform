@@ -1,0 +1,404 @@
+@model CRM.ViewModels.Filters.FilterPanelViewModel
+@inject Microsoft.AspNetCore.Antiforgery.IAntiforgery Antiforgery
+@{
+    var antiforgeryToken = Antiforgery.GetAndStoreTokens(Context).RequestToken;
+    var panelUid = $"{Model.FormId}_panel";
+}
+
+<form action="@Model.ActionUrl" method="get" id="@Model.FormId" class="crm-unified-filter-form" data-filter-form>
+    <input type="hidden" name="pageSize" value="@Model.PageSize" data-filter-page-size />
+    <input type="hidden" name="pageNumber" value="1" data-filter-page-number />
+    <input type="hidden" name="__RequestVerificationToken" value="@antiforgeryToken" data-filter-antiforgery />
+
+    <div crm-card class="mb-4 crm-unified-filter-card">
+        <div class="card-body p-3">
+            <div class="crm-unified-filter-toolbar">
+                <div class="crm-unified-filter-primary">
+                    <button
+                        type="button"
+                        class="btn btn-outline-secondary crm-unified-filter-toggle"
+                        data-bs-toggle="collapse"
+                        data-bs-target="#@Model.PanelId"
+                        aria-expanded="@(Model.ExpandedByDefault ? "true" : "false")"
+                        aria-controls="@Model.PanelId">
+                        <i class="bi bi-funnel me-1"></i> Фильтры
+                    </button>
+
+                    <div class="crm-unified-filter-search">
+                    <div class="input-group border rounded-3 overflow-hidden">
+                        <span class="input-group-text bg-white border-0">
+                            <i class="bi bi-search text-primary"></i>
+                        </span>
+                        <input
+                            type="text"
+                            name="searchString"
+                            value="@Model.SearchValue"
+                            class="form-control border-0 shadow-none"
+                            placeholder="@Model.SearchPlaceholder"
+                            autocomplete="off"
+                            data-filter-search />
+                    </div>
+                </div>
+                </div>
+
+                <div class="crm-unified-filter-presets input-group">
+                    <select class="form-select" data-filter-preset-select>
+                        <option value="">Сохраненные пресеты</option>
+                    </select>
+                    <button type="button" class="btn btn-outline-secondary" data-filter-preset-apply>Применить</button>
+                    <button type="button" class="btn btn-outline-secondary" data-filter-reset>Сбросить</button>
+                    <button type="button" class="btn btn-outline-secondary" data-filter-preset-save>Сохранить</button>
+                    <button type="button" class="btn btn-outline-danger" data-filter-preset-delete>Удалить</button>
+                </div>
+            </div>
+
+            <div class="collapse @(Model.ExpandedByDefault ? "show" : "")" id="@Model.PanelId">
+                <div class="pt-4 mt-3 border-top">
+                    <div class="row row-cols-1 row-cols-md-2 row-cols-lg-4 g-3">
+                        @foreach (var field in Model.Fields)
+                        {
+                            <div class="col">
+                                <label class="small text-muted fw-bold text-uppercase mb-1">@field.Label</label>
+
+                                @switch (field.Kind)
+                                {
+                                    case CRM.ViewModels.Filters.FilterInputKind.Number:
+                                        <input type="number" step="any" class="form-control form-control-sm shadow-none" name="filters[@field.Key]" value="@field.Value" data-filter-control />
+                                        break;
+                                    case CRM.ViewModels.Filters.FilterInputKind.Date:
+                                        <input type="date" class="form-control form-control-sm shadow-none" name="filters[@field.Key]" value="@field.Value" data-filter-control />
+                                        break;
+                                    case CRM.ViewModels.Filters.FilterInputKind.DateTime:
+                                        <input type="datetime-local" class="form-control form-control-sm shadow-none" name="filters[@field.Key]" value="@field.Value" data-filter-control />
+                                        break;
+                                    case CRM.ViewModels.Filters.FilterInputKind.Boolean:
+                                        <select class="form-select form-select-sm shadow-none" name="filters[@field.Key]" data-filter-control>
+                                            <option value="">Все</option>
+                                            @foreach (var option in field.Options)
+                                            {
+                                                <option value="@option.Value" selected="@(option.Value == field.Value)">@option.Label</option>
+                                            }
+                                        </select>
+                                        break;
+                                    case CRM.ViewModels.Filters.FilterInputKind.Select:
+                                    case CRM.ViewModels.Filters.FilterInputKind.EntityLink:
+                                        <select class="form-select form-select-sm shadow-none" name="filters[@field.Key]" data-filter-control>
+                                            <option value="">Все</option>
+                                            @foreach (var option in field.Options)
+                                            {
+                                                <option value="@option.Value" selected="@(option.Value == field.Value)">@option.Label</option>
+                                            }
+                                        </select>
+                                        break;
+                                    default:
+                                        <input type="text" class="form-control form-control-sm shadow-none" name="filters[@field.Key]" value="@field.Value" placeholder="@field.Placeholder" data-filter-control />
+                                        break;
+                                }
+                            </div>
+                        }
+                    </div>
+
+                    <div class="d-flex justify-content-end mt-3">
+                        <a href="@Model.ResetUrl" class="btn btn-link btn-sm text-danger text-decoration-none p-0">Сбросить все фильтры</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+<script>
+    (() => {
+        const form = document.getElementById('@Model.FormId');
+        if (!form || form.dataset.filterInitialized === 'true') {
+            return;
+        }
+
+        form.dataset.filterInitialized = 'true';
+
+        const entityCode = '@Model.EntityCode';
+        const viewCode = '@Model.ViewCode';
+        const presetSelect = form.querySelector('[data-filter-preset-select]');
+        const pageNumberInput = form.querySelector('[data-filter-page-number]');
+        const pageSizeInput = form.querySelector('[data-filter-page-size]');
+        const antiForgeryInput = form.querySelector('[data-filter-antiforgery]');
+        const controls = Array.from(form.querySelectorAll('[data-filter-control]'));
+        const searchInput = form.querySelector('[data-filter-search]');
+        const savePresetButton = form.querySelector('[data-filter-preset-save]');
+        const applyPresetButton = form.querySelector('[data-filter-preset-apply]');
+        const deletePresetButton = form.querySelector('[data-filter-preset-delete]');
+        const resetButton = form.querySelector('[data-filter-reset]');
+
+        let presetCache = [];
+        let filterTimer = null;
+
+        function resetPageNumber() {
+            if (pageNumberInput) {
+                pageNumberInput.value = '1';
+            }
+        }
+
+        function submitForm() {
+            resetPageNumber();
+            form.submit();
+        }
+
+        function getFilterValues() {
+            const result = {};
+            const formData = new FormData(form);
+
+            for (const [key, value] of formData.entries()) {
+                if (key === '__RequestVerificationToken' || key === 'pageNumber' || key === 'pageSize') {
+                    continue;
+                }
+
+                result[key] = String(value || '');
+            }
+
+            return result;
+        }
+
+        function applyValues(values) {
+            const normalized = values || {};
+            const allControls = form.querySelectorAll('input[name], select[name], textarea[name]');
+
+            allControls.forEach(control => {
+                const name = control.name;
+                if (!name || name === '__RequestVerificationToken' || name === 'pageSize' || name === 'pageNumber') {
+                    return;
+                }
+
+                const nextValue = Object.prototype.hasOwnProperty.call(normalized, name)
+                    ? normalized[name]
+                    : '';
+
+                control.value = nextValue;
+            });
+        }
+
+        function renderPresets(selectedId) {
+            presetSelect.innerHTML = '<option value="">Сохраненные пресеты</option>';
+            presetCache.forEach(preset => {
+                const option = document.createElement('option');
+                option.value = preset.id;
+                option.textContent = preset.name;
+                presetSelect.appendChild(option);
+            });
+
+            if (selectedId) {
+                presetSelect.value = selectedId;
+            }
+        }
+
+        async function reloadPresets(selectedId) {
+            try {
+                const response = await fetch(`/FilterPresets/Get?entityCode=${encodeURIComponent(entityCode)}&viewCode=${encodeURIComponent(viewCode)}`);
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const data = await response.json();
+                presetCache = Array.isArray(data) ? data : [];
+                renderPresets(selectedId);
+            } catch {
+                presetCache = [];
+                renderPresets();
+            }
+        }
+
+        function resetFilters() {
+            if (searchInput) {
+                searchInput.value = '';
+            }
+
+            controls.forEach(control => {
+                control.value = '';
+            });
+
+            if (presetSelect) {
+                presetSelect.value = '';
+            }
+
+            submitForm();
+        }
+
+        if (searchInput) {
+            searchInput.addEventListener('input', () => {
+                window.clearTimeout(filterTimer);
+                filterTimer = window.setTimeout(submitForm, 500);
+            });
+        }
+
+        controls.forEach(control => {
+            const eventName = control.tagName === 'SELECT' ? 'change' : 'input';
+            control.addEventListener(eventName, () => {
+                window.clearTimeout(filterTimer);
+                filterTimer = window.setTimeout(submitForm, control.tagName === 'SELECT' ? 0 : 500);
+            });
+        });
+
+        if (pageSizeInput) {
+            window.changePageSize = function(value) {
+                pageSizeInput.value = value;
+                submitForm();
+            };
+        }
+
+        resetButton?.addEventListener('click', resetFilters);
+
+        savePresetButton?.addEventListener('click', async () => {
+            const name = window.prompt('Название пресета:');
+            if (!name || !name.trim()) {
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('__RequestVerificationToken', antiForgeryInput?.value || '');
+            formData.append('entityCode', entityCode);
+            formData.append('viewCode', viewCode);
+            formData.append('name', name.trim());
+
+            const values = getFilterValues();
+            Object.keys(values).forEach(key => formData.append(`values[${key}]`, values[key] || ''));
+
+            try {
+                const response = await fetch('/FilterPresets/Save', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+                if (!result.success) {
+                    window.alert(result.message || 'Не удалось сохранить пресет.');
+                    return;
+                }
+
+                await reloadPresets(result.id);
+            } catch {
+                window.alert('Ошибка сети при сохранении пресета.');
+            }
+        });
+
+        applyPresetButton?.addEventListener('click', () => {
+            const selectedId = presetSelect?.value;
+            if (!selectedId) {
+                return;
+            }
+
+            const preset = presetCache.find(item => String(item.id) === selectedId);
+            if (!preset) {
+                return;
+            }
+
+            applyValues(preset.values || {});
+            submitForm();
+        });
+
+        deletePresetButton?.addEventListener('click', async () => {
+            const selectedId = presetSelect?.value;
+            if (!selectedId) {
+                return;
+            }
+
+            if (!window.confirm('Удалить выбранный пресет?')) {
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('__RequestVerificationToken', antiForgeryInput?.value || '');
+            formData.append('id', selectedId);
+
+            try {
+                const response = await fetch('/FilterPresets/Delete', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const result = await response.json();
+                if (!result.success) {
+                    window.alert(result.message || 'Не удалось удалить пресет.');
+                    return;
+                }
+
+                await reloadPresets();
+            } catch {
+                window.alert('Ошибка сети при удалении пресета.');
+            }
+        });
+
+        reloadPresets();
+    })();
+</script>
+
+<style>
+    .crm-unified-filter-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 1rem;
+        align-items: center;
+    }
+
+    .crm-unified-filter-primary {
+        display: flex;
+        align-items: center;
+        gap: 0.875rem;
+        flex: 1 1 540px;
+        min-width: 320px;
+    }
+
+    .crm-unified-filter-search {
+        flex: 1 1 auto;
+        min-width: 220px;
+    }
+
+    .crm-unified-filter-search .form-control,
+    .crm-unified-filter-search .input-group-text {
+        height: 40px;
+    }
+
+    .crm-unified-filter-toggle {
+        height: 40px;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+
+    .crm-unified-filter-presets {
+        align-self: stretch;
+        flex: 0 1 620px;
+        min-width: 380px;
+    }
+
+    .crm-unified-filter-presets .btn,
+    .crm-unified-filter-presets .form-select {
+        white-space: nowrap;
+        height: 40px;
+    }
+
+    @@media (max-width: 1199.98px) {
+        .crm-unified-filter-presets {
+            flex-basis: 100%;
+        }
+    }
+
+    @@media (max-width: 767.98px) {
+        .crm-unified-filter-primary {
+            min-width: 100%;
+            flex-wrap: wrap;
+        }
+
+        .crm-unified-filter-search {
+            width: 100%;
+        }
+
+        .crm-unified-filter-presets {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            min-width: 100%;
+            width: 100%;
+        }
+
+        .crm-unified-filter-presets .form-select {
+            grid-column: 1 / -1;
+        }
+    }
+</style>

@@ -24,12 +24,20 @@
 
 <div class="container-fluid">
     <div class="card shadow-sm border-0 mb-3">
-        <div class="card-header bg-transparent border-bottom-0 d-flex justify-content-between align-items-center">
-            <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#scheduleFilterCollapse" aria-expanded="false" aria-controls="scheduleFilterCollapse">
-                <i class="bi bi-funnel me-1"></i> Фильтры
-            </button>
+        <div class="card-header bg-transparent border-bottom-0">
+            <div class="schedule-filter-toolbar">
+                <button class="btn btn-sm btn-outline-secondary schedule-filter-toggle" type="button" data-bs-toggle="collapse" data-bs-target="#scheduleFilterCollapse" aria-expanded="false" aria-controls="scheduleFilterCollapse">
+                    <i class="bi bi-funnel me-1"></i> Фильтры
+                </button>
 
-            <div class="input-group input-group-sm" style="max-width: 640px;">
+                <div class="schedule-filter-search">
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text bg-white border-0"><i class="bi bi-search text-primary"></i></span>
+                        <input type="text" class="form-control border-0 shadow-none" name="f_search" form="scheduleFilterForm" placeholder="Быстрый поиск" />
+                    </div>
+                </div>
+
+            <div class="input-group input-group-sm schedule-filter-presets">
                 <select id="savedFilterSelect" class="form-select">
                     <option value="">Сохраненные фильтры</option>
                 </select>
@@ -37,16 +45,13 @@
                 <button type="button" class="btn btn-outline-secondary" id="resetSavedFilterBtn">Сбросить</button>
                 <button type="button" class="btn btn-outline-danger" id="deleteSavedFilterBtn">Удалить</button>
             </div>
+            </div>
         </div>
 
         <div class="collapse" id="scheduleFilterCollapse">
             <div class="card-body pt-0">
                 <form id="scheduleFilterForm">
                     <div class="row g-2">
-                        <div class="col-md-3">
-                            <label class="form-label small fw-bold">Поиск</label>
-                            <input type="text" class="form-control form-control-sm" name="f_search" placeholder="Ресурс, услуга, исполнитель..." />
-                        </div>
                         <div class="col-md-3">
                             <label class="form-label small fw-bold">Ресурс</label>
                             <select class="form-select form-select-sm searchable-select" name="f_resourceId" data-search-placeholder="Поиск ресурса...">
@@ -310,6 +315,40 @@
 </div>
 
 <style>
+    .schedule-filter-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .schedule-filter-toggle {
+        height: 40px;
+        white-space: nowrap;
+    }
+
+    .schedule-filter-search {
+        flex: 1 1 520px;
+        min-width: 240px;
+    }
+
+    .schedule-filter-search .form-control,
+    .schedule-filter-search .input-group-text,
+    .schedule-filter-presets .form-select,
+    .schedule-filter-presets .btn {
+        height: 40px;
+    }
+
+    .schedule-filter-presets {
+        flex: 0 1 610px;
+    }
+
+    @@media (max-width: 991.98px) {
+        .schedule-filter-presets {
+            flex-basis: 100%;
+        }
+    }
+
     /* Здесь можно вручную менять оттенки нерабочего времени/отсутствий в календаре. */
     #bookingCalendar {
         --schedule-company-closed-color: rgba(108, 117, 125, 0.42);

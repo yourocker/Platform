@@ -8,6 +8,9 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Hosting;
+using Core.Entities.Platform;
+using CRM.Infrastructure;
+using CRM.ViewModels.Filters;
 
 namespace CRM.Controllers
 {
@@ -18,9 +21,40 @@ namespace CRM.Controllers
         {
         }
 
+        private FilterPanelViewModel BuildFilterPanelModel(
+            IReadOnlyCollection<AppFieldDefinition> dynamicFields,
+            IDictionary<string, string> currentFilters,
+            int pageSize)
+        {
+            var lookupData = ViewBag.LookupData as Dictionary<string, List<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>>
+                             ?? new Dictionary<string, List<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>>();
+
+            var fields = new List<FilterFieldViewModel>
+            {
+                new() { Key = "f_Name", Label = "Название", Kind = FilterInputKind.Text, Value = TryGetFilterValue(currentFilters, "f_Name") }
+            };
+
+            fields.AddRange(BuildDynamicFilterFields(dynamicFields, lookupData, currentFilters));
+
+            return new FilterPanelViewModel
+            {
+                ActionUrl = Url.Action(nameof(Index)) ?? "/Positions",
+                ResetUrl = Url.Action(nameof(Index)) ?? "/Positions",
+                EntityCode = "Position",
+                ViewCode = "Index",
+                SearchValue = ViewBag.CurrentSearch as string ?? string.Empty,
+                SearchPlaceholder = "Быстрый поиск",
+                PageSize = pageSize,
+                ExpandedByDefault = currentFilters.Any(),
+                Fields = fields
+            };
+        }
+
         public async Task<IActionResult> Index(string? searchString, int? pageNumber, int? pageSize, Dictionary<string, string> filters)
         {
             await LoadDynamicFields("Position");
+            var dynamicFields = ViewBag.DynamicFields as List<AppFieldDefinition> ?? new List<AppFieldDefinition>();
+            var dynamicFieldMap = dynamicFields.ToDictionary(field => field.SystemName, field => field, StringComparer.OrdinalIgnoreCase);
             var query = _context.Positions.AsQueryable();
 
             if (!string.IsNullOrWhiteSpace(searchString))
@@ -36,7 +70,10 @@ namespace CRM.Controllers
                     else if (filter.Key.StartsWith("f_dyn_"))
                     {
                         var fieldName = filter.Key.Replace("f_dyn_", "");
-                        query = query.Where(p => EF.Functions.ILike(p.Properties, $"%\"{fieldName}\":%\"{filter.Value}\"%"));
+                        if (dynamicFieldMap.TryGetValue(fieldName, out var field))
+                        {
+                            query = query.ApplyDynamicPropertyFilter(nameof(Position.Properties), field, filter.Value);
+                        }
                     }
                 }
             }
@@ -55,8 +92,10 @@ namespace CRM.Controllers
             ViewBag.PageNumber = actualPageNumber;
             ViewBag.PageSize = actualPageSize;
             ViewBag.TotalPages = (int)Math.Ceiling(totalItems / (double)actualPageSize);
+            var currentFilters = filters ?? new Dictionary<string, string>();
             ViewBag.CurrentSearch = searchString;
-            ViewBag.CurrentFilters = filters ?? new Dictionary<string, string>();
+            ViewBag.CurrentFilters = currentFilters;
+            ViewBag.FilterPanelModel = BuildFilterPanelModel(dynamicFields, currentFilters, actualPageSize);
 
             return View(positions);
         }

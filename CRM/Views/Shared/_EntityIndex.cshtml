@@ -14,21 +14,20 @@
 <div class="container-fluid px-4">
     
     @* --- HEADER --- *@
-    <crm-page-header title="@title" icon="@icon">
+    <crm-page-header title="" icon="">
         @await RenderSectionAsync("HeaderControls", required: false)
-
-        @* Кнопка открытия фильтров *@
-        <button crm-button variant="outline-primary" icon="funnel" class="shadow-sm" type="button" 
-                data-bs-toggle="collapse" data-bs-target="#filterPanel">
-            Фильтры
-        </button>
 
         @await RenderSectionAsync("ActionButtons", required: false)
     </crm-page-header>
 
-    @* --- FILTER PANEL (Подключаем стандартный компонент) --- *@
-    @* Компонент сам отрисует форму, поиск и поля фильтрации *@
-    @await Html.PartialAsync("_FilterPanel")
+    @if (ViewBag.FilterPanelModel != null)
+    {
+        @await Html.PartialAsync("_UniversalFilterPanel", (CRM.ViewModels.Filters.FilterPanelViewModel)ViewBag.FilterPanelModel)
+    }
+    else
+    {
+        @await Html.PartialAsync("_FilterPanel")
+    }
 
     @* --- TABLE CONTENT --- *@
     <div crm-card class="overflow-hidden">

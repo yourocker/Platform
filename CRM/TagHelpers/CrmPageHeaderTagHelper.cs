@@ -27,6 +27,10 @@ namespace CRM.TagHelpers
             output.TagName = "div";
             output.Attributes.SetAttribute("class", "crm-page-header row mb-4 align-items-center justify-content-between");
 
+            var hasHeaderInfo = !string.IsNullOrWhiteSpace(Title) ||
+                                !string.IsNullOrWhiteSpace(Icon) ||
+                                !string.IsNullOrWhiteSpace(Subtitle);
+
             // Левая часть: Иконка + Заголовок
             var leftCol = new TagBuilder("div");
             leftCol.AddCssClass("col-auto");
@@ -65,7 +69,10 @@ namespace CRM.TagHelpers
 
             // КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: Очищаем буфер перед выводом колонок
             output.Content.Clear(); 
-            output.Content.AppendHtml(leftCol);
+            if (hasHeaderInfo)
+            {
+                output.Content.AppendHtml(leftCol);
+            }
             output.Content.AppendHtml(rightCol);
         }
     }

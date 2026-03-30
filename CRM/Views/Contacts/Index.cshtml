@@ -7,9 +7,6 @@
     ViewData["Title"] = "Контакты";
     ViewData["Icon"] = "person-lines-fill";
     
-    // Включаем стандартную панель (Фамилия, Имя, Телефон, Email) в _FilterPanel
-    ViewData["ShowStandardFilters"] = true; 
-    
     // Получаем конфиг таблицы из контроллера
     var gridConfig = ViewBag.GridConfig as GridConfig<ContactListDto>;
     ViewBag.ItemCount = Model?.Count() ?? 0;
@@ -19,7 +16,7 @@
     @* Меню выбора колонок генерируется автоматически на основе GridConfig *@
     <div class="dropdown">
         <button crm-button variant="outline-secondary" icon="view-list" class="dropdown-toggle shadow-sm" type="button" data-bs-toggle="dropdown" aria-expanded="false" data-bs-auto-close="outside">
-            Вид
+            Вид таблицы
         </button>
         <ul class="dropdown-menu shadow border-0" style="max-height: 500px; overflow-y: auto; min-width: 250px;">
             <li><h6 class="dropdown-header">Колонки</h6></li>
@@ -44,7 +41,7 @@
 }
 
 @section ActionButtons {
-    <a asp-action="Create" crm-button variant="primary" icon="plus-lg" class="shadow-sm px-4">Создать</a>
+    <a asp-action="Create" crm-button variant="primary" icon="plus-lg" class="shadow-sm px-4"> Добавить запись</a>
 }
 
 @if (gridConfig != null && Model != null)

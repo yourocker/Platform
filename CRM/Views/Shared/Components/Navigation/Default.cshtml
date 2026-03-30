@@ -22,6 +22,10 @@
         </div>
     }
 
+    <button type="button" id="nav-sub-expand-btn" class="main-btn nav-main-toggle" title="Развернуть меню" aria-label="Развернуть меню">
+        <i class="bi bi-list"></i>
+    </button>
+
     <div id="sortable-menu" style="width: 100%; display: flex; flex-direction: column; align-items: center;">
         <a href="/" class="main-btn @(Model.Controller == "Home" ? "active" : "")" data-id="home" title="Дашборд">
             <i class="bi bi-speedometer2"></i>
@@ -64,10 +68,11 @@
     </div>
 </nav>
 
+<div id="nav-sub-shell">
 <nav id="nav-sub">
     @if (Model.IsCrmModuleEnabled && Model.IsCRMActive && Model.CrmCategory != null)
     {
-        <div class="sub-header">@Model.CrmCategory.Name</div>
+        <div class="sub-header"><span>@Model.CrmCategory.Name</span><button type="button" class="sub-header-toggle" title="Свернуть" aria-label="Свернуть меню"><i class="bi bi-chevron-left"></i></button></div>
         @foreach (var app in Model.CrmCategory.Apps.OrderBy(a => a.IsSystem ? 0 : 1).ThenBy(a => a.Name))
         {
             @* Для Контактов (системных) оставляем старый роут, для остальных — /Data/ *@
@@ -79,7 +84,7 @@
     }
     else if (Model.IsCompanyActive)
     {
-        <div class="sub-header">Компания</div>
+        <div class="sub-header"><span>Компания</span><button type="button" class="sub-header-toggle" title="Свернуть" aria-label="Свернуть меню"><i class="bi bi-chevron-left"></i></button></div>
         <a href="/Departments" class="sub-link @(Model.Controller == "Departments" ? "active" : "")"><i class="bi bi-diagram-3"></i> Оргструктура</a>
         <a href="/Employees" class="sub-link @(Model.Controller == "Employees" ? "active" : "")"><i class="bi bi-person-badge"></i> Сотрудники</a>
         <a href="/Positions" class="sub-link @(Model.Controller == "Positions" ? "active" : "")"><i class="bi bi-briefcase"></i> Должности</a>
@@ -103,7 +108,7 @@
     }
     else if (Model.IsTasksActive)
     {
-        <div class="sub-header">Задачи</div>
+        <div class="sub-header"><span>Задачи</span><button type="button" class="sub-header-toggle" title="Свернуть" aria-label="Свернуть меню"><i class="bi bi-chevron-left"></i></button></div>
         <a href="/Tasks/CreatedByMe" class="sub-link @(Model.Action == "CreatedByMe" ? "active" : "")"><i class="bi bi-person-up"></i> Поставленные мной</a>
         <a href="/Tasks/AssignedToMe" class="sub-link @(Model.Action == "AssignedToMe" ? "active" : "")"><i class="bi bi-person-check"></i> Назначенные мне</a>
         <a href="/Tasks/CompletedTasks" class="sub-link @(Model.Action == "CompletedTasks" ? "active" : "")"><i class="bi bi-check2-all"></i> Выполненные</a>
@@ -112,13 +117,13 @@
     }
     else if (Model.IsScheduleActive)
     {
-        <div class="sub-header">Расписание</div>
+        <div class="sub-header"><span>Расписание</span><button type="button" class="sub-header-toggle" title="Свернуть" aria-label="Свернуть меню"><i class="bi bi-chevron-left"></i></button></div>
         <a href="/Schedule" class="sub-link @(Model.Controller == "Schedule" ? "active" : "")"><i class="bi bi-calendar-week"></i> Календарь</a>
         <a href="/CompanySettings/WorkMode#booking-resources-settings" class="sub-link @(Model.Controller == "CompanySettings" && Model.Action == "WorkMode" ? "active" : "")"><i class="bi bi-sliders"></i> Настройки бронирования</a>
     }
     else if (Model.IsSettingsActive)
     {
-        <div class="sub-header">Конструктор</div>
+        <div class="sub-header"><span>Конструктор</span><button type="button" class="sub-header-toggle" title="Свернуть" aria-label="Свернуть меню"><i class="bi bi-chevron-left"></i></button></div>
 
         @* ДИНАМИЧЕСКИЕ ПРИЛОЖЕНИЯ В КОНСТРУКТОРЕ *@
         @if (settingsCat != null)
@@ -138,7 +143,7 @@
     }
     else if (activeCustomCategory != null)
     {
-        <div class="sub-header">@activeCustomCategory.Name</div>
+        <div class="sub-header"><span>@activeCustomCategory.Name</span><button type="button" class="sub-header-toggle" title="Свернуть" aria-label="Свернуть меню"><i class="bi bi-chevron-left"></i></button></div>
         @foreach (var app in activeCustomCategory.Apps.OrderBy(a => a.Name))
         {
             <a href="/Data/@app.EntityCode" class="sub-link @(Model.EntityCode == app.EntityCode ? "active" : "")">
@@ -148,7 +153,9 @@
     }
     else
     {
-        <div class="sub-header">Главная</div>
+        <div class="sub-header"><span>Главная</span><button type="button" class="sub-header-toggle" title="Свернуть" aria-label="Свернуть меню"><i class="bi bi-chevron-left"></i></button></div>
         <a href="/" class="sub-link active"><i class="bi bi-house"></i> Рабочий стол</a>
     }
 </nav>
+<div id="nav-sub-hover-zone" aria-hidden="true"></div>
+</div>

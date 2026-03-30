@@ -17,6 +17,7 @@ using Core.Entities.CRM;
 using Core.Interfaces.Platform;
 using Core.Services.Platform;
 using CRM.Infrastructure;
+using CRM.ViewModels.Filters;
 
 namespace CRM.Controllers;
 
@@ -28,6 +29,37 @@ public class GenericObjectsController(
     IEntityTimelineService timelineService) : BasePlatformController(context, hostingEnvironment)
 {
     private readonly IEntityTimelineService _timelineService = timelineService;
+
+    private FilterPanelViewModel BuildFilterPanelModel(
+        string entityCode,
+        string definitionName,
+        IReadOnlyCollection<AppFieldDefinition> dynamicFields,
+        IDictionary<string, string> currentFilters,
+        int pageSize)
+    {
+        var lookupData = ViewBag.LookupData as Dictionary<string, List<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>>
+                         ?? new Dictionary<string, List<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>>();
+
+        var fields = new List<FilterFieldViewModel>
+        {
+            new() { Key = "f_Name", Label = "Название", Kind = FilterInputKind.Text, Value = TryGetFilterValue(currentFilters, "f_Name") }
+        };
+
+        fields.AddRange(BuildDynamicFilterFields(dynamicFields, lookupData, currentFilters));
+
+        return new FilterPanelViewModel
+        {
+            ActionUrl = Url.Action(nameof(Index), new { entityCode }) ?? $"/Data/{entityCode}",
+            ResetUrl = Url.Action(nameof(Index), new { entityCode }) ?? $"/Data/{entityCode}",
+            EntityCode = entityCode,
+            ViewCode = "Index",
+            SearchValue = ViewBag.CurrentSearch as string ?? string.Empty,
+            SearchPlaceholder = "Быстрый поиск",
+            PageSize = pageSize,
+            ExpandedByDefault = currentFilters.Any(),
+            Fields = fields
+        };
+    }
 
     private static Dictionary<Guid, string> BuildNamesMap(
         IEnumerable<(Guid Id, string Name)> genericObjects,
@@ -152,6 +184,9 @@ public class GenericObjectsController(
         ViewBag.Definition = definition;
         ViewBag.EntityCode = entityCode;
         ViewBag.DynamicFields = definition.Fields.OrderBy(f => f.SortOrder).ToList();
+        ViewBag.LookupData = await BuildEntityLinkLookupDataAsync(definition.Fields);
+        var dynamicFields = ViewBag.DynamicFields as List<AppFieldDefinition> ?? new List<AppFieldDefinition>();
+        var dynamicFieldMap = dynamicFields.ToDictionary(field => field.SystemName, field => field, StringComparer.OrdinalIgnoreCase);
 
         var query = _context.GenericObjects
             .Where(o => o.EntityCode == entityCode)
@@ -177,7 +212,10 @@ public class GenericObjectsController(
                 else if (filter.Key.Contains("f_dyn_"))
                 {
                     var fieldName = filter.Key.Split("f_dyn_").Last();
-                    query = query.Where(o => EF.Functions.ILike(o.Properties, $"%\"{fieldName}\":%\"{filter.Value}\"%"));
+                    if (dynamicFieldMap.TryGetValue(fieldName, out var field))
+                    {
+                        query = query.ApplyDynamicPropertyFilter(nameof(GenericObject.Properties), field, filter.Value);
+                    }
                 }
             }
         }
@@ -237,9 +275,11 @@ public class GenericObjectsController(
         ViewBag.TotalItems = totalItems;
         ViewBag.PageNumber = actualPageNumber;
         ViewBag.PageSize = actualPageSize;
+        var currentFilters = filters ?? new Dictionary<string, string>();
         ViewBag.TotalPages = (int)Math.Ceiling(totalItems / (double)actualPageSize);
         ViewBag.CurrentSearch = searchString;
-        ViewBag.CurrentFilters = filters ?? new Dictionary<string, string>();
+        ViewBag.CurrentFilters = currentFilters;
+        ViewBag.FilterPanelModel = BuildFilterPanelModel(entityCode, definition.Name, dynamicFields, currentFilters, actualPageSize);
 
         return View(objectDtos);
     }

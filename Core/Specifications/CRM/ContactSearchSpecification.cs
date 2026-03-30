@@ -1,5 +1,6 @@
 ﻿using System.Linq;
 using Core.Entities.CRM;
+using Core.Entities.Platform;
 using Microsoft.EntityFrameworkCore;
 using Core.Data.Extensions;
 using Core.Specifications;
@@ -11,9 +12,12 @@ namespace Core.Specifications.CRM
         /// <summary>
         /// Конструктор для ПОДСЧЕТА количества (без пагинации и сортировки)
         /// </summary>
-        public ContactSearchSpecification(string? searchString, Dictionary<string, string> filters)
+        public ContactSearchSpecification(
+            string? searchString,
+            Dictionary<string, string> filters,
+            IReadOnlyDictionary<string, AppFieldDefinition>? dynamicFieldMap)
         {
-            ApplyFilters(searchString, filters);
+            ApplyFilters(searchString, filters, dynamicFieldMap);
         }
 
         /// <summary>
@@ -22,11 +26,12 @@ namespace Core.Specifications.CRM
         public ContactSearchSpecification(
             string? searchString, 
             Dictionary<string, string> filters, 
+            IReadOnlyDictionary<string, AppFieldDefinition>? dynamicFieldMap,
             int pageNumber, 
             int pageSize, 
             string? sortOrder)
         {
-            ApplyFilters(searchString, filters);
+            ApplyFilters(searchString, filters, dynamicFieldMap);
             
             // Подгружаем связанные данные для отображения в таблице
             AddInclude(c => c.Phones);
@@ -112,7 +117,10 @@ namespace Core.Specifications.CRM
         /// <summary>
         /// Применяет фильтры поиска (общий поиск + детальные фильтры)
         /// </summary>
-        private void ApplyFilters(string? searchString, Dictionary<string, string> filters)
+        private void ApplyFilters(
+            string? searchString,
+            Dictionary<string, string> filters,
+            IReadOnlyDictionary<string, AppFieldDefinition>? dynamicFieldMap)
         {
             // 1. Глобальный поиск (строка поиска)
             if (!string.IsNullOrEmpty(searchString))
@@ -153,9 +161,46 @@ namespace Core.Specifications.CRM
                             AddCriteria(c => c.Emails.Any(e => EF.Functions.ILike(e.Email, $"%{val}%")));
                             break;
                         default:
-                            // Фильтрация по динамическим полям JSON
-                            AddCriteria(c => c.Properties != null && 
-                                EF.Functions.ILike(NpgsqlJsonExtensions.JsonExtractPathText(c.Properties, key), $"%{val}%"));
+                            var jsonKey = key.Replace("dyn_", "");
+                            if (dynamicFieldMap != null && dynamicFieldMap.TryGetValue(jsonKey, out var field))
+                            {
+                                switch (field.DataType)
+                                {
+                                    case FieldDataType.Boolean:
+                                        var normalizedBoolean = val.Equals("true", StringComparison.OrdinalIgnoreCase) ? "true" : "false";
+                                        AddCriteria(c => NpgsqlJsonExtensions.JsonExtractPathText(c.Properties, jsonKey) == normalizedBoolean);
+                                        break;
+                                    case FieldDataType.Select:
+                                    case FieldDataType.EntityLink:
+                                        AddCriteria(c => NpgsqlJsonExtensions.JsonExtractPathText(c.Properties, jsonKey) == val);
+                                        break;
+                                    case FieldDataType.Date:
+                                    case FieldDataType.DateTime:
+                                        AddCriteria(c =>
+                                            NpgsqlJsonExtensions.JsonExtractPathText(c.Properties, jsonKey) != null &&
+                                            NpgsqlJsonExtensions.JsonExtractPathText(c.Properties, jsonKey).StartsWith(val));
+                                        break;
+                                    case FieldDataType.Number:
+                                    case FieldDataType.Money:
+                                        var normalizedNumber = val.Replace(",", ".");
+                                        AddCriteria(c =>
+                                            EF.Functions.ILike(
+                                                NpgsqlJsonExtensions.JsonExtractPathText(c.Properties, jsonKey),
+                                                $"%{normalizedNumber}%"));
+                                        break;
+                                    default:
+                                        AddCriteria(c =>
+                                            c.Properties != null &&
+                                            EF.Functions.ILike(NpgsqlJsonExtensions.JsonExtractPathText(c.Properties, jsonKey), $"%{val}%"));
+                                        break;
+                                }
+                            }
+                            else
+                            {
+                                AddCriteria(c =>
+                                    c.Properties != null &&
+                                    EF.Functions.ILike(NpgsqlJsonExtensions.JsonExtractPathText(c.Properties, jsonKey), $"%{val}%"));
+                            }
                             break;
                     }
                 }

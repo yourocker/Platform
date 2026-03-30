@@ -41,47 +41,15 @@
             </ul>
         </div>
 
-        <button crm-button variant="outline-primary" icon="funnel" class="shadow-sm" type="button" data-bs-toggle="collapse" data-bs-target="#filterPanel">Фильтры</button>
-        
         <a asp-controller="GenericObjects" asp-action="Create" asp-route-entityCode="@definition?.EntityCode" crm-button variant="primary" icon="plus-lg" class="shadow-sm px-4">
             Добавить запись
         </a>
     </crm-page-header>
 
-    @* --- ФОРМА ПОИСКА И ФИЛЬТРОВ --- *@
-    <form asp-action="Index" method="get" id="mainFilterForm">
-        <input type="hidden" name="entityCode" value="@definition?.EntityCode" />
-        <input type="hidden" name="pageSize" value="@pageSize" id="hiddenPageSize" />
-        <input type="hidden" name="pageNumber" value="1" id="hiddenPageNumber" />
-
-        <div crm-card class="mb-4">
-            <div class="card-body p-3">
-                <div class="input-group input-group-lg border rounded-3 overflow-hidden">
-                    <span class="input-group-text bg-white border-0"><i class="bi bi-search text-primary"></i></span>
-                    <input type="text" name="searchString" value="@currentSearch" class="form-control border-0 shadow-none instant-filter" placeholder="Быстрый поиск по названию..." autocomplete="off"/>
-                </div>
-
-                <div class="collapse @(currentFilters.Any() ? "show" : "")" id="filterPanel">
-                    <div class="pt-4 mt-3 border-top">
-                        <div class="row row-cols-1 row-cols-md-3 row-cols-lg-4 g-3">
-                            <div class="col">
-                                <crm-input label="Название" name="filters[f_Name]" value="@(currentFilters.GetValueOrDefault("f_Name"))" class="instant-filter" />
-                            </div>
-                            @foreach (var field in dynamicFields)
-                            {
-                                <div class="col">
-                                    <crm-input label="@field.Label" name="filters[f_dyn_@field.SystemName]" value="@(currentFilters.GetValueOrDefault("f_dyn_" + field.SystemName))" class="instant-filter" />
-                                </div>
-                            }
-                        </div>
-                        <div class="text-end mt-3">
-                            <a asp-action="Index" asp-route-entityCode="@definition?.EntityCode" class="btn btn-link btn-sm text-danger text-decoration-none p-0">Сбросить всё</a>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </form>
+    @if (ViewBag.FilterPanelModel != null)
+    {
+        @await Html.PartialAsync("_UniversalFilterPanel", (CRM.ViewModels.Filters.FilterPanelViewModel)ViewBag.FilterPanelModel)
+    }
 
     @* --- ТАБЛИЦА ДАННЫХ --- *@
     <div crm-card class="overflow-hidden">
@@ -150,22 +118,6 @@
 </div>
 
 <script>
-    let filterTimeout;
-    document.querySelectorAll('.instant-filter').forEach(el => {
-        el.addEventListener('input', function() {
-            clearTimeout(filterTimeout);
-            filterTimeout = setTimeout(() => { 
-                document.getElementById('hiddenPageNumber').value = 1;
-                document.getElementById('mainFilterForm').submit(); 
-            }, 700);
-        });
-    });
-
-    function changePageSize(val) {
-        document.getElementById('hiddenPageSize').value = val;
-        document.getElementById('mainFilterForm').submit();
-    }
-
     document.addEventListener('DOMContentLoaded', function() {
         // Управление колонками (Уникальный ключ для каждой сущности)
         const ENTITY_CODE = '@definition?.EntityCode';

@@ -11,6 +11,9 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Identity;
 using Core.Services.Company;
+using Core.Entities.Platform;
+using CRM.Infrastructure;
+using CRM.ViewModels.Filters;
 
 namespace CRM.Controllers
 {
@@ -89,11 +92,57 @@ namespace CRM.Controllers
             return dict;
         }
 
+        private FilterPanelViewModel BuildFilterPanelModel(
+            IReadOnlyCollection<AppFieldDefinition> dynamicFields,
+            IDictionary<string, string> currentFilters,
+            int pageSize)
+        {
+            var lookupData = ViewBag.LookupData as Dictionary<string, List<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>>
+                             ?? new Dictionary<string, List<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>>();
+
+            var fields = new List<FilterFieldViewModel>
+            {
+                new() { Key = "f_LastName", Label = "Фамилия", Kind = FilterInputKind.Text, Value = TryGetFilterValue(currentFilters, "f_LastName") },
+                new() { Key = "f_FirstName", Label = "Имя", Kind = FilterInputKind.Text, Value = TryGetFilterValue(currentFilters, "f_FirstName") },
+                new() { Key = "f_MiddleName", Label = "Отчество", Kind = FilterInputKind.Text, Value = TryGetFilterValue(currentFilters, "f_MiddleName") },
+                new() { Key = "f_Phone", Label = "Телефон", Kind = FilterInputKind.Text, Value = TryGetFilterValue(currentFilters, "f_Phone") },
+                new()
+                {
+                    Key = "f_Status",
+                    Label = "Статус сотрудника",
+                    Kind = FilterInputKind.Select,
+                    Value = TryGetFilterValue(currentFilters, "f_Status"),
+                    Options = new List<FilterOptionViewModel>
+                    {
+                        new() { Value = "active", Label = "Работает" },
+                        new() { Value = "dismissed", Label = "Уволен" }
+                    }
+                }
+            };
+
+            fields.AddRange(BuildDynamicFilterFields(dynamicFields, lookupData, currentFilters));
+
+            return new FilterPanelViewModel
+            {
+                ActionUrl = Url.Action(nameof(Index)) ?? "/Employees",
+                ResetUrl = Url.Action(nameof(Index)) ?? "/Employees",
+                EntityCode = "Employee",
+                ViewCode = "Index",
+                SearchValue = ViewBag.CurrentSearch as string ?? string.Empty,
+                SearchPlaceholder = "Быстрый поиск",
+                PageSize = pageSize,
+                ExpandedByDefault = currentFilters.Any(),
+                Fields = fields
+            };
+        }
+
         // --- СПИСОК СОТРУДНИКОВ С ПОЛНОЙ ФИЛЬТРАЦИЕЙ И ПАГИНАЦИЕЙ ---
         public async Task<IActionResult> Index(string? searchString, int? pageNumber, int? pageSize, Dictionary<string, string> filters)
         {
             // Загружаем динамические поля для заголовков и фильтров
             await LoadDynamicFields("Employee");
+            var dynamicFields = ViewBag.DynamicFields as List<AppFieldDefinition> ?? new List<AppFieldDefinition>();
+            var dynamicFieldMap = dynamicFields.ToDictionary(field => field.SystemName, field => field, StringComparer.OrdinalIgnoreCase);
             
             var query = _context.Employees
                 .Include(e => e.StaffAppointments).ThenInclude(a => a.Position)
@@ -135,9 +184,11 @@ namespace CRM.Controllers
                     }
                     else if (key.StartsWith("f_dyn_"))
                     {
-                        // Динамические поля из конструктора
                         var fieldName = key.Replace("f_dyn_", "");
-                        query = query.Where(e => EF.Functions.ILike(e.Properties, $"%\"{fieldName}\":%\"{filter.Value}\"%"));
+                        if (dynamicFieldMap.TryGetValue(fieldName, out var field))
+                        {
+                            query = query.ApplyDynamicPropertyFilter(nameof(Employee.Properties), field, filter.Value);
+                        }
                     }
                 }
             }
@@ -163,8 +214,10 @@ namespace CRM.Controllers
             ViewBag.PageNumber = actualPageNumber;
             ViewBag.PageSize = actualPageSize;
             ViewBag.TotalPages = (int)Math.Ceiling(totalItems / (double)actualPageSize);
+            var currentFilters = filters ?? new Dictionary<string, string>();
             ViewBag.CurrentSearch = searchString;
-            ViewBag.CurrentFilters = filters ?? new Dictionary<string, string>();
+            ViewBag.CurrentFilters = currentFilters;
+            ViewBag.FilterPanelModel = BuildFilterPanelModel(dynamicFields, currentFilters, actualPageSize);
 
             return View(employeeDtos);
         }
