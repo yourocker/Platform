@@ -43,12 +43,11 @@ namespace CRM.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Create(Department department, IFormCollection form, bool modal = false)
         {
-            // 1. Загрузка во временную папку
+            department.Id = Guid.NewGuid();
             await SaveDynamicProperties(department, form, "Department");
 
             if (ModelState.IsValid)
             {
-                department.Id = Guid.NewGuid();
                 _context.Add(department);
                 
                 // 2. Первичное сохранение

@@ -505,6 +505,7 @@ namespace CRM.Controllers
 
             try
             {
+                FinalizeDynamicFilePaths(booking, BookingEntityCode, booking.Id.ToString());
                 await _resourceManager.BookResourceAsync(booking, isOutsideCompanyWorkHours && allowOutOfHours);
                 await LogBookingCreatedAsync(booking, currentEmployeeId);
                 return Json(new { success = true });
@@ -783,6 +784,7 @@ namespace CRM.Controllers
 
             try
             {
+                FinalizeDynamicFilePaths(booking, BookingEntityCode, booking.Id.ToString());
                 await _resourceManager.UpdateBookingAsync(booking, canBypassCompanyWorkHours);
                 await LogBookingUpdatedAsync(existing, booking, currentEmployeeId, "Запись обновлена");
                 return Json(new { success = true });
@@ -1597,7 +1599,7 @@ namespace CRM.Controllers
                 booking.Id,
                 BookingEntityCode,
                 CrmEventType.System,
-                "Запись удалена",
+                "Запись перемещена в корзину",
                 string.Join(Environment.NewLine, lines),
                 actorId);
         }

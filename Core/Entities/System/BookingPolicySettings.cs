@@ -1,14 +1,16 @@
 using System.ComponentModel.DataAnnotations;
+using Core.MultiTenancy;
 
 namespace Core.Entities.System
 {
     /// <summary>
     /// Глобальная политика бронирования ресурсов на уровне компании.
     /// </summary>
-    public class BookingPolicySettings
+    public class BookingPolicySettings : ITenantEntity
     {
         [Key]
         public Guid Id { get; set; }
+        public Guid TenantId { get; set; }
 
         /// <summary>
         /// Разрешает создавать записи в пересекающиеся интервалы времени.

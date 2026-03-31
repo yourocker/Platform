@@ -1,5 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using Core.MultiTenancy;
 
 namespace Core.Entities.Platform.Form;
 
@@ -13,10 +14,11 @@ public enum FormType
 /// <summary>
 /// Макет формы (п. 2.2 ТЗ v5.0)
 /// </summary>
-public class AppFormDefinition
+public class AppFormDefinition : ITenantEntity
 {
     [Key]
     public Guid Id { get; set; }
+    public Guid TenantId { get; set; }
 
     [Required]
     public Guid AppDefinitionId { get; set; }

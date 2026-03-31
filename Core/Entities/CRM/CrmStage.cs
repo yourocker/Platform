@@ -1,5 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using Core.MultiTenancy;
 
 namespace Core.Entities.CRM
 {
@@ -7,10 +8,11 @@ namespace Core.Entities.CRM
     /// Описание этапа воронки. 
     /// Содержит настройки цвета и список обязательных полей для перехода.
     /// </summary>
-    public class CrmStage
+    public class CrmStage : ITenantEntity
     {
         [Key]
         public Guid Id { get; set; }
+        public Guid TenantId { get; set; }
 
         public Guid PipelineId { get; set; }
 

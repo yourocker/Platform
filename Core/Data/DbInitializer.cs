@@ -3,6 +3,7 @@ using Core.Entities.CRM;
 using Core.Entities.Company;
 using Core.Entities.System;
 using Core.Constants;
+using Core.MultiTenancy;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
@@ -12,6 +13,46 @@ namespace Core.Data
     public static class DbInitializer
     {
         private const string BookingEntityCode = "ResourceBooking";
+        public static readonly Guid DefaultTenantId = Guid.Parse("11111111-1111-1111-1111-111111111111");
+
+        public static async Task<TenantInfo> EnsureDefaultTenantAsync(AppDbContext context, IConfiguration configuration)
+        {
+            var tenantKey = configuration[$"{TenantResolutionOptions.SectionName}:DefaultTenantKey"] ?? "default";
+            var tenantName = configuration[$"{TenantResolutionOptions.SectionName}:DefaultTenantName"] ?? "Default Company";
+
+            var tenant = await context.Tenants
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(t => t.Key == tenantKey);
+
+            if (tenant == null)
+            {
+                tenant = new Tenant
+                {
+                    Id = DefaultTenantId,
+                    Key = tenantKey,
+                    Name = tenantName,
+                    IsActive = true,
+                    CreatedAt = DateTime.UtcNow
+                };
+
+                context.Tenants.Add(tenant);
+                await context.SaveChangesAsync();
+            }
+            else if (!tenant.IsActive || !string.Equals(tenant.Name, tenantName, StringComparison.Ordinal))
+            {
+                tenant.IsActive = true;
+                tenant.Name = tenantName;
+                await context.SaveChangesAsync();
+            }
+
+            return new TenantInfo
+            {
+                Id = tenant.Id,
+                Key = tenant.Key,
+                Name = tenant.Name,
+                IsActive = tenant.IsActive
+            };
+        }
 
         public static async Task Initialize(AppDbContext context, UserManager<Employee> userManager, IConfiguration configuration)
         {
@@ -40,10 +81,10 @@ namespace Core.Data
             await EnsureDefaultPipelinesAsync(context);
 
             // --- ШАГ 9: Создание администратора из конфигурации ---
-            await EnsureAdminAsync(userManager, configuration);
+            await EnsureAdminAsync(context, userManager, configuration);
         }
 
-        private static async Task EnsureAdminAsync(UserManager<Employee> userManager, IConfiguration configuration)
+        private static async Task EnsureAdminAsync(AppDbContext context, UserManager<Employee> userManager, IConfiguration configuration)
         {
             var enableAdminSeed = bool.TryParse(configuration["SeedData:EnableAdminSeed"], out var parsedEnableAdminSeed)
                 && parsedEnableAdminSeed;
@@ -65,13 +106,16 @@ namespace Core.Data
                     "Admin seed is enabled, but SeedData:AdminUser, SeedData:AdminPassword and SeedData:AdminEmail are not fully configured.");
             }
 
-            var adminUser = await userManager.FindByNameAsync(adminLogin);
+            var adminUser = await context.Employees
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(x => x.UserName == adminLogin);
 
             if (adminUser == null)
             {
                 var admin = new Employee
                 {
                     Id = Guid.NewGuid(),
+                    TenantId = DefaultTenantId,
                     UserName = adminLogin,
                     Email = adminEmail,
                     EmailConfirmed = true,
@@ -88,7 +132,65 @@ namespace Core.Data
                     var errors = string.Join(", ", result.Errors.Select(e => e.Description));
                     throw new Exception($"Ошибка создания админа: {errors}");
                 }
+
+                await EnsureEmployeeMembershipAsync(context, admin.Id, DefaultTenantId, "admin", isDefault: true);
             }
+            else
+            {
+                if (adminUser.TenantId == Guid.Empty)
+                {
+                    adminUser.TenantId = DefaultTenantId;
+                    await context.SaveChangesAsync();
+                }
+
+                await EnsureEmployeeMembershipAsync(context, adminUser.Id, DefaultTenantId, "admin", isDefault: true);
+            }
+        }
+
+        public static async Task EnsureEmployeeMembershipAsync(
+            AppDbContext context,
+            Guid employeeId,
+            Guid tenantId,
+            string roleCode = "employee",
+            bool isDefault = false)
+        {
+            var existingMemberships = await context.EmployeeTenantMemberships
+                .IgnoreQueryFilters()
+                .Where(x => x.EmployeeId == employeeId)
+                .ToListAsync();
+
+            var membership = existingMemberships.FirstOrDefault(x => x.TenantId == tenantId);
+            if (membership == null)
+            {
+                membership = new EmployeeTenantMembership
+                {
+                    Id = Guid.NewGuid(),
+                    EmployeeId = employeeId,
+                    TenantId = tenantId,
+                    RoleCode = string.IsNullOrWhiteSpace(roleCode) ? "employee" : roleCode.Trim().ToLowerInvariant(),
+                    IsActive = true,
+                    IsDefault = isDefault,
+                    JoinedAt = DateTime.UtcNow
+                };
+
+                context.EmployeeTenantMemberships.Add(membership);
+            }
+            else
+            {
+                membership.IsActive = true;
+                membership.RoleCode = string.IsNullOrWhiteSpace(roleCode) ? membership.RoleCode : roleCode.Trim().ToLowerInvariant();
+                membership.IsDefault = membership.IsDefault || isDefault;
+            }
+
+            if (isDefault)
+            {
+                foreach (var otherMembership in existingMemberships.Where(x => x.Id != membership.Id))
+                {
+                    otherMembership.IsDefault = false;
+                }
+            }
+
+            await context.SaveChangesAsync();
         }
 
         private static async Task<AppCategory?> EnsureCategoriesAsync(AppDbContext context)

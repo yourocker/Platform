@@ -1,11 +1,13 @@
 ﻿using System.ComponentModel.DataAnnotations;
+using Core.MultiTenancy;
 
 namespace Core.Entities.Platform
 {
-    public class AppCategory
+    public class AppCategory : ITenantEntity
     {
         [Key]
         public Guid Id { get; set; }
+        public Guid TenantId { get; set; }
 
         [Required]
         [Display(Name = "Название раздела")]

@@ -1,5 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using Core.MultiTenancy;
 
 namespace Core.Entities.CRM
 {
@@ -8,10 +9,11 @@ namespace Core.Entities.CRM
     /// Тип ресурса больше не хардкодится — пользователь задает его через конструктор полей.
     /// </summary>
     [Table("CrmResources")]
-    public class CrmResource
+    public class CrmResource : ITenantEntity
     {
         [Key]
         public Guid Id { get; set; }
+        public Guid TenantId { get; set; }
 
         [Required]
         public string Name { get; set; } = string.Empty;

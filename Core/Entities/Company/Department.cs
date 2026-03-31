@@ -1,11 +1,13 @@
 ﻿using System;
 using System.Collections.Generic;
+using Core.MultiTenancy;
 
 namespace Core.Entities.Company
 {
-    public class Department : IHasDynamicProperties
+    public class Department : IHasDynamicProperties, ITenantEntity
     {
         public Guid Id { get; set; }
+        public Guid TenantId { get; set; }
         public string Name { get; set; } = string.Empty;
         // Иерархия
         public Guid? ParentId { get; set; }

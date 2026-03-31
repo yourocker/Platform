@@ -302,11 +302,11 @@ public class GenericObjectsController(
         if (string.IsNullOrEmpty(entityCode)) return NotFound();
 
         var obj = GenericObjectMapper.ToEntity(dto, entityCode);
+        obj.Id = Guid.NewGuid();
         obj.CreatedAt = DateTime.UtcNow;
         await SaveDynamicProperties(obj, form, obj.EntityCode);
         if (ModelState.IsValid)
         {
-            obj.Id = Guid.NewGuid();
             _context.Add(obj);
             await _context.SaveChangesAsync();
             FinalizeDynamicFilePaths(obj, obj.EntityCode, obj.Id.ToString());
@@ -428,8 +428,8 @@ public class GenericObjectsController(
             id,
             entityCode,
             CrmEventType.System,
-            "Объект удалён",
-            $"Удалён объект \"{objectName}\".",
+            "Объект перемещён в корзину",
+            $"Объект \"{objectName}\" перемещён в корзину.",
             TryGetCurrentEmployeeId());
 
         return Redirect($"/Data/{entityCode}");

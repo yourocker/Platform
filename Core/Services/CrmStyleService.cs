@@ -23,9 +23,6 @@ namespace Core.Services
     public class CrmStyleService : ICrmStyleService
     {
         private readonly AppDbContext _context;
-        
-        // Статический кэш для минимизации запросов к БД при рендеринге интерфейса
-        private static UiSettings _cachedSettings;
 
         public CrmStyleService(AppDbContext context)
         {
@@ -34,20 +31,12 @@ namespace Core.Services
 
         public UiSettings GetSettings()
         {
-            if (_cachedSettings == null)
-            {
-                // Ищем глобальные настройки (где EmployeeId == null)
-                _cachedSettings = _context.UiSettings
-                    .AsNoTracking()
-                    .FirstOrDefault(s => s.EmployeeId == null);
+            // Ищем глобальные настройки текущего tenant-а (где EmployeeId == null)
+            var settings = _context.UiSettings
+                .AsNoTracking()
+                .FirstOrDefault(s => s.EmployeeId == null);
 
-                // Если в базе еще нет записей, возвращаем новый объект с дефолтами
-                if (_cachedSettings == null)
-                {
-                    _cachedSettings = new UiSettings();
-                }
-            }
-            return _cachedSettings;
+            return settings ?? new UiSettings();
         }
 
         public async Task SaveSettingsAsync(UiSettings settings)
@@ -100,9 +89,6 @@ namespace Core.Services
             dbEntry.UpdatedAt = DateTime.Now;
 
             await _context.SaveChangesAsync();
-            
-            // Сбрасываем статический кэш, чтобы изменения применились мгновенно
-            _cachedSettings = null;
         }
     }
 }

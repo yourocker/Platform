@@ -1,13 +1,15 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using Core.MultiTenancy;
 
 namespace Core.Entities.System
 {
     [Table("BookingStatuses")]
-    public class BookingStatus
+    public class BookingStatus : ITenantEntity
     {
         [Key]
         public Guid Id { get; set; }
+        public Guid TenantId { get; set; }
 
         [Required]
         [MaxLength(120)]

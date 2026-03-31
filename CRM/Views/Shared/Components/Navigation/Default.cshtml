@@ -105,6 +105,7 @@
         <a href="/CompanySettings/WorkMode" class="sub-link @(Model.Controller == "CompanySettings" && Model.Action == "WorkMode" ? "active" : "")"><i class="bi bi-clock-history"></i> Режим работы и бронирование</a>
         <a href="/Services" class="sub-link @(Model.Controller == "Services" ? "active" : "")"><i class="bi bi-tag"></i> Справочник услуг</a>
         <a href="/CompanySettings/InterfaceSettings" class="sub-link @(Model.Controller == "CompanySettings" && Model.Action == "InterfaceSettings" ? "active" : "")"><i class="bi bi-palette"></i> Оформление</a>
+        <a href="/CompanySettings/Trash" class="sub-link @(Model.Controller == "CompanySettings" && Model.Action == "Trash" ? "active" : "")"><i class="bi bi-trash3"></i> Корзина</a>
     }
     else if (Model.IsTasksActive)
     {

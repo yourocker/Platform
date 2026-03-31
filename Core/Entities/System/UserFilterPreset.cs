@@ -1,15 +1,17 @@
 using System.ComponentModel.DataAnnotations;
 using Core.Entities.Company;
+using Core.MultiTenancy;
 
 namespace Core.Entities.System
 {
     /// <summary>
     /// Сохраненный пользовательский пресет фильтров для конкретной сущности и представления.
     /// </summary>
-    public class UserFilterPreset
+    public class UserFilterPreset : ITenantEntity
     {
         [Key]
         public Guid Id { get; set; }
+        public Guid TenantId { get; set; }
 
         /// <summary>
         /// Пользователь (Employee / Identity User), которому принадлежит пресет.

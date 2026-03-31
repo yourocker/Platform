@@ -1,14 +1,16 @@
 using System.ComponentModel.DataAnnotations;
+using Core.MultiTenancy;
 
 namespace Core.Entities.System
 {
     /// <summary>
     /// Переключатели модулей платформы (под тарифы/лицензии).
     /// </summary>
-    public class FeatureToggle
+    public class FeatureToggle : ITenantEntity
     {
         [Key]
         public Guid Id { get; set; }
+        public Guid TenantId { get; set; }
 
         [Required]
         [MaxLength(64)]

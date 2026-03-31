@@ -1,11 +1,13 @@
 ﻿using System;
+using Core.MultiTenancy;
 
 namespace Core.Entities.System
 {
     // Модель для хранения исходящих событий (согласно паттерну Outbox)
-    public class OutboxEvent
+    public class OutboxEvent : ITenantEntity
     {
         public Guid Id { get; set; }
+        public Guid TenantId { get; set; }
         
         // Тип события (например: TASK_ASSIGNED, TASK_COMMENT_ADDED)
         public string EventType { get; set; } = string.Empty;

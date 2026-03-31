@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using Core.Entities;
+using Core.MultiTenancy;
 
 namespace Core.Entities.Company
 {
@@ -14,6 +15,7 @@ namespace Core.Entities.Company
         }
         
         public override Guid Id { get; set; }
+        public Guid TenantId { get; set; }
         public string LastName { get; set; } = string.Empty;
         public string FirstName { get; set; } = string.Empty;
         public string? MiddleName { get; set; }
@@ -39,5 +41,6 @@ namespace Core.Entities.Company
 
         public string? Properties { get; set; }
         public List<StaffAppointment> StaffAppointments { get; set; } = new();
+        public List<EmployeeTenantMembership> TenantMemberships { get; set; } = new();
     }
 }

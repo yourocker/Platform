@@ -8,6 +8,8 @@ using Core.Services;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using CRM.Infrastructure.Trash;
+using CRM.ViewModels.CompanySettings;
 
 namespace CRM.Controllers
 {
@@ -21,18 +23,21 @@ namespace CRM.Controllers
         private readonly ICrmStyleService _styleService;
         private readonly IBookingPolicyService _bookingPolicyService;
         private readonly IFeatureToggleService _featureToggleService;
+        private readonly ITrashService _trashService;
 
         public CompanySettingsController(
             AppDbContext context,
             IWebHostEnvironment hostingEnvironment,
             ICrmStyleService styleService,
             IBookingPolicyService bookingPolicyService,
-            IFeatureToggleService featureToggleService)
+            IFeatureToggleService featureToggleService,
+            ITrashService trashService)
             : base(context, hostingEnvironment)
         {
             _styleService = styleService;
             _bookingPolicyService = bookingPolicyService;
             _featureToggleService = featureToggleService;
+            _trashService = trashService;
         }
 
         /// <summary>
@@ -52,30 +57,25 @@ namespace CRM.Controllers
         {
             if (settings == null) return RedirectToAction(nameof(InterfaceSettings));
 
+            var currentSettings = _styleService.GetSettings();
+            if (settings.Id == Guid.Empty)
+            {
+                settings.Id = currentSettings.Id;
+            }
+
             if (logoFile != null && logoFile.Length > 0)
             {
-                var uploadsFolder = Path.Combine(_hostingEnvironment.WebRootPath, "uploads", "logo");
-                if (!Directory.Exists(uploadsFolder)) Directory.CreateDirectory(uploadsFolder);
+                var storedFile = await FileStorageService.SaveAsync(
+                    logoFile,
+                    "company-logo",
+                    nameof(UiSettings),
+                    settings.Id == Guid.Empty ? null : settings.Id);
 
-                var fileName = Guid.NewGuid() + Path.GetExtension(logoFile.FileName);
-                var filePath = Path.Combine(uploadsFolder, fileName);
-
-                await using (var fileStream = new FileStream(filePath, FileMode.Create))
-                {
-                    await logoFile.CopyToAsync(fileStream);
-                }
-
-                if (!string.IsNullOrEmpty(settings.LogoPath))
-                {
-                    var oldPath = Path.Combine(_hostingEnvironment.WebRootPath, settings.LogoPath.TrimStart('/'));
-                    if (System.IO.File.Exists(oldPath)) System.IO.File.Delete(oldPath);
-                }
-
-                settings.LogoPath = "/uploads/logo/" + fileName;
+                DeletePhysicalFile(currentSettings.LogoPath);
+                settings.LogoPath = FileStorageService.BuildAccessPath(storedFile.Id);
             }
             else
             {
-                var currentSettings = _styleService.GetSettings();
                 settings.LogoPath = currentSettings.LogoPath;
             }
 
@@ -137,6 +137,57 @@ namespace CRM.Controllers
                 .ToListAsync();
 
             return View(modes);
+        }
+
+        [HttpGet]
+        public async Task<IActionResult> Trash([FromQuery] TrashFilterInput filter, CancellationToken cancellationToken)
+        {
+            var model = await _trashService.GetPageModelAsync(filter, cancellationToken);
+            return View(model);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> RestoreTrashItem(string selectionKey, string? returnUrl = null, CancellationToken cancellationToken = default)
+        {
+            var restoredCount = await _trashService.RestoreAsync(new[] { selectionKey }, cancellationToken);
+            TempData[restoredCount > 0 ? "Success" : "Error"] = restoredCount > 0
+                ? "Запись восстановлена."
+                : "Не удалось восстановить запись.";
+            return RedirectBackToTrash(returnUrl);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> PermanentlyDeleteTrashItem(string selectionKey, string? returnUrl = null, CancellationToken cancellationToken = default)
+        {
+            var deletedCount = await _trashService.PermanentlyDeleteAsync(new[] { selectionKey }, cancellationToken);
+            TempData[deletedCount > 0 ? "Success" : "Error"] = deletedCount > 0
+                ? "Запись удалена безвозвратно."
+                : "Не удалось удалить запись безвозвратно.";
+            return RedirectBackToTrash(returnUrl);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> RestoreTrashBulk(string[]? selectionKeys, string? returnUrl = null, CancellationToken cancellationToken = default)
+        {
+            var restoredCount = await _trashService.RestoreAsync(selectionKeys, cancellationToken);
+            TempData[restoredCount > 0 ? "Success" : "Error"] = restoredCount > 0
+                ? $"Восстановлено записей: {restoredCount}."
+                : "Для восстановления не выбрано ни одной записи.";
+            return RedirectBackToTrash(returnUrl);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> PermanentlyDeleteTrashBulk(string[]? selectionKeys, string? returnUrl = null, CancellationToken cancellationToken = default)
+        {
+            var deletedCount = await _trashService.PermanentlyDeleteAsync(selectionKeys, cancellationToken);
+            TempData[deletedCount > 0 ? "Success" : "Error"] = deletedCount > 0
+                ? $"Удалено безвозвратно записей: {deletedCount}."
+                : "Для безвозвратного удаления не выбрано ни одной записи.";
+            return RedirectBackToTrash(returnUrl);
         }
 
         [HttpPost]
@@ -433,6 +484,16 @@ namespace CRM.Controllers
             {
                 await _context.SaveChangesAsync();
             }
+        }
+
+        private IActionResult RedirectBackToTrash(string? returnUrl)
+        {
+            if (!string.IsNullOrWhiteSpace(returnUrl) && Url.IsLocalUrl(returnUrl))
+            {
+                return Redirect(returnUrl);
+            }
+
+            return RedirectToAction(nameof(Trash));
         }
     }
 }

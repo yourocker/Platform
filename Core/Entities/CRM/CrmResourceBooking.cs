@@ -1,6 +1,7 @@
 ﻿using Core.Entities;
 using Core.Entities.Company;
 using Core.Entities.System;
+using Core.MultiTenancy;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 
@@ -10,10 +11,11 @@ namespace Core.Entities.CRM
     /// Бронирование ресурса под конкретную задачу или позицию сделки.
     /// </summary>
     [Table("CrmResourceBookings")]
-    public class CrmResourceBooking : IHasDynamicProperties
+    public class CrmResourceBooking : IHasDynamicProperties, ITenantEntity, ISoftDeletable
     {
         [Key]
         public Guid Id { get; set; }
+        public Guid TenantId { get; set; }
 
         /// <summary>
         /// Исполнитель, к которому записали.
@@ -75,6 +77,10 @@ namespace Core.Entities.CRM
         public string? Properties { get; set; }
 
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+        public bool IsDeleted { get; set; }
+
+        public DateTime? DeletedAt { get; set; }
 
         public virtual List<CrmResourceBookingItem> BookingItems { get; set; } = new();
 

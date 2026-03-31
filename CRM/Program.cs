@@ -17,6 +17,8 @@ using CRM.Modules.Notifications.Infrastructure;
 using CRM.Modules.Notifications.Workers;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.SignalR;
+using Core.MultiTenancy;
+using CRM.Infrastructure.Trash;
 
 #pragma warning disable CS0618
 // Поддержка работы с jsonb в PostgreSQL
@@ -26,6 +28,8 @@ NpgsqlConnection.GlobalTypeMapper.EnableDynamicJson();
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddAntiforgery(options => options.HeaderName = "X-CSRF-TOKEN");
+builder.Services.Configure<TenantResolutionOptions>(builder.Configuration.GetSection(TenantResolutionOptions.SectionName));
+builder.Services.Configure<FileStorageOptions>(builder.Configuration.GetSection(FileStorageOptions.SectionName));
 
 // 1. Настройка контроллеров и глобальная политика авторизации
 builder.Services.AddControllersWithViews(options =>
@@ -86,6 +90,9 @@ builder.Services.ConfigureApplicationCookie(options =>
 builder.Services.AddHttpContextAccessor();
 builder.Services.AddSignalR();
 builder.Services.AddSingleton<IUserIdProvider, NameIdentifierUserIdProvider>();
+builder.Services.AddScoped<ITenantContextAccessor, TenantContextAccessor>();
+builder.Services.AddScoped<IFileStorageService, FileStorageService>();
+builder.Services.AddScoped<ITrashService, TrashService>();
 
 builder.Services.AddScoped<IContactService, ContactService>();
 builder.Services.AddScoped<ICrmService, CrmService>();
@@ -115,6 +122,7 @@ app.UseStaticFiles();
 app.UseRouting();
 
 app.UseAuthentication(); 
+app.UseMiddleware<TenantResolutionMiddleware>();
 app.UseAuthorization();
 
 app.MapControllers();
@@ -123,18 +131,28 @@ app.MapControllerRoute(
     name: "default",
     pattern: "{controller=Home}/{action=Index}/{id?}");
 
+var skipBootstrap = string.Equals(
+    Environment.GetEnvironmentVariable("EF_SKIP_APP_BOOTSTRAP"),
+    "1",
+    StringComparison.Ordinal);
+
 // 6. Автоматическое применение миграций и ИНИЦИАЛИЗАЦИЯ ДАННЫХ ПРИ СТАРТЕ
-using (var scope = app.Services.CreateScope())
+if (!skipBootstrap)
 {
+    using var scope = app.Services.CreateScope();
     var services = scope.ServiceProvider;
     try
     {
         var context = services.GetRequiredService<AppDbContext>();
         var userManager = services.GetRequiredService<UserManager<Employee>>();
         var configuration = services.GetRequiredService<IConfiguration>(); // Получаем конфиг
+        var tenantContextAccessor = services.GetRequiredService<ITenantContextAccessor>();
         
         // Сначала накатываем миграции
         await context.Database.MigrateAsync();
+
+        var defaultTenant = await DbInitializer.EnsureDefaultTenantAsync(context, configuration);
+        tenantContextAccessor.CurrentTenant = defaultTenant;
         
         // ЗАТЕМ запускаем твой инициализатор для создания CRM, Контактов и Пользователя
         await DbInitializer.Initialize(context, userManager, configuration);
@@ -148,4 +166,7 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
-app.Run();
+if (!skipBootstrap)
+{
+    app.Run();
+}

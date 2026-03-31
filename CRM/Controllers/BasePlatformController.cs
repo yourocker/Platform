@@ -17,6 +17,7 @@ using Core.Entities.Tasks;
 using CRM.Infrastructure;
 using CRM.ViewModels.Filters;
 using System.Security.Claims;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace CRM.Controllers
 {
@@ -31,6 +32,7 @@ namespace CRM.Controllers
     {
         protected readonly AppDbContext _context;
         protected readonly IWebHostEnvironment _hostingEnvironment;
+        protected IFileStorageService FileStorageService => HttpContext.RequestServices.GetRequiredService<IFileStorageService>();
 
         protected BasePlatformController(AppDbContext context, IWebHostEnvironment hostingEnvironment)
         {
@@ -338,8 +340,14 @@ namespace CRM.Controllers
             if (string.IsNullOrEmpty(webPath)) return;
             try
             {
+                if (FileStorageService.TryParseReference(webPath, out _))
+                {
+                    FileStorageService.DeleteByReferenceAsync(webPath).GetAwaiter().GetResult();
+                    return;
+                }
+
                 var fullPath = Path.Combine(_hostingEnvironment.WebRootPath, webPath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
-                if (System.IO.File.Exists(fullPath)) 
+                if (System.IO.File.Exists(fullPath))
                 {
                     System.IO.File.Delete(fullPath);
                 }
@@ -347,11 +355,11 @@ namespace CRM.Controllers
             catch { }
         }
 
-        [HttpPost]
+        [HttpPost("/files/delete-property")]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteFileProperty(Guid id, string entityCode, string propertyName, string filePath)
         {
-            var entity = await _context.GenericObjects.FindAsync(id);
+            var entity = await FindDynamicEntityAsync(id, entityCode);
             if (entity == null || string.IsNullOrEmpty(entity.Properties)) return Json(new { success = false });
 
             var props = JsonSerializer.Deserialize<Dictionary<string, object>>(entity.Properties);
@@ -415,6 +423,7 @@ namespace CRM.Controllers
                     if (files.Any())
                     {
                         var newPaths = new List<string>();
+                        var entityId = TryGetEntityId(entity);
                         foreach (var file in files)
                         {
                             if (file.Length > 20 * 1024 * 1024) 
@@ -423,17 +432,13 @@ namespace CRM.Controllers
                                 continue;
                             }
 
-                            var folderGuid = Guid.NewGuid().ToString();
-                            var uploadDir = Path.Combine(_hostingEnvironment.WebRootPath, "uploads", "temp", folderGuid);
-                            if (!Directory.Exists(uploadDir)) Directory.CreateDirectory(uploadDir);
+                            var storedFile = await FileStorageService.SaveAsync(
+                                file,
+                                "dynamic-fields",
+                                entityCode,
+                                entityId == Guid.Empty ? null : entityId);
 
-                            var safeFileName = Path.GetFileName(file.FileName); 
-                            var filePath = Path.Combine(uploadDir, safeFileName);
-                            using (var stream = new FileStream(filePath, FileMode.Create))
-                            {
-                                await file.CopyToAsync(stream);
-                            }
-                            newPaths.Add($"/uploads/temp/{folderGuid}/{safeFileName}");
+                            newPaths.Add(FileStorageService.BuildAccessPath(storedFile.Id));
                         }
 
                         if (newPaths.Any())
@@ -566,6 +571,25 @@ namespace CRM.Controllers
                     WriteIndented = true
                 });
             }
+        }
+
+        private Guid TryGetEntityId(IHasDynamicProperties entity)
+        {
+            var idValue = entity.GetType().GetProperty("Id")?.GetValue(entity);
+            return idValue is Guid guid ? guid : Guid.Empty;
+        }
+
+        private async Task<IHasDynamicProperties?> FindDynamicEntityAsync(Guid id, string entityCode)
+        {
+            var normalizedCode = NormalizeEntityCode(entityCode);
+            return normalizedCode switch
+            {
+                "employee" => await _context.Employees.FirstOrDefaultAsync(x => x.Id == id),
+                "position" => await _context.Positions.FirstOrDefaultAsync(x => x.Id == id),
+                "department" => await _context.Departments.FirstOrDefaultAsync(x => x.Id == id),
+                "resourcebooking" => await _context.CrmResourceBookings.FirstOrDefaultAsync(x => x.Id == id),
+                _ => await _context.GenericObjects.FirstOrDefaultAsync(x => x.Id == id)
+            };
         }
 
         private string MoveFileToFinal(string tempWebPath, string finalBaseDir)

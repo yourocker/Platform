@@ -1,13 +1,15 @@
 ﻿using System;
 using System.ComponentModel.DataAnnotations;
+using Core.MultiTenancy;
 
 namespace Core.Entities.Company
 {
     // Модель режима работы компании по дням недели
-    public class CompanyWorkMode
+    public class CompanyWorkMode : ITenantEntity
     {
         [Key]
         public Guid Id { get; set; }
+        public Guid TenantId { get; set; }
         public DayOfWeek DayOfWeek { get; set; }
         public TimeSpan StartTime { get; set; }
         public TimeSpan EndTime { get; set; }

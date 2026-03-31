@@ -1,16 +1,18 @@
 ﻿using System;
+using Core.MultiTenancy;
 
 namespace Core.Entities.System
 {
     /// <summary>
     /// Сущность для хранения настроек интерфейса CRM (цвета, шрифты, темы).
     /// </summary>
-    public class UiSettings
+    public class UiSettings : ITenantEntity
     {
         /// <summary>
         /// Уникальный идентификатор настроек.
         /// </summary>
         public Guid Id { get; set; }
+        public Guid TenantId { get; set; }
 
         // --- БРЕНД И АКЦЕНТЫ ---
 

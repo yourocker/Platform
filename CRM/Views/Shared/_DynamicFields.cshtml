@@ -163,7 +163,7 @@
                         var wrapperId = "wrapper_" + Guid.NewGuid().ToString("N");
 
                         <div class="mb-2 dynamic-field-item" id="@wrapperId" data-dynamic-field-item="@field.SystemName">
-                            @if (field.DataType == FieldDataType.File && !string.IsNullOrWhiteSpace(val) && !val.Contains("/uploads/temp/"))
+                            @if (field.DataType == FieldDataType.File && !string.IsNullOrWhiteSpace(val))
                             {
                                 <div class="mb-1 d-flex align-items-center">
                                     <a href="@val" target="_blank" class="text-decoration-none small">
@@ -294,7 +294,7 @@
                             var wrapperId = "wrapper_" + Guid.NewGuid().ToString("N");
 
                             <div class="mb-2 dynamic-field-item" id="@wrapperId" data-dynamic-field-item="@field.SystemName">
-                                @if (field.DataType == FieldDataType.File && !string.IsNullOrWhiteSpace(val) && !val.Contains("/uploads/temp/"))
+                                @if (field.DataType == FieldDataType.File && !string.IsNullOrWhiteSpace(val))
                                 {
                                     <div class="mb-1 d-flex align-items-center">
                                         <a href="@val" target="_blank" class="text-decoration-none small">
@@ -645,7 +645,7 @@
 
             const token = document.querySelector('input[name="__RequestVerificationToken"]')?.value || '';
 
-            fetch('/GenericObjects/DeleteFileProperty', {
+            fetch('/files/delete-property', {
                 method: 'POST',
                 body: formData,
                 headers: { 'RequestVerificationToken': token }

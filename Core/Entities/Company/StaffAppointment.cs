@@ -1,10 +1,12 @@
 ﻿using System;
+using Core.MultiTenancy;
 
 namespace Core.Entities.Company
 {
-    public class StaffAppointment : IHasDynamicProperties
+    public class StaffAppointment : IHasDynamicProperties, ITenantEntity
     {
         public Guid Id { get; set; }
+        public Guid TenantId { get; set; }
         public Guid EmployeeId { get; set; }
         public Employee Employee { get; set; }
         public Guid DepartmentId { get; set; }

@@ -1,10 +1,12 @@
 using System;
+using Core.MultiTenancy;
 
 namespace Core.Entities.System
 {
-    public class UserNotification
+    public class UserNotification : ITenantEntity
     {
         public Guid Id { get; set; }
+        public Guid TenantId { get; set; }
         public Guid? SourceEventId { get; set; }
         public Guid UserId { get; set; }
         public string Title { get; set; } = string.Empty;

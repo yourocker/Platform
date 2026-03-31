@@ -86,21 +86,21 @@ namespace CRM.Controllers
             };
         }
 
-        /// <summary>
-        /// Извлекает динамические поля из формы (Request.Form) в словарь.
-        /// </summary>
-        private Dictionary<string, object> ExtractDynamicProps()
+        private static Dictionary<string, object> DeserializeDynamicProps(string? properties)
         {
-            var dict = new Dictionary<string, object>();
-            foreach (var key in Request.Form.Keys.Where(k => k.StartsWith("DynamicProps[")))
+            if (string.IsNullOrWhiteSpace(properties))
             {
-                var systemName = key.Replace("DynamicProps[", "").Replace("]", "");
-                var values = Request.Form[key].ToList();
-                
-                if (values.Count > 1) dict[systemName] = values;
-                else dict[systemName] = values.FirstOrDefault() ?? "";
+                return new Dictionary<string, object>();
             }
-            return dict;
+
+            try
+            {
+                return JsonSerializer.Deserialize<Dictionary<string, object>>(properties) ?? new Dictionary<string, object>();
+            }
+            catch
+            {
+                return new Dictionary<string, object>();
+            }
         }
 
         // --- ACTIONS ---
@@ -219,11 +219,13 @@ namespace CRM.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Create(ContactCreateDto dto, bool modal = false)
         {
+            var contact = ContactMapper.ToEntity(dto);
+            contact.Id = Guid.NewGuid();
+            await SaveDynamicProperties(contact, Request.Form, "Contact");
+
             if (ModelState.IsValid)
             {
-                var contact = ContactMapper.ToEntity(dto);
-                var dynamicProps = ExtractDynamicProps();
-                var createdContact = await _contactService.CreateContactAsync(contact, dto.PhoneNumbers, dto.EmailAddresses, dynamicProps);
+                var createdContact = await _contactService.CreateContactAsync(contact, dto.PhoneNumbers, dto.EmailAddresses);
 
                 await _timelineService.LogEventAsync(
                     createdContact.Id,
@@ -242,7 +244,7 @@ namespace CRM.Controllers
             }
             await LoadViewData();
             ViewBag.IsModal = modal;
-            dto.DynamicValues = ExtractDynamicProps();
+            dto.DynamicValues = DeserializeDynamicProps(contact.Properties);
             return View(dto);
         }
 
@@ -271,27 +273,32 @@ namespace CRM.Controllers
         {
             if (id != dto.Id) return NotFound();
 
+            var beforeContact = await _context.Contacts
+                .Include(c => c.Phones)
+                .Include(c => c.Emails)
+                .AsNoTracking()
+                .FirstOrDefaultAsync(c => c.Id == id);
+            if (beforeContact == null)
+            {
+                return NotFound();
+            }
+
+            var contact = new Contact
+            {
+                Id = id,
+                Properties = beforeContact.Properties
+            };
+            ContactMapper.UpdateEntity(contact, dto);
+            await SaveDynamicProperties(contact, Request.Form, "Contact");
+
             if (ModelState.IsValid)
             {
-                var beforeContact = await _context.Contacts
-                    .Include(c => c.Phones)
-                    .Include(c => c.Emails)
-                    .AsNoTracking()
-                    .FirstOrDefaultAsync(c => c.Id == id);
-                if (beforeContact == null)
-                {
-                    return NotFound();
-                }
-
                 try
                 {
-                    var contact = new Contact(); 
-                    ContactMapper.UpdateEntity(contact, dto); 
-                    var dynamicProps = ExtractDynamicProps(); 
-                    await _contactService.UpdateContactAsync(id, contact, dto.PhoneNumbers, dto.EmailAddresses, dynamicProps);
+                    await _contactService.UpdateContactAsync(id, contact, dto.PhoneNumbers, dto.EmailAddresses);
 
                     var fieldLabels = await LoadFieldLabelMapAsync("Contact");
-                    var summary = BuildContactChangeSummary(beforeContact, dto, dynamicProps, fieldLabels);
+                    var summary = BuildContactChangeSummary(beforeContact, dto, DeserializeDynamicProps(contact.Properties), fieldLabels);
 
                     await _timelineService.LogEventAsync(
                         id,
@@ -319,7 +326,7 @@ namespace CRM.Controllers
             }
             
             await LoadViewData();
-            dto.DynamicValues = ExtractDynamicProps(); 
+            dto.DynamicValues = DeserializeDynamicProps(contact.Properties); 
             return View(dto);
         }
 
@@ -348,8 +355,8 @@ namespace CRM.Controllers
                     id,
                     "Contact",
                     CrmEventType.System,
-                    "Контакт удалён",
-                    $"Удалён контакт \"{contact.FullName}\".",
+                    "Контакт перемещён в корзину",
+                    $"Контакт \"{contact.FullName}\" перемещён в корзину.",
                     TryGetCurrentEmployeeId());
             }
 

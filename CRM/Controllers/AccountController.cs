@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Core.Entities.Company;
 using Core.Data;
+using System.Security.Claims;
 
 namespace CRM.Controllers
 {
@@ -41,28 +42,19 @@ namespace CRM.Controllers
                 return View();
             }
 
-            // 1. Поиск стандартным способом (по NormalizedUserName)
-            var user = await _userManager.FindByNameAsync(login);
-            if (user == null)
-            {
-                user = await _userManager.FindByEmailAsync(login);
-            }
+            var cleanLogin = login.Trim();
+            var normalizedLogin = cleanLogin.ToUpperInvariant();
+            var phoneLogin = cleanLogin.Replace(" ", "").Replace("-", "").Replace("(", "").Replace(")", "");
 
-            // 2. ФОЛЛБЭК: Ищем по совпадению в полях (если Identity данные пусты или кривые)
-            if (user == null)
-            {
-                var cleanLogin = login.Trim();
-                // Убираем лишнее для поиска по телефону
-                var phoneLogin = cleanLogin.Replace(" ", "").Replace("-", "").Replace("(", "").Replace(")", "");
-
-                user = await _context.Employees
-                    .FirstOrDefaultAsync(u => 
-                        u.UserName == cleanLogin || 
-                        u.Email == cleanLogin || 
-                        u.PhoneNumber == phoneLogin ||
-                        u.PhoneNumber == cleanLogin
-                    );
-            }
+            var user = await _context.Employees
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(u =>
+                    u.UserName == cleanLogin ||
+                    u.NormalizedUserName == normalizedLogin ||
+                    u.Email == cleanLogin ||
+                    u.NormalizedEmail == normalizedLogin ||
+                    u.PhoneNumber == phoneLogin ||
+                    u.PhoneNumber == cleanLogin);
 
             // 3. САМОЛЕЧЕНИЕ (ИСПРАВЛЕННОЕ)
             // Если нашли пользователя, проверяем критические поля Identity
@@ -121,11 +113,18 @@ namespace CRM.Controllers
                 return View();
             }
 
-            // Стандартный вход
-            var result = await _signInManager.PasswordSignInAsync(user, password, isPersistent: true, lockoutOnFailure: true);
+            var membership = await ResolveLoginMembershipAsync(user);
+            if (membership == null)
+            {
+                ModelState.AddModelError(string.Empty, "У пользователя нет активного доступа ни к одному tenant.");
+                return View();
+            }
+
+            var result = await _signInManager.CheckPasswordSignInAsync(user, password, lockoutOnFailure: true);
 
             if (result.Succeeded)
             {
+                await SignInWithTenantAsync(user, membership, isPersistent: true);
                 return RedirectToLocal(returnUrl);
             }
 
@@ -137,6 +136,35 @@ namespace CRM.Controllers
             
             ModelState.AddModelError(string.Empty, "Неверный логин или пароль");
             return View();
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> SwitchTenant(Guid tenantId, string? returnUrl = null)
+        {
+            var user = await _userManager.GetUserAsync(User);
+            if (user == null)
+            {
+                return RedirectToAction(nameof(Login));
+            }
+
+            var membership = await _context.EmployeeTenantMemberships
+                .IgnoreQueryFilters()
+                .AsNoTracking()
+                .Include(x => x.Tenant)
+                .FirstOrDefaultAsync(x =>
+                    x.EmployeeId == user.Id &&
+                    x.TenantId == tenantId &&
+                    x.IsActive &&
+                    x.Tenant.IsActive);
+
+            if (membership == null)
+            {
+                return Forbid();
+            }
+
+            await SignInWithTenantAsync(user, membership, isPersistent: true);
+            return RedirectToLocal(returnUrl);
         }
 
         [HttpPost]
@@ -154,6 +182,51 @@ namespace CRM.Controllers
                 return Redirect(returnUrl);
             }
             return RedirectToAction("Index", "Home");
+        }
+
+        private async Task<EmployeeTenantMembership?> ResolveLoginMembershipAsync(Employee user)
+        {
+            var currentTenantClaim = User.FindFirstValue("tenant_id");
+            if (Guid.TryParse(currentTenantClaim, out var currentTenantId))
+            {
+                var membershipByClaim = await _context.EmployeeTenantMemberships
+                    .IgnoreQueryFilters()
+                    .AsNoTracking()
+                    .Include(x => x.Tenant)
+                    .FirstOrDefaultAsync(x =>
+                        x.EmployeeId == user.Id &&
+                        x.TenantId == currentTenantId &&
+                        x.IsActive &&
+                        x.Tenant.IsActive);
+
+                if (membershipByClaim != null)
+                {
+                    return membershipByClaim;
+                }
+            }
+
+            return await _context.EmployeeTenantMemberships
+                .IgnoreQueryFilters()
+                .AsNoTracking()
+                .Include(x => x.Tenant)
+                .Where(x => x.EmployeeId == user.Id && x.IsActive && x.Tenant.IsActive)
+                .OrderByDescending(x => x.IsDefault)
+                .ThenBy(x => x.JoinedAt)
+                .FirstOrDefaultAsync();
+        }
+
+        private async Task SignInWithTenantAsync(Employee user, EmployeeTenantMembership membership, bool isPersistent)
+        {
+            var claims = new List<Claim>
+            {
+                new("tenant_id", membership.TenantId.ToString()),
+                new("tenant_membership_id", membership.Id.ToString()),
+                new("tenant_role", membership.RoleCode),
+                new(ClaimTypes.Role, membership.RoleCode)
+            };
+
+            await _signInManager.SignOutAsync();
+            await _signInManager.SignInWithClaimsAsync(user, isPersistent, claims);
         }
     }
 }

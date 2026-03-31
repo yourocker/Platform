@@ -10,12 +10,12 @@ namespace Core.Interfaces.CRM
         /// <summary>
         /// Создает новый контакт вместе с телефонами, почтами и динамическими полями.
         /// </summary>
-        Task<Contact> CreateContactAsync(Contact contact, IEnumerable<string> phones, IEnumerable<string> emails, Dictionary<string, object> dynamicProperties);
+        Task<Contact> CreateContactAsync(Contact contact, IEnumerable<string> phones, IEnumerable<string> emails);
 
         /// <summary>
         /// Обновляет существующий контакт. Полностью заменяет списки телефонов и почт.
         /// </summary>
-        Task<Contact> UpdateContactAsync(Guid id, Contact source, IEnumerable<string> phones, IEnumerable<string> emails, Dictionary<string, object> dynamicProperties);
+        Task<Contact> UpdateContactAsync(Guid id, Contact source, IEnumerable<string> phones, IEnumerable<string> emails);
 
         /// <summary>
         /// Удаляет контакт.

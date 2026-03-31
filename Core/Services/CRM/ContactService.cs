@@ -19,18 +19,12 @@ namespace Core.Services.CRM
             _context = context;
         }
 
-        public async Task<Contact> CreateContactAsync(Contact contact, IEnumerable<string> phones, IEnumerable<string> emails, Dictionary<string, object> dynamicProperties)
+        public async Task<Contact> CreateContactAsync(Contact contact, IEnumerable<string> phones, IEnumerable<string> emails)
         {
             // 1. Базовая инициализация
             if (contact.Id == Guid.Empty) contact.Id = Guid.NewGuid();
             contact.EntityCode = "Contact";
             contact.CreatedAt = DateTime.UtcNow;
-
-            // 2. Обработка динамических полей (JSON)
-            if (dynamicProperties != null && dynamicProperties.Any())
-            {
-                contact.Properties = JsonSerializer.Serialize(dynamicProperties);
-            }
 
             // 3. Расчет полного имени (Бизнес-логика сущности)
             contact.RecalculateFullName();
@@ -61,7 +55,7 @@ namespace Core.Services.CRM
             return contact;
         }
 
-        public async Task<Contact> UpdateContactAsync(Guid id, Contact source, IEnumerable<string> phones, IEnumerable<string> emails, Dictionary<string, object> dynamicProperties)
+        public async Task<Contact> UpdateContactAsync(Guid id, Contact source, IEnumerable<string> phones, IEnumerable<string> emails)
         {
             // 1. Загружаем оригинал с зависимостями
             var original = await _context.Contacts
@@ -77,16 +71,7 @@ namespace Core.Services.CRM
             original.MiddleName = source.MiddleName;
             
             // 3. Обновляем JSON свойства
-            if (dynamicProperties != null && dynamicProperties.Any())
-            {
-                original.Properties = JsonSerializer.Serialize(dynamicProperties);
-            }
-            else
-            {
-                // Если пришел пустой словарь, но поля были - можно решить: затирать или нет.
-                // В данном случае, если форма отправлена, считаем что это актуальное состояние.
-                original.Properties = null; 
-            }
+            original.Properties = string.IsNullOrWhiteSpace(source.Properties) ? null : source.Properties;
 
             // 4. Пересчитываем FullName
             original.RecalculateFullName();

@@ -1,5 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
+using Core.MultiTenancy;
 
 namespace Core.Entities.Platform;
 
@@ -30,9 +31,10 @@ public class FieldSelectOption
     public int SortOrder { get; set; }
 }
 
-public class AppFieldDefinition
+public class AppFieldDefinition : ITenantEntity
 {
     public Guid Id { get; set; }
+    public Guid TenantId { get; set; }
 
     public Guid AppDefinitionId { get; set; }
     public AppDefinition AppDefinition { get; set; } = null!;

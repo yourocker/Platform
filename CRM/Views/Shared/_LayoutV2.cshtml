@@ -8,12 +8,36 @@
 
 @inject ICrmStyleService StyleService
 @inject UserManager<Employee> UserManager
+@inject AppDbContext AppDbContext
 @inject IAntiforgery Antiforgery
 
 @{
 // Загружаем настройки интерфейса через сервис (с кэшированием).
 var ui = StyleService.GetSettings();
 var antiforgeryToken = Antiforgery.GetAndStoreTokens(Context).RequestToken;
+var currentUser = User.Identity?.IsAuthenticated == true ? await UserManager.GetUserAsync(User) : null;
+var currentTenantId = User.FindFirst("tenant_id")?.Value;
+var currentTenantName = string.Empty;
+var currentTenantRole = User.FindFirst("tenant_role")?.Value ?? User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? string.Empty;
+var tenantMemberships = new List<EmployeeTenantMembership>();
+var currentReturnUrl = $"{Context.Request.Path}{Context.Request.QueryString}";
+
+if (currentUser != null)
+{
+    tenantMemberships = await AppDbContext.EmployeeTenantMemberships
+        .IgnoreQueryFilters()
+        .AsNoTracking()
+        .Include(x => x.Tenant)
+        .Where(x => x.EmployeeId == currentUser.Id && x.IsActive && x.Tenant.IsActive)
+        .OrderByDescending(x => x.IsDefault)
+        .ThenBy(x => x.Tenant.Name)
+        .ToListAsync();
+
+    currentTenantName = tenantMemberships
+        .FirstOrDefault(x => x.TenantId.ToString() == currentTenantId)?.Tenant.Name
+        ?? tenantMemberships.FirstOrDefault()?.Tenant.Name
+        ?? string.Empty;
+}
 }
 
 <!DOCTYPE html>
@@ -307,22 +331,57 @@ var antiforgeryToken = Antiforgery.GetAndStoreTokens(Context).RequestToken;
 
             @if (User.Identity.IsAuthenticated)
             {
-            var user = await UserManager.GetUserAsync(User);
-            var displayName = user != null ? $"{user.FirstName} {user.LastName}" : User.Identity.Name;
-            var timezone = user?.TimezoneId ?? "UTC";
+            var displayName = currentUser != null ? $"{currentUser.FirstName} {currentUser.LastName}" : User.Identity.Name;
+            var timezone = currentUser?.TimezoneId ?? "UTC";
 
             <input type="hidden" id="notificationAntiforgeryToken" value="@antiforgeryToken" />
             <input type="hidden" id="user-timezone" value="@timezone" />
 
             <div class="dropdown">
                 <button class="btn dropdown-toggle d-flex align-items-center gap-2 border-0 bg-transparent p-0" type="button" data-bs-toggle="dropdown">
+                    <div class="text-end lh-sm d-none d-lg-block me-1">
+                        @if (!string.IsNullOrWhiteSpace(currentTenantName))
+                        {
+                            <div class="fw-semibold">@currentTenantName</div>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(currentTenantRole))
+                        {
+                            <small class="opacity-50 text-uppercase">@currentTenantRole</small>
+                        }
+                    </div>
                     <div class="rounded-circle d-flex align-items-center justify-content-center"
                          style="width: 36px; height: 36px; background-color: var(--primary-color); color: var(--primary-text);">
-                        @displayName?.Substring(0,1).ToUpper()
+                        @(string.IsNullOrWhiteSpace(displayName) ? "?" : displayName.Substring(0, 1).ToUpper())
                     </div>
                 </button>
                 <ul class="dropdown-menu dropdown-menu-end shadow border-0" style="background-color: var(--card-bg); color: var(--card-text);">
                     <li class="px-3 py-2 opacity-50 small">@displayName</li>
+                    @if (!string.IsNullOrWhiteSpace(currentTenantName))
+                    {
+                        <li class="px-3 pb-2 small">
+                            <span class="opacity-50">Tenant:</span> @currentTenantName
+                        </li>
+                    }
+                    @if (tenantMemberships.Count > 1)
+                    {
+                        <li><hr class="dropdown-divider"></li>
+                        <li class="px-3 pb-2 pt-1 opacity-50 small">Переключить tenant</li>
+                        @foreach (var membership in tenantMemberships)
+                        {
+                            var isCurrentTenant = membership.TenantId.ToString() == currentTenantId;
+                            <li>
+                                <form asp-controller="Account" asp-action="SwitchTenant" method="post" class="d-inline">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="tenantId" value="@membership.TenantId" />
+                                    <input type="hidden" name="returnUrl" value="@currentReturnUrl" />
+                                    <button type="submit" class="dropdown-item @(isCurrentTenant ? "active" : "")" style="color: var(--card-text);">
+                                        <span>@membership.Tenant.Name</span>
+                                        <small class="opacity-50 text-uppercase ms-2">@membership.RoleCode</small>
+                                    </button>
+                                </form>
+                            </li>
+                        }
+                    }
                     <li><hr class="dropdown-divider"></li>
                     <li>
                         <button class="dropdown-item" onclick="openProfileSettings()" style="color: var(--card-text);">

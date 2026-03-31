@@ -97,6 +97,9 @@ namespace Core.Migrations
                     b.Property<Guid>("ServiceItemId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
                     b.HasKey("Id");
 
                     b.HasIndex("DealId");
@@ -129,6 +132,9 @@ namespace Core.Migrations
                         .HasColumnType("text");
 
                     b.Property<Guid>("TargetId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("Title")
@@ -169,6 +175,9 @@ namespace Core.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
                     b.HasKey("Id");
 
                     b.ToTable("CrmPipelines", (string)null);
@@ -195,6 +204,9 @@ namespace Core.Migrations
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
 
                     b.HasKey("Id");
 
@@ -226,11 +238,17 @@ namespace Core.Migrations
                     b.Property<Guid?>("DealItemId")
                         .HasColumnType("uuid");
 
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
                     b.Property<string>("DiscountReason")
                         .HasColumnType("text");
 
                     b.Property<DateTime>("EndTime")
                         .HasColumnType("timestamp without time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
 
                     b.Property<bool>("IsOverbooking")
                         .HasColumnType("boolean");
@@ -251,6 +269,9 @@ namespace Core.Migrations
                         .HasColumnType("timestamp without time zone");
 
                     b.Property<Guid?>("StatusId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
                         .HasColumnType("uuid");
 
                     b.Property<string>("Title")
@@ -354,6 +375,9 @@ namespace Core.Migrations
                     b.Property<int>("StageType")
                         .HasColumnType("integer");
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
                     b.HasKey("Id");
 
                     b.HasIndex("PipelineId");
@@ -373,6 +397,9 @@ namespace Core.Migrations
                     b.Property<string>("Description")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
 
                     b.HasKey("Id");
 
@@ -403,6 +430,9 @@ namespace Core.Migrations
                     b.Property<TimeSpan>("StartTime")
                         .HasColumnType("interval");
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
                     b.HasKey("Id");
 
                     b.ToTable("CompanyWorkModes", (string)null);
@@ -426,6 +456,9 @@ namespace Core.Migrations
 
                     b.Property<string>("Properties")
                         .HasColumnType("text");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
 
                     b.HasKey("Id");
 
@@ -528,6 +561,9 @@ namespace Core.Migrations
                     b.Property<int>("Status")
                         .HasColumnType("integer");
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("TimezoneId")
                         .IsRequired()
                         .HasColumnType("text");
@@ -569,11 +605,50 @@ namespace Core.Migrations
                     b.Property<DateTime>("StartTime")
                         .HasColumnType("timestamp without time zone");
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
                     b.HasKey("Id");
 
                     b.HasIndex("EmployeeId");
 
                     b.ToTable("EmployeeSchedules", (string)null);
+                });
+
+            modelBuilder.Entity("Core.Entities.Company.EmployeeTenantMembership", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsDefault")
+                        .HasColumnType("boolean");
+
+                    b.Property<DateTime>("JoinedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("RoleCode")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("EmployeeId", "IsActive");
+
+                    b.HasIndex("TenantId", "EmployeeId")
+                        .IsUnique();
+
+                    b.ToTable("EmployeeTenantMemberships", (string)null);
                 });
 
             modelBuilder.Entity("Core.Entities.Company.Position", b =>
@@ -591,6 +666,9 @@ namespace Core.Migrations
 
                     b.Property<string>("SystemName")
                         .HasColumnType("text");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
 
                     b.HasKey("Id");
 
@@ -617,6 +695,9 @@ namespace Core.Migrations
 
                     b.Property<string>("Properties")
                         .HasColumnType("text");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
 
                     b.HasKey("Id");
 
@@ -649,7 +730,13 @@ namespace Core.Migrations
                     b.Property<int>("SortOrder")
                         .HasColumnType("integer");
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
                     b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "Name")
+                        .IsUnique();
 
                     b.ToTable("AppCategories");
                 });
@@ -681,9 +768,15 @@ namespace Core.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
                     b.HasKey("Id");
 
                     b.HasIndex("AppCategoryId");
+
+                    b.HasIndex("TenantId", "EntityCode")
+                        .IsUnique();
 
                     b.ToTable("AppDefinitions");
                 });
@@ -736,9 +829,14 @@ namespace Core.Migrations
                         .HasMaxLength(50)
                         .HasColumnType("character varying(50)");
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
                     b.HasKey("Id");
 
-                    b.HasIndex("AppDefinitionId", "SystemName")
+                    b.HasIndex("AppDefinitionId");
+
+                    b.HasIndex("TenantId", "AppDefinitionId", "SystemName")
                         .IsUnique();
 
                     b.ToTable("AppFieldDefinitions");
@@ -765,14 +863,19 @@ namespace Core.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("character varying(100)");
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
                     b.Property<int>("Type")
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("AppDefinitionId", "Type", "IsDefault");
+                    b.HasIndex("AppDefinitionId");
 
-                    b.HasIndex("AppDefinitionId", "Type", "Name")
+                    b.HasIndex("TenantId", "AppDefinitionId", "Type", "IsDefault");
+
+                    b.HasIndex("TenantId", "AppDefinitionId", "Type", "Name")
                         .IsUnique();
 
                     b.ToTable("AppFormDefinitions");
@@ -787,9 +890,15 @@ namespace Core.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp without time zone");
 
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
                     b.Property<string>("EntityCode")
                         .IsRequired()
                         .HasColumnType("text");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
 
                     b.Property<string>("Name")
                         .IsRequired()
@@ -798,6 +907,9 @@ namespace Core.Migrations
 
                     b.Property<string>("Properties")
                         .HasColumnType("jsonb");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
 
                     b.HasKey("Id");
 
@@ -820,6 +932,9 @@ namespace Core.Migrations
 
                     b.Property<int>("MaxParallelBookings")
                         .HasColumnType("integer");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
 
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp without time zone");
@@ -852,6 +967,9 @@ namespace Core.Migrations
                     b.Property<int>("SortOrder")
                         .HasColumnType("integer");
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp without time zone");
 
@@ -882,12 +1000,15 @@ namespace Core.Migrations
                     b.Property<bool>("IsEnabled")
                         .HasColumnType("boolean");
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp without time zone");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("FeatureCode")
+                    b.HasIndex("TenantId", "FeatureCode")
                         .IsUnique();
 
                     b.ToTable("FeatureToggles", (string)null);
@@ -913,9 +1034,105 @@ namespace Core.Migrations
                     b.Property<DateTime?>("ProcessedAt")
                         .HasColumnType("timestamp without time zone");
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
                     b.HasKey("Id");
 
                     b.ToTable("OutboxEvents");
+                });
+
+            modelBuilder.Entity("Core.Entities.System.StoredFile", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Category")
+                        .IsRequired()
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<string>("ContentType")
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("OriginalFileName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("OwnerEntityCode")
+                        .HasMaxLength(128)
+                        .HasColumnType("character varying(128)");
+
+                    b.Property<Guid?>("OwnerEntityId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("RelativePath")
+                        .IsRequired()
+                        .HasMaxLength(2048)
+                        .HasColumnType("character varying(2048)");
+
+                    b.Property<long>("Size")
+                        .HasColumnType("bigint");
+
+                    b.Property<string>("StoredFileName")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("UploadedByEmployeeId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId", "RelativePath")
+                        .IsUnique();
+
+                    b.HasIndex("TenantId", "OwnerEntityCode", "OwnerEntityId");
+
+                    b.ToTable("StoredFiles", (string)null);
+                });
+
+            modelBuilder.Entity("Core.Entities.System.Tenant", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("Key")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(1024)
+                        .HasColumnType("character varying(1024)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Key")
+                        .IsUnique();
+
+                    b.ToTable("Tenants", (string)null);
                 });
 
             modelBuilder.Entity("Core.Entities.System.UiSettings", b =>
@@ -977,12 +1194,15 @@ namespace Core.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp without time zone");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("EmployeeId");
+                    b.HasIndex("TenantId", "EmployeeId");
 
                     b.ToTable("UiSettings", (string)null);
                 });
@@ -1010,6 +1230,9 @@ namespace Core.Migrations
                         .HasMaxLength(120)
                         .HasColumnType("character varying(120)");
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
                     b.Property<DateTime>("UpdatedAt")
                         .HasColumnType("timestamp without time zone");
 
@@ -1023,9 +1246,11 @@ namespace Core.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("UserId", "EntityCode", "ViewCode");
+                    b.HasIndex("UserId");
 
-                    b.HasIndex("UserId", "EntityCode", "ViewCode", "Name")
+                    b.HasIndex("TenantId", "UserId", "EntityCode", "ViewCode");
+
+                    b.HasIndex("TenantId", "UserId", "EntityCode", "ViewCode", "Name")
                         .IsUnique();
 
                     b.ToTable("UserFilterPresets", (string)null);
@@ -1051,6 +1276,9 @@ namespace Core.Migrations
                     b.Property<Guid?>("SourceEventId")
                         .HasColumnType("uuid");
 
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
                     b.Property<string>("Title")
                         .IsRequired()
                         .HasMaxLength(256)
@@ -1066,10 +1294,10 @@ namespace Core.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("SourceEventId")
+                    b.HasIndex("TenantId", "SourceEventId")
                         .IsUnique();
 
-                    b.HasIndex("UserId");
+                    b.HasIndex("TenantId", "UserId");
 
                     b.ToTable("UserNotifications", (string)null);
                 });
@@ -1432,14 +1660,8 @@ namespace Core.Migrations
                     b.Property<DateTime?>("Deadline")
                         .HasColumnType("timestamp without time zone");
 
-                    b.Property<DateTime?>("DeletedAt")
-                        .HasColumnType("timestamp without time zone");
-
                     b.Property<string>("Description")
                         .HasColumnType("text");
-
-                    b.Property<bool>("IsDeleted")
-                        .HasColumnType("boolean");
 
                     b.Property<int>("Status")
                         .HasColumnType("integer");
@@ -1624,6 +1846,25 @@ namespace Core.Migrations
                         .IsRequired();
 
                     b.Navigation("Employee");
+                });
+
+            modelBuilder.Entity("Core.Entities.Company.EmployeeTenantMembership", b =>
+                {
+                    b.HasOne("Core.Entities.Company.Employee", "Employee")
+                        .WithMany("TenantMemberships")
+                        .HasForeignKey("EmployeeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Core.Entities.System.Tenant", "Tenant")
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Employee");
+
+                    b.Navigation("Tenant");
                 });
 
             modelBuilder.Entity("Core.Entities.Company.StaffAppointment", b =>
@@ -1944,6 +2185,8 @@ namespace Core.Migrations
             modelBuilder.Entity("Core.Entities.Company.Employee", b =>
                 {
                     b.Navigation("StaffAppointments");
+
+                    b.Navigation("TenantMemberships");
                 });
 
             modelBuilder.Entity("Core.Entities.Platform.AppCategory", b =>

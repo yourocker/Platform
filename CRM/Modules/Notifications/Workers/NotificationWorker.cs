@@ -58,6 +58,7 @@ namespace CRM.Modules.Notifications.Workers
             var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
             var eventIds = await context.OutboxEvents
+                .IgnoreQueryFilters()
                 .Where(e => e.ProcessedAt == null)
                 .OrderBy(e => e.CreatedAt)
                 .Take(10)
@@ -93,6 +94,7 @@ namespace CRM.Modules.Notifications.Workers
             var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
             var evt = await context.OutboxEvents
+                .IgnoreQueryFilters()
                 .FirstOrDefaultAsync(e => e.Id == eventId, cancellationToken);
 
             if (evt == null || evt.ProcessedAt != null)
@@ -101,6 +103,7 @@ namespace CRM.Modules.Notifications.Workers
             }
 
             if (await context.UserNotifications
+                    .IgnoreQueryFilters()
                     .AsNoTracking()
                     .AnyAsync(n => n.SourceEventId == evt.Id, cancellationToken))
             {
@@ -120,6 +123,7 @@ namespace CRM.Modules.Notifications.Workers
             }
 
             var userSettings = await context.Employees
+                .IgnoreQueryFilters()
                 .AsNoTracking()
                 .Select(e => new
                 {
@@ -154,6 +158,7 @@ namespace CRM.Modules.Notifications.Workers
             var historyEntry = new UserNotification
             {
                 Id = Guid.NewGuid(),
+                TenantId = evt.TenantId,
                 SourceEventId = evt.Id,
                 UserId = recipientId,
                 Title = data["Title"]?.ToString() ?? "Уведомление",

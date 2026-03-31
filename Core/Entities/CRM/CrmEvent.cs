@@ -1,6 +1,7 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using Core.Entities.Company;
+using Core.MultiTenancy;
 
 namespace Core.Entities.CRM
 {
@@ -14,10 +15,11 @@ namespace Core.Entities.CRM
     }
 
     [Table("CrmEvents")]
-    public class CrmEvent
+    public class CrmEvent : ITenantEntity
     {
         [Key]
         public Guid Id { get; set; }
+        public Guid TenantId { get; set; }
 
         // К какой сущности привязано (Lead или Deal)
         public Guid TargetId { get; set; }

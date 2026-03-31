@@ -78,6 +78,23 @@ namespace CRM.Controllers
                 .ToList() ?? new List<string>();
         }
 
+        private async Task<Employee?> FindExistingIdentityEmployeeAsync(string? login)
+        {
+            if (string.IsNullOrWhiteSpace(login))
+            {
+                return null;
+            }
+
+            var normalizedLogin = login.Trim().ToUpperInvariant();
+            return await _context.Employees
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(x =>
+                    x.UserName == login.Trim() ||
+                    x.NormalizedUserName == normalizedLogin ||
+                    x.Email == login.Trim() ||
+                    x.NormalizedEmail == normalizedLogin);
+        }
+
         private Dictionary<string, object> ExtractDynamicProps()
         {
             var dict = new Dictionary<string, object>();
@@ -241,14 +258,72 @@ namespace CRM.Controllers
             dto.Login = string.IsNullOrWhiteSpace(dto.Login) ? null : dto.Login.Trim();
 
             var employee = EmployeeMapper.CreateEntity(dto);
+            employee.Id = Guid.NewGuid();
+            employee.TenantId = _context.CurrentTenantId ?? employee.TenantId;
             employee.Phones = dto.Phones;
             employee.Emails = dto.Emails;
             await SaveDynamicProperties(employee, Request.Form, "Employee");
+            var candidateProperties = employee.Properties;
 
             if (ModelState.IsValid)
             {
-                employee.Id = Guid.NewGuid();
-                if (!string.IsNullOrEmpty(dto.Login) && !string.IsNullOrEmpty(dto.Password))
+                var existingIdentityEmployee = await FindExistingIdentityEmployeeAsync(dto.Login);
+
+                if (existingIdentityEmployee != null && _context.CurrentTenantId.HasValue)
+                {
+                    var currentTenantId = _context.CurrentTenantId.Value;
+                    var alreadyInTenant = await _context.EmployeeTenantMemberships
+                        .IgnoreQueryFilters()
+                        .AnyAsync(x => x.EmployeeId == existingIdentityEmployee.Id && x.TenantId == currentTenantId);
+
+                    if (alreadyInTenant)
+                    {
+                        ModelState.AddModelError(nameof(dto.Login), "Пользователь с таким логином уже добавлен в текущий tenant.");
+                    }
+                    else
+                    {
+                        employee = existingIdentityEmployee;
+                        employee.LastName = dto.LastName.Trim();
+                        employee.FirstName = dto.FirstName.Trim();
+                        employee.MiddleName = string.IsNullOrWhiteSpace(dto.MiddleName) ? null : dto.MiddleName.Trim();
+                        employee.Phones = dto.Phones;
+                        employee.Emails = dto.Emails;
+                        employee.Properties = candidateProperties;
+
+                        var updateResult = await _userManager.UpdateAsync(employee);
+                        if (!updateResult.Succeeded)
+                        {
+                            foreach (var error in updateResult.Errors) ModelState.AddModelError("", error.Description);
+                        }
+                        else
+                        {
+                            if (!string.IsNullOrEmpty(dto.Password) && !await _userManager.HasPasswordAsync(employee))
+                            {
+                                var passwordResult = await _userManager.AddPasswordAsync(employee, dto.Password);
+                                if (!passwordResult.Succeeded)
+                                {
+                                    foreach (var error in passwordResult.Errors) ModelState.AddModelError("", error.Description);
+                                }
+                            }
+
+                            if (ModelState.IsValid)
+                            {
+                                var hasAnyMemberships = await _context.EmployeeTenantMemberships
+                                    .IgnoreQueryFilters()
+                                    .AnyAsync(x => x.EmployeeId == employee.Id);
+
+                                await DbInitializer.EnsureEmployeeMembershipAsync(
+                                    _context,
+                                    employee.Id,
+                                    currentTenantId,
+                                    "employee",
+                                    isDefault: !hasAnyMemberships);
+                            }
+                        }
+                    }
+                }
+
+                if (ModelState.IsValid && existingIdentityEmployee == null && !string.IsNullOrEmpty(dto.Login) && !string.IsNullOrEmpty(dto.Password))
                 {
                     employee.UserName = dto.Login;
                     employee.Email = dto.Login.Contains("@") ? dto.Login : null;
@@ -264,10 +339,20 @@ namespace CRM.Controllers
                         return View(dto);
                     }
                 }
-                else
+                else if (ModelState.IsValid && existingIdentityEmployee == null)
                 {
                     _context.Add(employee);
                     await _context.SaveChangesAsync();
+                }
+
+                if (ModelState.IsValid && _context.CurrentTenantId.HasValue && existingIdentityEmployee == null)
+                {
+                    await DbInitializer.EnsureEmployeeMembershipAsync(
+                        _context,
+                        employee.Id,
+                        _context.CurrentTenantId.Value,
+                        "employee",
+                        isDefault: true);
                 }
 
                 var appointments = EmployeeMapper.ToStaffAppointments(employee.Id, dto.Appointments);

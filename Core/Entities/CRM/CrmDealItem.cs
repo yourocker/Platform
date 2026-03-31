@@ -1,5 +1,6 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using Core.MultiTenancy;
 
 namespace Core.Entities.CRM
 {
@@ -7,10 +8,11 @@ namespace Core.Entities.CRM
     /// Позиция в корзине сделки. Фиксирует стоимость услуги на момент продажи.
     /// </summary>
     [Table("CrmDealItems")]
-    public class CrmDealItem
+    public class CrmDealItem : ITenantEntity
     {
         [Key]
         public Guid Id { get; set; }
+        public Guid TenantId { get; set; }
 
         public Guid DealId { get; set; }
 

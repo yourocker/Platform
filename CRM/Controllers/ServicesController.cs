@@ -22,10 +22,12 @@ namespace CRM.Controllers
     public class ServicesController : Controller
     {
         private readonly AppDbContext _context;
+        private readonly IFileStorageService _fileStorageService;
 
-        public ServicesController(AppDbContext context)
+        public ServicesController(AppDbContext context, IFileStorageService fileStorageService)
         {
             _context = context;
+            _fileStorageService = fileStorageService;
         }
 
         // --- ВСПОМОГАТЕЛЬНЫЕ МЕТОДЫ ---
@@ -196,31 +198,22 @@ public async Task<IActionResult> UploadForImport(IFormFile file)
 {
     if (file == null || file.Length == 0) return BadRequest("Файл не выбран");
 
-    // Путь к временной папке в wwwroot
-    var tempDir = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "temp_imports");
-    if (!Directory.Exists(tempDir)) Directory.CreateDirectory(tempDir);
-
-    var fileName = Guid.NewGuid().ToString() + Path.GetExtension(file.FileName);
-    var filePath = Path.Combine(tempDir, fileName);
-
-    using (var stream = new FileStream(filePath, FileMode.Create))
-    {
-        await file.CopyToAsync(stream);
-    }
-
-    return RedirectToAction(nameof(Mapping), new { fileName });
+    var storedFile = await _fileStorageService.SaveAsync(file, "service-import", "ServiceImport");
+    return RedirectToAction(nameof(Mapping), new { fileName = storedFile.Id.ToString() });
 }
 
 // Страница сопоставления полей (Mapping)
 [HttpGet]
 public async Task<IActionResult> Mapping(string fileName)
 {
-    var filePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "temp_imports", fileName);
-    if (!System.IO.File.Exists(filePath)) return NotFound("Файл не найден");
+    if (!Guid.TryParse(fileName, out var fileId)) return NotFound("Файл не найден");
+    var fileResult = await _fileStorageService.OpenReadAsync(fileId);
+    if (fileResult == null) return NotFound("Файл не найден");
 
     var model = new ImportMappingViewModel { FileName = fileName };
 
-    using (var workbook = new XLWorkbook(filePath))
+    await using (var stream = fileResult.Value.Stream)
+    using (var workbook = new XLWorkbook(stream))
     {
         var worksheet = workbook.Worksheet(1);
         var firstRow = worksheet.Row(1);
@@ -274,13 +267,15 @@ public async Task<IActionResult> Mapping(string fileName)
 [HttpPost]
 public async Task<IActionResult> ExecuteImport(string fileName, Dictionary<string, string> mappings)
 {
-    var filePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "temp_imports", fileName);
-    if (!System.IO.File.Exists(filePath)) return NotFound("Файл импорта не найден. Попробуйте загрузить заново.");
+    if (!Guid.TryParse(fileName, out var fileId)) return NotFound("Файл импорта не найден. Попробуйте загрузить заново.");
+    var fileResult = await _fileStorageService.OpenReadAsync(fileId);
+    if (fileResult == null) return NotFound("Файл импорта не найден. Попробуйте загрузить заново.");
 
     int createdCount = 0;
     int updatedCount = 0;
 
-    using (var workbook = new XLWorkbook(filePath))
+    await using (var stream = fileResult.Value.Stream)
+    using (var workbook = new XLWorkbook(stream))
     {
         var worksheet = workbook.Worksheet(1);
         var rows = worksheet.RowsUsed().Skip(1); // Пропускаем заголовки
@@ -375,8 +370,7 @@ public async Task<IActionResult> ExecuteImport(string fileName, Dictionary<strin
         await _context.SaveChangesAsync();
     }
 
-    // Удаляем временный файл
-    System.IO.File.Delete(filePath);
+    await _fileStorageService.DeleteAsync(fileId);
 
     TempData["ImportResult"] = $"Импорт завершен. Создано: {createdCount}, Обновлено: {updatedCount}";
     return RedirectToAction(nameof(Index));

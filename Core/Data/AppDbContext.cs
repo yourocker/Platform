@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Linq.Expressions;
+using System.Reflection;
 using Core.Entities.Company;
 using Core.Entities.Platform;
 using Core.Entities.Tasks;
@@ -9,19 +11,31 @@ using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Core.Entities.System;
 using Core.Data.Interceptors;
 using Core.Data.Extensions;
+using Core.Entities;
 using Core.Entities.Platform.Form;
+using Core.MultiTenancy;
 
 namespace Core.Data
 {
     public class AppDbContext : IdentityDbContext<Employee, IdentityRole<Guid>, Guid>
     {
-        public AppDbContext(DbContextOptions<AppDbContext> options) : base(options)
+        private readonly ITenantContextAccessor? _tenantContextAccessor;
+        private int _hardDeleteScopeDepth;
+
+        public AppDbContext(
+            DbContextOptions<AppDbContext> options,
+            ITenantContextAccessor? tenantContextAccessor = null) : base(options)
         {
+            _tenantContextAccessor = tenantContextAccessor;
             // Настройка для корректной работы с датами в PostgreSQL
             AppContext.SetSwitch("Npgsql.EnableLegacyTimestampBehavior", true);
         }
 
+        public Guid? CurrentTenantId => _tenantContextAccessor?.CurrentTenant?.Id;
+        private bool IsTenantFilterEnabled => CurrentTenantId.HasValue;
+
         // --- Инфраструктура платформы ---
+        public DbSet<Tenant> Tenants { get; set; }
         public DbSet<AppDefinition> AppDefinitions { get; set; }
         public DbSet<AppFieldDefinition> AppFieldDefinitions { get; set; }
         public DbSet<AppCategory> AppCategories { get; set; }
@@ -36,6 +50,7 @@ namespace Core.Data
         
         // --- Оргструктура ---
         public DbSet<Employee> Employees { get; set; }
+        public DbSet<EmployeeTenantMembership> EmployeeTenantMemberships { get; set; }
         public DbSet<Position> Positions { get; set; }
         public DbSet<Department> Departments { get; set; }
         public DbSet<StaffAppointment> StaffAppointments { get; set; }
@@ -65,6 +80,7 @@ namespace Core.Data
         public DbSet<BookingPolicySettings> BookingPolicySettings { get; set; }
         public DbSet<BookingStatus> BookingStatuses { get; set; }
         public DbSet<UserFilterPreset> UserFilterPresets { get; set; }
+        public DbSet<StoredFile> StoredFiles { get; set; }
         
         // --- CRM ---
         public DbSet<CrmPipeline> CrmPipelines { get; set; }
@@ -99,6 +115,30 @@ namespace Core.Data
                     .IsBuiltIn(true);
             }
             
+            modelBuilder.Entity<Tenant>(entity =>
+            {
+                entity.ToTable("Tenants");
+                entity.HasKey(e => e.Id);
+                entity.HasIndex(e => e.Key).IsUnique();
+                entity.Property(e => e.Key).HasMaxLength(100).IsRequired();
+                entity.Property(e => e.Name).HasMaxLength(255).IsRequired();
+                entity.Property(e => e.Notes).HasMaxLength(1024);
+            });
+
+            modelBuilder.Entity<StoredFile>(entity =>
+            {
+                entity.ToTable("StoredFiles");
+                entity.HasKey(e => e.Id);
+                entity.HasIndex(e => new { e.TenantId, e.RelativePath }).IsUnique();
+                entity.HasIndex(e => new { e.TenantId, e.OwnerEntityCode, e.OwnerEntityId });
+                entity.Property(e => e.RelativePath).HasMaxLength(2048).IsRequired();
+                entity.Property(e => e.OriginalFileName).HasMaxLength(255).IsRequired();
+                entity.Property(e => e.StoredFileName).HasMaxLength(255).IsRequired();
+                entity.Property(e => e.ContentType).HasMaxLength(255);
+                entity.Property(e => e.Category).HasMaxLength(128);
+                entity.Property(e => e.OwnerEntityCode).HasMaxLength(128);
+            });
+
             // 1. Настройка Контактов (Явная изоляция от GenericObjects)
             modelBuilder.Entity<Contact>(entity =>
             {
@@ -147,6 +187,25 @@ namespace Core.Data
                 entity.Property(e => e.Emails).HasColumnType("jsonb");
                 entity.Property(e => e.Properties).HasColumnType("jsonb");
                 entity.Ignore(e => e.FullName);
+
+                entity.HasMany(e => e.TenantMemberships)
+                    .WithOne(m => m.Employee)
+                    .HasForeignKey(m => m.EmployeeId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<EmployeeTenantMembership>(entity =>
+            {
+                entity.ToTable("EmployeeTenantMemberships");
+                entity.HasKey(e => e.Id);
+                entity.HasIndex(e => new { e.TenantId, e.EmployeeId }).IsUnique();
+                entity.HasIndex(e => new { e.EmployeeId, e.IsActive });
+                entity.Property(e => e.RoleCode).HasMaxLength(64).IsRequired();
+
+                entity.HasOne(e => e.Tenant)
+                    .WithMany()
+                    .HasForeignKey(e => e.TenantId)
+                    .OnDelete(DeleteBehavior.Cascade);
             });
 
             // 5. Задачи (Отдельная таблица)
@@ -169,8 +228,8 @@ namespace Core.Data
             {
                 entity.ToTable("UserNotifications");
                 entity.HasKey(e => e.Id);
-                entity.HasIndex(e => e.UserId);
-                entity.HasIndex(e => e.SourceEventId).IsUnique();
+                entity.HasIndex(e => new { e.TenantId, e.UserId });
+                entity.HasIndex(e => new { e.TenantId, e.SourceEventId }).IsUnique();
                 entity.Property(e => e.Title).HasMaxLength(256).IsRequired();
                 entity.Property(e => e.Message).HasMaxLength(2000).IsRequired();
                 entity.Property(e => e.Url).HasMaxLength(1024).IsRequired();
@@ -187,7 +246,17 @@ namespace Core.Data
             // 7. Уникальный индекс для метаданных полей
             modelBuilder.Entity<AppFieldDefinition>(entity =>
             {
-                entity.HasIndex(f => new { f.AppDefinitionId, f.SystemName }).IsUnique();
+                entity.HasIndex(f => new { f.TenantId, f.AppDefinitionId, f.SystemName }).IsUnique();
+            });
+
+            modelBuilder.Entity<AppCategory>(entity =>
+            {
+                entity.HasIndex(e => new { e.TenantId, e.Name }).IsUnique();
+            });
+
+            modelBuilder.Entity<AppDefinition>(entity =>
+            {
+                entity.HasIndex(e => new { e.TenantId, e.EntityCode }).IsUnique();
             });
             
             // 8. Рабочие графики
@@ -232,14 +301,14 @@ namespace Core.Data
             modelBuilder.Entity<UiSettings>(entity =>
             {
                 entity.ToTable("UiSettings");
-                entity.HasIndex(e => e.EmployeeId);
+                entity.HasIndex(e => new { e.TenantId, e.EmployeeId });
             });
 
             // 10.1. Переключатели модулей (тарифы / лицензии)
             modelBuilder.Entity<FeatureToggle>(entity =>
             {
                 entity.ToTable("FeatureToggles");
-                entity.HasIndex(e => e.FeatureCode).IsUnique();
+                entity.HasIndex(e => new { e.TenantId, e.FeatureCode }).IsUnique();
                 entity.Property(e => e.FeatureCode).HasMaxLength(64).IsRequired();
                 entity.Property(e => e.Description).HasMaxLength(256);
             });
@@ -268,8 +337,8 @@ namespace Core.Data
                 entity.Property(e => e.Name).HasMaxLength(120).IsRequired();
                 entity.Property(e => e.FiltersJson).HasColumnType("jsonb").IsRequired();
 
-                entity.HasIndex(e => new { e.UserId, e.EntityCode, e.ViewCode });
-                entity.HasIndex(e => new { e.UserId, e.EntityCode, e.ViewCode, e.Name }).IsUnique();
+                entity.HasIndex(e => new { e.TenantId, e.UserId, e.EntityCode, e.ViewCode });
+                entity.HasIndex(e => new { e.TenantId, e.UserId, e.EntityCode, e.ViewCode, e.Name }).IsUnique();
 
                 entity.HasOne(e => e.User)
                     .WithMany()
@@ -431,13 +500,232 @@ namespace Core.Data
             modelBuilder.Entity<AppFormDefinition>(entity =>
             {
                 // Индекс для быстрого поиска стандартной формы
-                entity.HasIndex(f => new { f.AppDefinitionId, f.Type, f.IsDefault }); 
+                entity.HasIndex(f => new { f.TenantId, f.AppDefinitionId, f.Type, f.IsDefault }); 
                 
                 // Уникальный индекс: Нельзя создать две формы с одинаковым именем для одной сущности и типа задачи
-                entity.HasIndex(f => new { f.AppDefinitionId, f.Type, f.Name }).IsUnique();
+                entity.HasIndex(f => new { f.TenantId, f.AppDefinitionId, f.Type, f.Name }).IsUnique();
 
                 entity.Property(e => e.Layout).HasColumnType("jsonb");
             });
+
+            ConfigureTenantFilters(modelBuilder);
+        }
+
+        public override int SaveChanges(bool acceptAllChangesOnSuccess)
+        {
+            ApplySoftDeleteScope();
+            ApplyTenantScope();
+            return base.SaveChanges(acceptAllChangesOnSuccess);
+        }
+
+        public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+        {
+            ApplySoftDeleteScope();
+            ApplyTenantScope();
+            return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+        }
+
+        public IDisposable BeginHardDeleteScope()
+        {
+            _hardDeleteScopeDepth++;
+            return new HardDeleteScope(this);
+        }
+
+        private void ApplySoftDeleteScope()
+        {
+            if (_hardDeleteScopeDepth > 0)
+            {
+                return;
+            }
+
+            foreach (var entry in ChangeTracker.Entries<ISoftDeletable>())
+            {
+                if (entry.State != EntityState.Deleted)
+                {
+                    continue;
+                }
+
+                entry.State = EntityState.Modified;
+                entry.Entity.IsDeleted = true;
+                entry.Entity.DeletedAt = DateTime.UtcNow;
+            }
+        }
+
+        private void ApplyTenantScope()
+        {
+            if (!CurrentTenantId.HasValue)
+            {
+                return;
+            }
+
+            var tenantId = CurrentTenantId.Value;
+
+            foreach (var entry in ChangeTracker.Entries<ITenantEntity>())
+            {
+                if (entry.Entity is Tenant)
+                {
+                    continue;
+                }
+
+                if (entry.State == EntityState.Added)
+                {
+                    if (entry.Entity.TenantId == Guid.Empty)
+                    {
+                        entry.Entity.TenantId = tenantId;
+                    }
+                    else if (entry.Entity.TenantId != tenantId)
+                    {
+                        throw new InvalidOperationException("Попытка сохранить сущность в tenant, отличный от текущего контекста.");
+                    }
+                }
+                else if (entry.State == EntityState.Modified)
+                {
+                    if (entry.Entity.TenantId == Guid.Empty)
+                    {
+                        entry.Entity.TenantId = tenantId;
+                    }
+                    else if (entry.Entity.TenantId != tenantId)
+                    {
+                        throw new InvalidOperationException("Попытка изменить сущность другого tenant.");
+                    }
+                }
+            }
+        }
+
+        private void ConfigureTenantFilters(ModelBuilder modelBuilder)
+        {
+            foreach (var entityType in modelBuilder.Model.GetEntityTypes())
+            {
+                var clrType = entityType.ClrType;
+                if (clrType == null || clrType == typeof(Tenant))
+                {
+                    continue;
+                }
+
+                var isTenantEntity = typeof(ITenantEntity).IsAssignableFrom(clrType);
+                var isSoftDeletable = typeof(ISoftDeletable).IsAssignableFrom(clrType);
+                if (!isTenantEntity && !isSoftDeletable)
+                {
+                    continue;
+                }
+
+                var baseClrType = entityType.BaseType?.ClrType;
+                if (baseClrType != null &&
+                    (typeof(ITenantEntity).IsAssignableFrom(baseClrType) ||
+                     typeof(ISoftDeletable).IsAssignableFrom(baseClrType)))
+                {
+                    continue;
+                }
+
+                var method = typeof(AppDbContext)
+                    .GetMethod(nameof(SetVisibilityFilter), BindingFlags.Instance | BindingFlags.NonPublic)?
+                    .MakeGenericMethod(clrType);
+
+                method?.Invoke(this, new object[] { modelBuilder });
+            }
+
+            modelBuilder.Entity<Employee>().HasQueryFilter(BuildEmployeeTenantFilter());
+        }
+
+        private void SetVisibilityFilter<TEntity>(ModelBuilder modelBuilder)
+            where TEntity : class
+        {
+            var entityType = typeof(TEntity);
+            var isTenantEntity = typeof(ITenantEntity).IsAssignableFrom(entityType);
+            var isSoftDeletable = typeof(ISoftDeletable).IsAssignableFrom(entityType);
+
+            if (isTenantEntity && isSoftDeletable)
+            {
+                ApplyTypedFilter(nameof(ApplyTenantSoftDeleteFilter), entityType, modelBuilder);
+                return;
+            }
+
+            if (isTenantEntity)
+            {
+                ApplyTypedFilter(nameof(ApplyTenantFilter), entityType, modelBuilder);
+                return;
+            }
+
+            ApplyTypedFilter(nameof(ApplySoftDeleteFilter), entityType, modelBuilder);
+        }
+
+        private void ApplyTypedFilter(string methodName, Type entityType, ModelBuilder modelBuilder)
+        {
+            var method = typeof(AppDbContext)
+                .GetMethod(methodName, BindingFlags.Instance | BindingFlags.NonPublic)?
+                .MakeGenericMethod(entityType);
+
+            method?.Invoke(this, new object[] { modelBuilder });
+        }
+
+        private void ApplyTenantSoftDeleteFilter<TEntity>(ModelBuilder modelBuilder)
+            where TEntity : class, ITenantEntity, ISoftDeletable
+        {
+            modelBuilder.Entity<TEntity>().HasQueryFilter(BuildTenantSoftDeleteFilter<TEntity>());
+        }
+
+        private void ApplyTenantFilter<TEntity>(ModelBuilder modelBuilder)
+            where TEntity : class, ITenantEntity
+        {
+            modelBuilder.Entity<TEntity>().HasQueryFilter(BuildTenantFilter<TEntity>());
+        }
+
+        private void ApplySoftDeleteFilter<TEntity>(ModelBuilder modelBuilder)
+            where TEntity : class, ISoftDeletable
+        {
+            modelBuilder.Entity<TEntity>().HasQueryFilter(BuildSoftDeleteFilter<TEntity>());
+        }
+
+        private Expression<Func<TEntity, bool>> BuildTenantSoftDeleteFilter<TEntity>()
+            where TEntity : class, ITenantEntity, ISoftDeletable
+        {
+            return entity => (!IsTenantFilterEnabled || entity.TenantId == CurrentTenantId.GetValueOrDefault()) && !entity.IsDeleted;
+        }
+
+        private Expression<Func<TEntity, bool>> BuildTenantFilter<TEntity>()
+            where TEntity : class, ITenantEntity
+        {
+            return entity => !IsTenantFilterEnabled || entity.TenantId == CurrentTenantId.GetValueOrDefault();
+        }
+
+        private Expression<Func<TEntity, bool>> BuildSoftDeleteFilter<TEntity>()
+            where TEntity : class, ISoftDeletable
+        {
+            return entity => !entity.IsDeleted;
+        }
+
+        private Expression<Func<Employee, bool>> BuildEmployeeTenantFilter()
+        {
+            return employee => !IsTenantFilterEnabled ||
+                employee.TenantMemberships.Any(m =>
+                    m.TenantId == CurrentTenantId.GetValueOrDefault() &&
+                    m.IsActive);
+        }
+
+        private sealed class HardDeleteScope : IDisposable
+        {
+            private readonly AppDbContext _context;
+            private bool _disposed;
+
+            public HardDeleteScope(AppDbContext context)
+            {
+                _context = context;
+            }
+
+            public void Dispose()
+            {
+                if (_disposed)
+                {
+                    return;
+                }
+
+                if (_context._hardDeleteScopeDepth > 0)
+                {
+                    _context._hardDeleteScopeDepth--;
+                }
+
+                _disposed = true;
+            }
         }
     }
 }

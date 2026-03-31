@@ -1,0 +1,245 @@
+@model CRM.ViewModels.CompanySettings.TrashPageViewModel
+@{
+    ViewData["Title"] = "Корзина";
+    Layout = "_LayoutV2";
+    var currentReturnUrl = $"{Context.Request.Path}{Context.Request.QueryString}";
+}
+
+<crm-page-header title="Корзина tenant" icon="trash3" subtitle="Удалённые записи текущего tenant. Здесь можно восстановить их или удалить безвозвратно.">
+    @if (Model.Items.Any())
+    {
+        <button type="submit"
+                form="trashBulkForm"
+                formaction="@Url.Action("RestoreTrashBulk", "CompanySettings")"
+                class="btn btn-outline-primary">
+            <i class="bi bi-arrow-counterclockwise me-1"></i> Восстановить выбранное
+        </button>
+        <button type="submit"
+                form="trashBulkForm"
+                formaction="@Url.Action("PermanentlyDeleteTrashBulk", "CompanySettings")"
+                class="btn btn-danger"
+                data-confirm-permanent="true">
+            <i class="bi bi-trash3-fill me-1"></i> Удалить выбранное навсегда
+        </button>
+    }
+</crm-page-header>
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success py-2">@TempData["Success"]</div>
+}
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger py-2">@TempData["Error"]</div>
+}
+
+<div class="row g-4 mb-4">
+    <div class="col-xl-8">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-body">
+                <form method="get" asp-action="Trash" class="row g-3 align-items-end">
+                    <div class="col-md-4">
+                        <label class="form-label small text-muted">Имя / название</label>
+                        <input type="text" name="Search" value="@Model.Filters.Search" class="form-control" placeholder="Контрагент, сделка, задача..." />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small text-muted">Тип сущности</label>
+                        <select name="EntityCode" class="form-select">
+                            <option value="">Все типы</option>
+                            @foreach (var option in Model.EntityOptions)
+                            {
+                                if (option.EntityCode == Model.Filters.EntityCode)
+                                {
+                                    <option value="@option.EntityCode" selected>@option.Name</option>
+                                }
+                                else
+                                {
+                                    <option value="@option.EntityCode">@option.Name</option>
+                                }
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small text-muted">Создано с</label>
+                        <input type="date" name="CreatedFrom" value="@Model.Filters.CreatedFrom?.ToString("yyyy-MM-dd")" class="form-control" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small text-muted">Создано по</label>
+                        <input type="date" name="CreatedTo" value="@Model.Filters.CreatedTo?.ToString("yyyy-MM-dd")" class="form-control" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small text-muted">Удалено с</label>
+                        <input type="date" name="DeletedFrom" value="@Model.Filters.DeletedFrom?.ToString("yyyy-MM-dd")" class="form-control" />
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small text-muted">Удалено по</label>
+                        <input type="date" name="DeletedTo" value="@Model.Filters.DeletedTo?.ToString("yyyy-MM-dd")" class="form-control" />
+                    </div>
+                    <div class="col-md-6 d-flex gap-2">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-funnel me-1"></i> Применить фильтр
+                        </button>
+                        <a href="@Url.Action("Trash", "CompanySettings")" class="btn btn-outline-secondary">
+                            <i class="bi bi-x-circle me-1"></i> Сбросить
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-4">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-body">
+                <div class="d-flex align-items-center justify-content-between mb-3">
+                    <div>
+                        <div class="small text-muted">Сейчас в корзине</div>
+                        <div class="fs-4 fw-semibold">@Model.TotalCount</div>
+                    </div>
+                    <span class="badge text-bg-secondary">Текущий tenant</span>
+                </div>
+
+                @if (Model.Stats.Any())
+                {
+                    <div class="d-flex flex-wrap gap-2">
+                        @foreach (var stat in Model.Stats)
+                        {
+                            <span class="badge rounded-pill text-bg-light border">@stat.EntityName: @stat.Count</span>
+                        }
+                    </div>
+                }
+                else
+                {
+                    <div class="text-muted small">Удалённых записей по текущему фильтру нет.</div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm border-0">
+    <div class="card-body p-0">
+        @if (!Model.Items.Any())
+        {
+            <div class="text-center py-5 px-4">
+                <div class="mb-3">
+                    <i class="bi bi-recycle fs-1 text-muted"></i>
+                </div>
+                <div class="fs-5 fw-semibold mb-2">Корзина пуста</div>
+                <div class="text-muted">Попробуйте изменить фильтры или вернитесь позже, когда в системе появятся удалённые записи.</div>
+            </div>
+        }
+        else
+        {
+            <form id="trashBulkForm" method="post">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="returnUrl" value="@currentReturnUrl" />
+
+                <div class="table-responsive">
+                    <table class="table align-middle mb-0">
+                        <thead class="table-light">
+                            <tr>
+                                <th style="width: 48px;" class="text-center">
+                                    <input type="checkbox" id="trash-select-all" class="form-check-input" />
+                                </th>
+                                <th>Объект</th>
+                                <th style="width: 180px;">Создан</th>
+                                <th style="width: 180px;">Удалён</th>
+                                <th style="width: 250px;" class="text-end">Действия</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var item in Model.Items)
+                            {
+                                var formKey = item.SelectionKey.Replace(":", "-");
+                                <tr>
+                                    <td class="text-center">
+                                        <input type="checkbox" name="selectionKeys" value="@item.SelectionKey" class="form-check-input trash-select-item" />
+                                    </td>
+                                    <td>
+                                        <div class="d-flex flex-column gap-1">
+                                            <div class="d-flex flex-wrap align-items-center gap-2">
+                                                <span class="badge text-bg-light border">@item.EntityName</span>
+                                                <span class="fw-semibold">@item.Title</span>
+                                            </div>
+                                            <div class="small text-muted">ID: @item.Id</div>
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <div class="small fw-semibold">@item.CreatedAt.ToString("dd.MM.yyyy")</div>
+                                        <div class="small text-muted">@item.CreatedAt.ToString("HH:mm")</div>
+                                    </td>
+                                    <td>
+                                        <div class="small fw-semibold">@(item.DeletedAt?.ToString("dd.MM.yyyy") ?? "—")</div>
+                                        <div class="small text-muted">@(item.DeletedAt?.ToString("HH:mm") ?? "—")</div>
+                                    </td>
+                                    <td class="text-end">
+                                        <div class="d-inline-flex gap-2">
+                                            <button type="submit" form="restore-@formKey" class="btn btn-sm btn-outline-primary">
+                                                <i class="bi bi-arrow-counterclockwise me-1"></i> Восстановить
+                                            </button>
+                                            <button type="submit" form="delete-@formKey" class="btn btn-sm btn-outline-danger" data-confirm-permanent="true">
+                                                <i class="bi bi-x-octagon me-1"></i> Удалить навсегда
+                                            </button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </form>
+        }
+    </div>
+</div>
+
+@foreach (var item in Model.Items)
+{
+    var formKey = item.SelectionKey.Replace(":", "-");
+    <form id="restore-@formKey" asp-action="RestoreTrashItem" method="post" class="d-none">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="selectionKey" value="@item.SelectionKey" />
+        <input type="hidden" name="returnUrl" value="@currentReturnUrl" />
+    </form>
+    <form id="delete-@formKey" asp-action="PermanentlyDeleteTrashItem" method="post" class="d-none">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="selectionKey" value="@item.SelectionKey" />
+        <input type="hidden" name="returnUrl" value="@currentReturnUrl" />
+    </form>
+}
+
+@section Scripts
+{
+    <script>
+        (function () {
+            const selectAll = document.getElementById('trash-select-all');
+            const items = Array.from(document.querySelectorAll('.trash-select-item'));
+
+            if (selectAll) {
+                selectAll.addEventListener('change', () => {
+                    items.forEach(item => item.checked = selectAll.checked);
+                });
+            }
+
+            items.forEach(item => {
+                item.addEventListener('change', () => {
+                    if (!selectAll) {
+                        return;
+                    }
+
+                    selectAll.checked = items.length > 0 && items.every(x => x.checked);
+                    selectAll.indeterminate = items.some(x => x.checked) && !selectAll.checked;
+                });
+            });
+
+            document.querySelectorAll('[data-confirm-permanent="true"]').forEach(button => {
+                button.addEventListener('click', event => {
+                    const confirmed = window.confirm('Удалить безвозвратно? Это действие уже нельзя будет отменить.');
+                    if (!confirmed) {
+                        event.preventDefault();
+                    }
+                });
+            });
+        })();
+    </script>
+}

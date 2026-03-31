@@ -110,10 +110,10 @@ namespace CRM.Controllers
         [HttpPost] [ValidateAntiForgeryToken]
         public async Task<IActionResult> Create(Position position, IFormCollection form, bool modal = false)
         {
+            position.Id = Guid.NewGuid();
             await SaveDynamicProperties(position, form, "Position");
             if (ModelState.IsValid)
             {
-                position.Id = Guid.NewGuid();
                 _context.Add(position);
                 await _context.SaveChangesAsync();
                 FinalizeDynamicFilePaths(position, "Position", position.Id.ToString());

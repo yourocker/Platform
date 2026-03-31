@@ -55,16 +55,6 @@ namespace Core.Entities.Tasks
         public TaskStatus Status { get; set; } = TaskStatus.Created;
 
         /// <summary>
-        /// Флаг мягкого удаления
-        /// </summary>
-        public bool IsDeleted { get; set; } = false;
-
-        /// <summary>
-        /// Дата мягкого удаления
-        /// </summary>
-        public DateTime? DeletedAt { get; set; }
-
-        /// <summary>
         /// Множественные связи с объектами системы (Пациенты, Оборудование и т.д.)
         /// </summary>
         public virtual ICollection<TaskEntityRelation> Relations { get; set; } = new List<TaskEntityRelation>();
