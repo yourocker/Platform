@@ -47,10 +47,9 @@ namespace Core.Services.Company
             employee.LastName = NormalizeRequired(dto.LastName);
             employee.FirstName = NormalizeRequired(dto.FirstName);
             employee.MiddleName = NormalizeOptional(dto.MiddleName);
-            employee.IsDismissed = dto.IsDismissed;
         }
 
-        public static EmployeeEditDto ToEditDto(Employee employee)
+        public static EmployeeEditDto ToEditDto(Employee employee, bool isDismissed = false)
         {
             return new EmployeeEditDto
             {
@@ -61,7 +60,7 @@ namespace Core.Services.Company
                 Phones = employee.Phones?.ToList() ?? new List<string>(),
                 Emails = employee.Emails?.ToList() ?? new List<string>(),
                 Login = employee.UserName,
-                IsDismissed = employee.IsDismissed,
+                IsDismissed = isDismissed,
                 Appointments = employee.StaffAppointments?
                     .OrderByDescending(appointment => appointment.IsPrimary)
                     .Select(ToAppointmentDto)
@@ -70,7 +69,7 @@ namespace Core.Services.Company
             };
         }
 
-        public static EmployeeListDto ToListDto(Employee employee)
+        public static EmployeeListDto ToListDto(Employee employee, bool isDismissed = false)
         {
             return new EmployeeListDto
             {
@@ -79,7 +78,7 @@ namespace Core.Services.Company
                 FirstName = employee.FirstName,
                 MiddleName = employee.MiddleName,
                 Phones = employee.Phones?.ToList() ?? new List<string>(),
-                IsDismissed = employee.IsDismissed,
+                IsDismissed = isDismissed,
                 Appointments = employee.StaffAppointments?
                     .OrderByDescending(appointment => appointment.IsPrimary)
                     .Select(ToAppointmentDto)

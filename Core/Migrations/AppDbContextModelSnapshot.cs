@@ -624,7 +624,13 @@ namespace Core.Migrations
                     b.Property<Guid>("EmployeeId")
                         .HasColumnType("uuid");
 
+                    b.Property<DateTime?>("DismissedAt")
+                        .HasColumnType("timestamp without time zone");
+
                     b.Property<bool>("IsActive")
+                        .HasColumnType("boolean");
+
+                    b.Property<bool>("IsDismissed")
                         .HasColumnType("boolean");
 
                     b.Property<bool>("IsDefault")

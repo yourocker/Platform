@@ -8,9 +8,11 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Hosting;
+using CRM.Infrastructure.Security;
 
 namespace CRM.Controllers
 {
+    [TenantAuthorize(TenantPermissions.ManageCompanyStructure)]
     public class DepartmentsController : BasePlatformController
     {
         public DepartmentsController(AppDbContext context, IWebHostEnvironment hostingEnvironment) 
@@ -22,9 +24,11 @@ namespace CRM.Controllers
         {
             var departments = await _context.Departments
                 .Include(d => d.Manager)
+                    .ThenInclude(m => m.TenantMemberships)
                 .Include(d => d.Parent)
                 .Include(d => d.StaffAppointments)
                     .ThenInclude(sa => sa.Employee)
+                        .ThenInclude(e => e.TenantMemberships)
                 .OrderBy(d => d.Name)
                 .ToListAsync();
 
@@ -132,7 +136,13 @@ namespace CRM.Controllers
             if (department == null) return NotFound();
 
             bool hasActiveEmployees = await _context.StaffAppointments
-                .AnyAsync(sa => sa.DepartmentId == id && sa.Employee != null && !sa.Employee.IsDismissed);
+                .AnyAsync(sa =>
+                    sa.DepartmentId == id &&
+                    sa.Employee != null &&
+                    (!_context.CurrentTenantId.HasValue || sa.Employee.TenantMemberships.Any(m =>
+                        m.TenantId == _context.CurrentTenantId.Value &&
+                        m.IsActive &&
+                        !m.IsDismissed)));
     
             bool hasSubDepartments = await _context.Departments
                 .AnyAsync(d => d.ParentId == id);

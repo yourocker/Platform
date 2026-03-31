@@ -13,18 +13,27 @@ using Microsoft.AspNetCore.Identity;
 using Core.Services.Company;
 using Core.Entities.Platform;
 using CRM.Infrastructure;
+using CRM.Infrastructure.Security;
 using CRM.ViewModels.Filters;
+using Core.MultiTenancy;
 
 namespace CRM.Controllers
 {
+    [TenantAuthorize(TenantPermissions.ManageEmployees)]
     public class EmployeesController : BasePlatformController
     {
         private readonly UserManager<Employee> _userManager;
+        private readonly ITenantPermissionService _tenantPermissionService;
 
-        public EmployeesController(AppDbContext context, IWebHostEnvironment hostingEnvironment, UserManager<Employee> userManager) 
+        public EmployeesController(
+            AppDbContext context,
+            IWebHostEnvironment hostingEnvironment,
+            UserManager<Employee> userManager,
+            ITenantPermissionService tenantPermissionService) 
             : base(context, hostingEnvironment)
         {
             _userManager = userManager;
+            _tenantPermissionService = tenantPermissionService;
         }
 
         private async Task LoadEmployeeViewData()
@@ -95,6 +104,41 @@ namespace CRM.Controllers
                     x.NormalizedEmail == normalizedLogin);
         }
 
+        private bool CanManageEmployeeAccess() =>
+            _tenantPermissionService.HasPermission(User, TenantPermissions.ManageEmployeeAccess);
+
+        private async Task<EmployeeTenantMembership?> FindCurrentTenantMembershipAsync(Guid employeeId)
+        {
+            if (!_context.CurrentTenantId.HasValue)
+            {
+                return null;
+            }
+
+            return await _context.EmployeeTenantMemberships
+                .IgnoreQueryFilters()
+                .FirstOrDefaultAsync(x =>
+                    x.EmployeeId == employeeId &&
+                    x.TenantId == _context.CurrentTenantId.Value);
+        }
+
+        private async Task<bool> IsLastPrivilegedMembershipAsync(EmployeeTenantMembership membership)
+        {
+            if (membership.IsDismissed ||
+                !membership.IsActive)
+            {
+                return false;
+            }
+
+            var privilegedCount = await _context.EmployeeTenantMemberships
+                .IgnoreQueryFilters()
+                .CountAsync(x =>
+                    x.TenantId == membership.TenantId &&
+                    x.IsActive &&
+                    !x.IsDismissed);
+
+            return privilegedCount <= 1;
+        }
+
         private Dictionary<string, object> ExtractDynamicProps()
         {
             var dict = new Dictionary<string, object>();
@@ -156,12 +200,20 @@ namespace CRM.Controllers
         // --- СПИСОК СОТРУДНИКОВ С ПОЛНОЙ ФИЛЬТРАЦИЕЙ И ПАГИНАЦИЕЙ ---
         public async Task<IActionResult> Index(string? searchString, int? pageNumber, int? pageSize, Dictionary<string, string> filters)
         {
+            if (!_context.CurrentTenantId.HasValue)
+            {
+                return Forbid();
+            }
+
+            var currentTenantId = _context.CurrentTenantId.Value;
+
             // Загружаем динамические поля для заголовков и фильтров
             await LoadDynamicFields("Employee");
             var dynamicFields = ViewBag.DynamicFields as List<AppFieldDefinition> ?? new List<AppFieldDefinition>();
             var dynamicFieldMap = dynamicFields.ToDictionary(field => field.SystemName, field => field, StringComparer.OrdinalIgnoreCase);
             
             var query = _context.Employees
+                .Include(e => e.TenantMemberships.Where(m => m.TenantId == currentTenantId))
                 .Include(e => e.StaffAppointments).ThenInclude(a => a.Position)
                 .Include(e => e.StaffAppointments).ThenInclude(a => a.Department)
                 .AsQueryable();
@@ -196,8 +248,20 @@ namespace CRM.Controllers
                         query = query.Where(e => e.Phones.Any(p => EF.Functions.ILike(p, $"%{filter.Value}%")));
                     else if (key == "f_Status")
                     {
-                        if (filter.Value == "active") query = query.Where(e => !e.IsDismissed);
-                        else if (filter.Value == "dismissed") query = query.Where(e => e.IsDismissed);
+                        if (filter.Value == "active")
+                        {
+                            query = query.Where(e => e.TenantMemberships.Any(m =>
+                                m.TenantId == currentTenantId &&
+                                m.IsActive &&
+                                !m.IsDismissed));
+                        }
+                        else if (filter.Value == "dismissed")
+                        {
+                            query = query.Where(e => e.TenantMemberships.Any(m =>
+                                m.TenantId == currentTenantId &&
+                                m.IsActive &&
+                                m.IsDismissed));
+                        }
                     }
                     else if (key.StartsWith("f_dyn_"))
                     {
@@ -211,7 +275,12 @@ namespace CRM.Controllers
             }
 
             // 3. СОРТИРОВКА (Уволенные в конце)
-            query = query.OrderBy(e => e.IsDismissed).ThenBy(e => e.LastName);
+            query = query
+                .OrderBy(e => e.TenantMemberships
+                    .Where(m => m.TenantId == currentTenantId && m.IsActive)
+                    .Select(m => m.IsDismissed)
+                    .FirstOrDefault())
+                .ThenBy(e => e.LastName);
 
             // 4. ПАГИНАЦИЯ
             int actualPageSize = pageSize ?? 10;
@@ -224,7 +293,13 @@ namespace CRM.Controllers
                 .Take(actualPageSize)
                 .ToListAsync();
 
-            var employeeDtos = employees.Select(EmployeeMapper.ToListDto).ToList();
+            var employeeDtos = employees
+                .Select(employee =>
+                {
+                    var membership = employee.TenantMemberships.FirstOrDefault(x => x.TenantId == currentTenantId);
+                    return EmployeeMapper.ToListDto(employee, membership?.IsDismissed == true);
+                })
+                .ToList();
 
             // Передача метаданных во вьюху
             ViewBag.TotalItems = totalItems;
@@ -243,6 +318,7 @@ namespace CRM.Controllers
         {
             await LoadEmployeeViewData();
             ViewBag.IsModal = modal;
+            ViewBag.CanManageEmployeeAccess = CanManageEmployeeAccess();
             var dto = new EmployeeCreateDto();
             EnsureAppointmentRow(dto);
             return View(dto);
@@ -252,10 +328,21 @@ namespace CRM.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Create(EmployeeCreateDto dto, Guid[] selectedPositions, Guid[] selectedDepartments, bool modal = false)
         {
+            if (!_context.CurrentTenantId.HasValue)
+            {
+                return Forbid();
+            }
+
+            var canManageEmployeeAccess = CanManageEmployeeAccess();
             dto.Appointments = BuildAppointments(selectedPositions, selectedDepartments);
             dto.Phones = NormalizeContacts(dto.Phones);
             dto.Emails = NormalizeContacts(dto.Emails);
             dto.Login = string.IsNullOrWhiteSpace(dto.Login) ? null : dto.Login.Trim();
+
+            if (!canManageEmployeeAccess && (!string.IsNullOrWhiteSpace(dto.Login) || !string.IsNullOrWhiteSpace(dto.Password)))
+            {
+                ModelState.AddModelError(string.Empty, "Выдавать доступ в систему может только администратор tenant или техподдержка.");
+            }
 
             var employee = EmployeeMapper.CreateEntity(dto);
             employee.Id = Guid.NewGuid();
@@ -267,7 +354,9 @@ namespace CRM.Controllers
 
             if (ModelState.IsValid)
             {
-                var existingIdentityEmployee = await FindExistingIdentityEmployeeAsync(dto.Login);
+                var existingIdentityEmployee = canManageEmployeeAccess
+                    ? await FindExistingIdentityEmployeeAsync(dto.Login)
+                    : null;
 
                 if (existingIdentityEmployee != null && _context.CurrentTenantId.HasValue)
                 {
@@ -323,7 +412,7 @@ namespace CRM.Controllers
                     }
                 }
 
-                if (ModelState.IsValid && existingIdentityEmployee == null && !string.IsNullOrEmpty(dto.Login) && !string.IsNullOrEmpty(dto.Password))
+                if (ModelState.IsValid && existingIdentityEmployee == null && canManageEmployeeAccess && !string.IsNullOrEmpty(dto.Login) && !string.IsNullOrEmpty(dto.Password))
                 {
                     employee.UserName = dto.Login;
                     employee.Email = dto.Login.Contains("@") ? dto.Login : null;
@@ -377,18 +466,26 @@ namespace CRM.Controllers
             EnsureAppointmentRow(dto);
             await LoadEmployeeViewData();
             ViewBag.IsModal = modal;
+            ViewBag.CanManageEmployeeAccess = canManageEmployeeAccess;
             return View(dto);
         }
 
         public async Task<IActionResult> Edit(Guid? id)
         {
             if (id == null) return NotFound();
+            if (!_context.CurrentTenantId.HasValue) return Forbid();
+
+            var currentTenantId = _context.CurrentTenantId.Value;
             var employee = await _context.Employees
+                .Include(e => e.TenantMemberships.Where(m => m.TenantId == currentTenantId))
                 .Include(e => e.StaffAppointments)
                 .FirstOrDefaultAsync(e => e.Id == id);
             if (employee == null) return NotFound();
+            var membership = employee.TenantMemberships.FirstOrDefault(m => m.TenantId == currentTenantId);
+            if (membership == null) return NotFound();
             await LoadEmployeeViewData();
-            var dto = EmployeeMapper.ToEditDto(employee);
+            ViewBag.CanManageEmployeeAccess = CanManageEmployeeAccess();
+            var dto = EmployeeMapper.ToEditDto(employee, membership.IsDismissed);
             EnsureAppointmentRow(dto);
             return View(dto);
         }
@@ -398,14 +495,34 @@ namespace CRM.Controllers
         public async Task<IActionResult> Edit(Guid id, EmployeeEditDto dto, Guid[] selectedPositions, Guid[] selectedDepartments, bool modal = false)
         {
             if (id != dto.Id) return NotFound();
+            if (!_context.CurrentTenantId.HasValue) return Forbid();
+
+            var canManageEmployeeAccess = CanManageEmployeeAccess();
 
             dto.Appointments = BuildAppointments(selectedPositions, selectedDepartments);
             dto.Phones = NormalizeContacts(dto.Phones);
             dto.Emails = NormalizeContacts(dto.Emails);
             dto.Login = string.IsNullOrWhiteSpace(dto.Login) ? null : dto.Login.Trim();
 
-            var dbEmployee = await _context.Employees.FindAsync(id);
+            var dbEmployee = await _context.Employees
+                .Include(e => e.TenantMemberships.Where(m => m.TenantId == _context.CurrentTenantId.Value))
+                .FirstOrDefaultAsync(e => e.Id == id);
             if (dbEmployee == null) return NotFound();
+            var currentMembership = dbEmployee.TenantMemberships.FirstOrDefault(m => m.TenantId == _context.CurrentTenantId.Value);
+            if (currentMembership == null) return NotFound();
+
+            if (!canManageEmployeeAccess)
+            {
+                var attemptedLoginChange = Request.Form.ContainsKey(nameof(dto.Login)) &&
+                                           !string.Equals(dto.Login, dbEmployee.UserName, StringComparison.OrdinalIgnoreCase);
+                if (attemptedLoginChange || !string.IsNullOrWhiteSpace(dto.NewPassword))
+                {
+                    ModelState.AddModelError(string.Empty, "Изменять доступ в систему может только администратор tenant или техподдержка.");
+                }
+
+                dto.Login = dbEmployee.UserName;
+                dto.NewPassword = null;
+            }
 
             await SaveDynamicProperties(dbEmployee, Request.Form, "Employee");
 
@@ -459,16 +576,24 @@ namespace CRM.Controllers
 
             dto.DynamicValues = ExtractDynamicProps();
             dto.NewPassword = null;
-            dto.IsDismissed = dbEmployee.IsDismissed;
+            dto.IsDismissed = currentMembership.IsDismissed;
             EnsureAppointmentRow(dto);
             await LoadEmployeeViewData();
+            ViewBag.CanManageEmployeeAccess = canManageEmployeeAccess;
             return View(dto);
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
+        [TenantAuthorize(TenantPermissions.ManageEmployeeAccess)]
         public async Task<IActionResult> AdminResetPassword(Guid id, string newPassword)
         {
+            var membership = await FindCurrentTenantMembershipAsync(id);
+            if (membership == null)
+            {
+                return NotFound("Сотрудник текущего tenant не найден");
+            }
+
             var user = await _userManager.FindByIdAsync(id.ToString());
             if (user == null) return NotFound("Сотрудник не найден");
             if (await _userManager.HasPasswordAsync(user)) await _userManager.RemovePasswordAsync(user);
@@ -482,8 +607,28 @@ namespace CRM.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Dismiss(Guid id)
         {
-            var employee = await _context.Employees.FindAsync(id);
-            if (employee != null) { employee.IsDismissed = true; await _context.SaveChangesAsync(); }
+            var membership = await FindCurrentTenantMembershipAsync(id);
+            var currentUserIdRaw = User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value;
+            if (membership == null)
+            {
+                return RedirectToAction(nameof(Index));
+            }
+
+            if (Guid.TryParse(currentUserIdRaw, out var currentUserId) && membership.EmployeeId == currentUserId)
+            {
+                TempData["Error"] = "Нельзя уволить самого себя из текущего tenant.";
+                return RedirectToAction(nameof(Edit), new { id });
+            }
+
+            if (await IsLastPrivilegedMembershipAsync(membership))
+            {
+                TempData["Error"] = "Нельзя уволить последнего пользователя с доступом в tenant.";
+                return RedirectToAction(nameof(Edit), new { id });
+            }
+
+            membership.IsDismissed = true;
+            membership.DismissedAt = DateTime.UtcNow;
+            await _context.SaveChangesAsync();
             return RedirectToAction(nameof(Edit), new { id = id });
         }
 
@@ -491,8 +636,13 @@ namespace CRM.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> Restore(Guid id)
         {
-            var employee = await _context.Employees.FindAsync(id);
-            if (employee != null) { employee.IsDismissed = false; await _context.SaveChangesAsync(); }
+            var membership = await FindCurrentTenantMembershipAsync(id);
+            if (membership != null)
+            {
+                membership.IsDismissed = false;
+                membership.DismissedAt = null;
+                await _context.SaveChangesAsync();
+            }
             return RedirectToAction(nameof(Edit), new { id = id });
         }
     }

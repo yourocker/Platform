@@ -1,0 +1,218 @@
+@using Core.MultiTenancy
+@model CRM.ViewModels.CompanySettings.TenantMembersViewModel
+@{
+    ViewData["Title"] = "Участники tenant";
+    Layout = "_LayoutV2";
+    var currentReturnUrl = $"{Context.Request.Path}{Context.Request.QueryString}";
+}
+
+<crm-page-header title="Участники tenant" icon="people" subtitle="Управление ролями, доступом и tenant по умолчанию для пользователей текущей компании."></crm-page-header>
+
+@if (TempData["Success"] != null)
+{
+    <div class="alert alert-success py-2">@TempData["Success"]</div>
+}
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger py-2">@TempData["Error"]</div>
+}
+
+<div class="row g-4 mb-4">
+    <div class="col-xl-7">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <div>
+                        <div class="small text-muted">Текущий tenant</div>
+                        <div class="fs-5 fw-semibold">@Model.TenantName</div>
+                    </div>
+                    <span class="badge text-bg-secondary">Всего участников: @Model.Items.Count</span>
+                </div>
+
+                <form method="get" asp-action="TenantMembers" class="row g-3 align-items-end">
+                    <div class="col-md-7">
+                        <label class="form-label small text-muted">Имя, логин или email</label>
+                        <input type="text" name="Search" value="@Model.Filter.Search" class="form-control" placeholder="Иванов, support@@..., login..." />
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small text-muted">Статус</label>
+                        <select name="Status" class="form-select">
+                            @if (Model.Filter.Status == "active")
+                            {
+                                <option value="active" selected>Активные</option>
+                            }
+                            else
+                            {
+                                <option value="active">Активные</option>
+                            }
+                            @if (Model.Filter.Status == "inactive")
+                            {
+                                <option value="inactive" selected>Отключённые</option>
+                            }
+                            else
+                            {
+                                <option value="inactive">Отключённые</option>
+                            }
+                            @if (Model.Filter.Status == "all")
+                            {
+                                <option value="all" selected>Все</option>
+                            }
+                            else
+                            {
+                                <option value="all">Все</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="col-md-2 d-grid">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-funnel me-1"></i> Фильтр
+                        </button>
+                    </div>
+                    <div class="col-12">
+                        <a href="@Url.Action("TenantMembers", "CompanySettings")" class="btn btn-outline-secondary">
+                            <i class="bi bi-x-circle me-1"></i> Сбросить
+                        </a>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-5">
+        <div class="card shadow-sm border-0 h-100">
+            <div class="card-body">
+                <div class="fw-semibold mb-2">Пригласить существующий аккаунт</div>
+                <div class="small text-muted mb-3">
+                    Если пользователь уже зарегистрирован в системе в другом tenant, здесь можно добавить его в текущую компанию без создания нового аккаунта.
+                </div>
+
+                <form asp-action="InviteTenantMember" method="post" class="row g-3">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="returnUrl" value="@currentReturnUrl" />
+                    <div class="col-12">
+                        <label class="form-label small text-muted">Логин или email</label>
+                        <input name="Login" value="@Model.Invite.Login" class="form-control" placeholder="support@@company.ru" />
+                    </div>
+                    <div class="col-md-12 d-flex align-items-end">
+                        <div class="form-check mb-2">
+                            <input type="checkbox" id="invite-make-default" name="MakeDefault" value="true" class="form-check-input" @(Model.Invite.MakeDefault ? "checked" : null) />
+                            <label for="invite-make-default" class="form-check-label">Сделать основным tenant</label>
+                        </div>
+                    </div>
+                    <div class="col-12 d-grid">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="bi bi-person-plus me-1"></i> Добавить в tenant
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="card shadow-sm border-0">
+    <div class="card-body p-0">
+        @if (!Model.Items.Any())
+        {
+            <div class="text-center py-5 px-4">
+                <div class="mb-3"><i class="bi bi-people fs-1 text-muted"></i></div>
+                <div class="fs-5 fw-semibold mb-2">Участники не найдены</div>
+                <div class="text-muted">Измените фильтры или пригласите существующий аккаунт в текущий tenant.</div>
+            </div>
+        }
+        else
+        {
+            <div class="table-responsive">
+                <table class="table align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Пользователь</th>
+                            <th style="width: 240px;">Статус</th>
+                            <th style="width: 320px;" class="text-end">Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in Model.Items)
+                        {
+                            <tr class="@((!item.IsActive || item.IsDismissed) ? "table-secondary opacity-75" : string.Empty)">
+                                <td>
+                                    <div class="fw-semibold">@item.FullName</div>
+                                    <div class="small text-muted">@(!string.IsNullOrWhiteSpace(item.Login) ? item.Login : "Без логина")</div>
+                                    @if (!string.IsNullOrWhiteSpace(item.PrimaryEmail))
+                                    {
+                                        <div class="small text-muted">@item.PrimaryEmail</div>
+                                    }
+                                    <div class="small text-muted">В tenant с @item.JoinedAt.ToString("dd.MM.yyyy")</div>
+                                </td>
+                                <td>
+                                    <div class="d-flex flex-wrap gap-2">
+                                        <span class="badge @((item.IsActive && !item.IsDismissed) ? "text-bg-success" : "text-bg-secondary")">
+                                            @((item.IsActive && !item.IsDismissed) ? "Доступ включён" : item.IsDismissed ? "Доступ заблокирован" : "Доступ отключён")
+                                        </span>
+                                        <span class="badge text-bg-primary">Полный доступ</span>
+                                        @if (item.IsDismissed)
+                                        {
+                                            <span class="badge text-bg-warning">Уволен в tenant</span>
+                                        }
+                                        @if (item.IsDefault)
+                                        {
+                                            <span class="badge text-bg-info">Tenant по умолчанию</span>
+                                        }
+                                        @if (item.IsCurrentUser)
+                                        {
+                                            <span class="badge text-bg-light border">Вы</span>
+                                        }
+                                    </div>
+                                </td>
+                                <td class="text-end">
+                                    <div class="d-inline-flex flex-wrap justify-content-end gap-2">
+                                        <a asp-controller="Employees" asp-action="Edit" asp-route-id="@item.EmployeeId" class="btn btn-sm btn-outline-secondary">
+                                            <i class="bi bi-box-arrow-up-right me-1"></i> Карточка
+                                        </a>
+
+                                        @if (item.IsActive)
+                                        {
+                                            <form asp-action="SetTenantMemberActive" method="post" class="d-inline">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="membershipId" value="@item.MembershipId" />
+                                                <input type="hidden" name="isActive" value="false" />
+                                                <input type="hidden" name="returnUrl" value="@currentReturnUrl" />
+                                                <button type="submit" class="btn btn-sm btn-outline-danger" @(item.IsCurrentUser ? "disabled" : null)>
+                                                    <i class="bi bi-person-x me-1"></i> Отключить
+                                                </button>
+                                            </form>
+                                        }
+                                        else
+                                        {
+                                            <form asp-action="SetTenantMemberActive" method="post" class="d-inline">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="membershipId" value="@item.MembershipId" />
+                                                <input type="hidden" name="isActive" value="true" />
+                                                <input type="hidden" name="returnUrl" value="@currentReturnUrl" />
+                                                <button type="submit" class="btn btn-sm btn-outline-success">
+                                                    <i class="bi bi-person-check me-1"></i> Включить
+                                                </button>
+                                            </form>
+                                        }
+
+                                        @if (item.IsActive && !item.IsDismissed && !item.IsDefault)
+                                        {
+                                            <form asp-action="SetTenantMemberDefault" method="post" class="d-inline">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="membershipId" value="@item.MembershipId" />
+                                                <input type="hidden" name="returnUrl" value="@currentReturnUrl" />
+                                                <button type="submit" class="btn btn-sm btn-outline-primary">
+                                                    <i class="bi bi-star me-1"></i> По умолчанию
+                                                </button>
+                                            </form>
+                                        }
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>

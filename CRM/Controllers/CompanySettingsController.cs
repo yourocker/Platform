@@ -8,11 +8,13 @@ using Core.Services;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using CRM.Infrastructure.Security;
 using CRM.Infrastructure.Trash;
 using CRM.ViewModels.CompanySettings;
 
 namespace CRM.Controllers
 {
+    [TenantAuthorize(TenantPermissions.ManageTenantSettings)]
     public class CompanySettingsController : BasePlatformController
     {
         private const string DefaultNewStatusName = "Новая запись";
@@ -24,6 +26,7 @@ namespace CRM.Controllers
         private readonly IBookingPolicyService _bookingPolicyService;
         private readonly IFeatureToggleService _featureToggleService;
         private readonly ITrashService _trashService;
+        private readonly ITenantMembershipAdministrationService _tenantMembershipAdministrationService;
 
         public CompanySettingsController(
             AppDbContext context,
@@ -31,13 +34,15 @@ namespace CRM.Controllers
             ICrmStyleService styleService,
             IBookingPolicyService bookingPolicyService,
             IFeatureToggleService featureToggleService,
-            ITrashService trashService)
+            ITrashService trashService,
+            ITenantMembershipAdministrationService tenantMembershipAdministrationService)
             : base(context, hostingEnvironment)
         {
             _styleService = styleService;
             _bookingPolicyService = bookingPolicyService;
             _featureToggleService = featureToggleService;
             _trashService = trashService;
+            _tenantMembershipAdministrationService = tenantMembershipAdministrationService;
         }
 
         /// <summary>
@@ -137,6 +142,68 @@ namespace CRM.Controllers
                 .ToListAsync();
 
             return View(modes);
+        }
+
+        [HttpGet]
+        [TenantAuthorize(TenantPermissions.ManageTenantMembers)]
+        public async Task<IActionResult> TenantMembers([FromQuery] TenantMembersFilterInput filter, CancellationToken cancellationToken)
+        {
+            var model = await _tenantMembershipAdministrationService.GetPageModelAsync(filter, User, cancellationToken);
+            return View(model);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [TenantAuthorize(TenantPermissions.ManageTenantMembers)]
+        public async Task<IActionResult> InviteTenantMember(
+            InviteTenantMemberInput input,
+            string? returnUrl = null,
+            CancellationToken cancellationToken = default)
+        {
+            var result = await _tenantMembershipAdministrationService.InviteAsync(User, input, cancellationToken);
+            TempData[result.Success ? "Success" : "Error"] = result.Message;
+            return RedirectBackToTenantMembers(returnUrl);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [TenantAuthorize(TenantPermissions.ManageTenantMembers)]
+        public async Task<IActionResult> UpdateTenantMemberRole(
+            Guid membershipId,
+            string roleCode,
+            string? returnUrl = null,
+            CancellationToken cancellationToken = default)
+        {
+            var result = await _tenantMembershipAdministrationService.UpdateRoleAsync(User, membershipId, roleCode, cancellationToken);
+            TempData[result.Success ? "Success" : "Error"] = result.Message;
+            return RedirectBackToTenantMembers(returnUrl);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [TenantAuthorize(TenantPermissions.ManageTenantMembers)]
+        public async Task<IActionResult> SetTenantMemberActive(
+            Guid membershipId,
+            bool isActive,
+            string? returnUrl = null,
+            CancellationToken cancellationToken = default)
+        {
+            var result = await _tenantMembershipAdministrationService.SetActiveAsync(User, membershipId, isActive, cancellationToken);
+            TempData[result.Success ? "Success" : "Error"] = result.Message;
+            return RedirectBackToTenantMembers(returnUrl);
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        [TenantAuthorize(TenantPermissions.ManageTenantMembers)]
+        public async Task<IActionResult> SetTenantMemberDefault(
+            Guid membershipId,
+            string? returnUrl = null,
+            CancellationToken cancellationToken = default)
+        {
+            var result = await _tenantMembershipAdministrationService.SetDefaultAsync(User, membershipId, cancellationToken);
+            TempData[result.Success ? "Success" : "Error"] = result.Message;
+            return RedirectBackToTenantMembers(returnUrl);
         }
 
         [HttpGet]
@@ -494,6 +561,16 @@ namespace CRM.Controllers
             }
 
             return RedirectToAction(nameof(Trash));
+        }
+
+        private IActionResult RedirectBackToTenantMembers(string? returnUrl)
+        {
+            if (!string.IsNullOrWhiteSpace(returnUrl) && Url.IsLocalUrl(returnUrl))
+            {
+                return Redirect(returnUrl);
+            }
+
+            return RedirectToAction(nameof(TenantMembers));
         }
     }
 }

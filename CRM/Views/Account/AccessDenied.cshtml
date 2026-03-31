@@ -1,0 +1,46 @@
+@{
+    ViewData["Title"] = "Доступ запрещен";
+    Layout = "_LayoutV2";
+    var returnUrl = ViewData["ReturnUrl"] as string;
+}
+
+<div class="container py-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-7">
+            <div class="card shadow-sm border-0">
+                <div class="card-body p-4 p-lg-5">
+                    <div class="d-flex align-items-center gap-3 mb-3">
+                        <div class="rounded-circle d-inline-flex align-items-center justify-content-center"
+                             style="width: 56px; height: 56px; background: rgba(220, 53, 69, 0.12); color: #dc3545;">
+                            <i class="bi bi-shield-lock fs-3"></i>
+                        </div>
+                        <div>
+                            <h1 class="h3 mb-1">Недостаточно прав</h1>
+                            <div class="text-muted">Текущая роль в tenant не дает доступ к этой странице.</div>
+                        </div>
+                    </div>
+
+                    @if (!string.IsNullOrWhiteSpace(returnUrl))
+                    {
+                        <div class="alert alert-light border small mb-4">
+                            Запрошенный адрес: <code>@returnUrl</code>
+                        </div>
+                    }
+
+                    <p class="text-muted mb-4">
+                        Если доступ должен быть, переключите tenant в меню профиля или попросите администратора текущего tenant выдать нужную роль.
+                    </p>
+
+                    <div class="d-flex flex-wrap gap-2">
+                        <a href="/" class="btn btn-primary">
+                            <i class="bi bi-house-door me-1"></i> На главную
+                        </a>
+                        <button type="button" class="btn btn-outline-secondary" onclick="history.back()">
+                            <i class="bi bi-arrow-left me-1"></i> Назад
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

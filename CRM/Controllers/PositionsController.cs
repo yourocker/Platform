@@ -10,10 +10,12 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Hosting;
 using Core.Entities.Platform;
 using CRM.Infrastructure;
+using CRM.Infrastructure.Security;
 using CRM.ViewModels.Filters;
 
 namespace CRM.Controllers
 {
+    [TenantAuthorize(TenantPermissions.ManageCompanyStructure)]
     public class PositionsController : BasePlatformController
     {
         public PositionsController(AppDbContext context, IWebHostEnvironment hostingEnvironment) 

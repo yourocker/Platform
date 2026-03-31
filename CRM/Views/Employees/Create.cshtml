@@ -5,6 +5,7 @@
     var appointments = Model.Appointments.Any()
         ? Model.Appointments
         : new List<EmployeeAppointmentDto> { new() };
+    var canManageEmployeeAccess = ViewBag.CanManageEmployeeAccess is bool flag && flag;
 }
 
 <script src="https://cdn.jsdelivr.net/npm/inputmask@5.0.8/dist/inputmask.min.js"></script>
@@ -127,7 +128,7 @@
                 </div>
 
                 @* 5. Доступ *@
-                @if (User.Identity.Name == "admin" || User.Identity.Name?.Contains("awlwlb") == true)
+                @if (canManageEmployeeAccess)
                 {
                     <div crm-card>
                         <div class="card-header bg-transparent border-0 pt-3 px-4"><h5 class="mb-0 fw-bold text-muted text-uppercase small">Доступ в систему</h5></div>
@@ -137,6 +138,12 @@
                                 <div class="col-md-6"><crm-input label="Пароль" asp-for="Password" type="password" autocomplete="new-password" /></div>
                             </div>
                         </div>
+                    </div>
+                }
+                else
+                {
+                    <div class="alert alert-light border small mb-0">
+                        Логин и пароль сотруднику назначает администратор tenant или техподдержка.
                     </div>
                 }
 

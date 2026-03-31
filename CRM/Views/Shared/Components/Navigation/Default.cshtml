@@ -1,8 +1,16 @@
 ﻿@model CRM.Models.NavigationViewModel
+@using CRM.Infrastructure.Security
 @inject Core.Services.ICrmStyleService StyleService
+@inject ITenantPermissionService TenantPermissionService
 
 @{
     var ui = StyleService.GetSettings();
+    var canManageTenantSettings = TenantPermissionService.HasPermission(User, TenantPermissions.ManageTenantSettings);
+    var canManageTenantMembers = TenantPermissionService.HasPermission(User, TenantPermissions.ManageTenantMembers);
+    var canManageConstructors = TenantPermissionService.HasPermission(User, TenantPermissions.ManageConstructors);
+    var canManageEmployees = TenantPermissionService.HasPermission(User, TenantPermissions.ManageEmployees);
+    var canManageCompanyStructure = TenantPermissionService.HasPermission(User, TenantPermissions.ManageCompanyStructure);
+    var canManageServiceCatalog = TenantPermissionService.HasPermission(User, TenantPermissions.ManageServiceCatalog);
     
     // Находим категории для вывода их динамических приложений в системные блоки
     var companyCat = Model.CustomCategories.FirstOrDefault(c => c.Name == "Компания");
@@ -62,9 +70,12 @@
             </a>
         }
 
-        <a href="/AppDefinitions" class="main-btn @(Model.IsSettingsActive ? "active" : "")" data-id="settings" title="Конструктор">
-            <i class="bi bi-gear"></i>
-        </a>
+        @if (canManageConstructors)
+        {
+            <a href="/AppDefinitions" class="main-btn @(Model.IsSettingsActive ? "active" : "")" data-id="settings" title="Конструктор">
+                <i class="bi bi-gear"></i>
+            </a>
+        }
     </div>
 </nav>
 
@@ -85,10 +96,16 @@
     else if (Model.IsCompanyActive)
     {
         <div class="sub-header"><span>Компания</span><button type="button" class="sub-header-toggle" title="Свернуть" aria-label="Свернуть меню"><i class="bi bi-chevron-left"></i></button></div>
-        <a href="/Departments" class="sub-link @(Model.Controller == "Departments" ? "active" : "")"><i class="bi bi-diagram-3"></i> Оргструктура</a>
-        <a href="/Employees" class="sub-link @(Model.Controller == "Employees" ? "active" : "")"><i class="bi bi-person-badge"></i> Сотрудники</a>
-        <a href="/Positions" class="sub-link @(Model.Controller == "Positions" ? "active" : "")"><i class="bi bi-briefcase"></i> Должности</a>
-        <a href="/EmployeeSchedule" class="sub-link @(Model.Controller == "EmployeeSchedule" ? "active" : "")"><i class="bi bi-calendar3"></i> График отсутствий</a>
+        @if (canManageCompanyStructure)
+        {
+            <a href="/Departments" class="sub-link @(Model.Controller == "Departments" ? "active" : "")"><i class="bi bi-diagram-3"></i> Оргструктура</a>
+            <a href="/Positions" class="sub-link @(Model.Controller == "Positions" ? "active" : "")"><i class="bi bi-briefcase"></i> Должности</a>
+            <a href="/EmployeeSchedule" class="sub-link @(Model.Controller == "EmployeeSchedule" ? "active" : "")"><i class="bi bi-calendar3"></i> График отсутствий</a>
+        }
+        @if (canManageEmployees)
+        {
+            <a href="/Employees" class="sub-link @(Model.Controller == "Employees" ? "active" : "")"><i class="bi bi-person-badge"></i> Сотрудники</a>
+        }
         @* ДИНАМИЧЕСКИЕ ПРИЛОЖЕНИЯ В КОМПАНИИ *@
         @if (companyCat != null)
         {
@@ -100,12 +117,25 @@
             }
         }
         
-        <hr />
-        <div class="px-3 small text-muted mb-2">Настройки компании</div>
-        <a href="/CompanySettings/WorkMode" class="sub-link @(Model.Controller == "CompanySettings" && Model.Action == "WorkMode" ? "active" : "")"><i class="bi bi-clock-history"></i> Режим работы и бронирование</a>
-        <a href="/Services" class="sub-link @(Model.Controller == "Services" ? "active" : "")"><i class="bi bi-tag"></i> Справочник услуг</a>
-        <a href="/CompanySettings/InterfaceSettings" class="sub-link @(Model.Controller == "CompanySettings" && Model.Action == "InterfaceSettings" ? "active" : "")"><i class="bi bi-palette"></i> Оформление</a>
-        <a href="/CompanySettings/Trash" class="sub-link @(Model.Controller == "CompanySettings" && Model.Action == "Trash" ? "active" : "")"><i class="bi bi-trash3"></i> Корзина</a>
+        @if (canManageTenantSettings || canManageTenantMembers || canManageServiceCatalog)
+        {
+            <hr />
+            <div class="px-3 small text-muted mb-2">Настройки компании</div>
+            @if (canManageTenantSettings)
+            {
+                <a href="/CompanySettings/WorkMode" class="sub-link @(Model.Controller == "CompanySettings" && Model.Action == "WorkMode" ? "active" : "")"><i class="bi bi-clock-history"></i> Режим работы и бронирование</a>
+                <a href="/CompanySettings/InterfaceSettings" class="sub-link @(Model.Controller == "CompanySettings" && Model.Action == "InterfaceSettings" ? "active" : "")"><i class="bi bi-palette"></i> Оформление</a>
+                <a href="/CompanySettings/Trash" class="sub-link @(Model.Controller == "CompanySettings" && Model.Action == "Trash" ? "active" : "")"><i class="bi bi-trash3"></i> Корзина</a>
+            }
+            @if (canManageServiceCatalog)
+            {
+                <a href="/Services" class="sub-link @(Model.Controller == "Services" ? "active" : "")"><i class="bi bi-tag"></i> Справочник услуг</a>
+            }
+            @if (canManageTenantMembers)
+            {
+                <a href="/CompanySettings/TenantMembers" class="sub-link @(Model.Controller == "CompanySettings" && Model.Action == "TenantMembers" ? "active" : "")"><i class="bi bi-people"></i> Участники tenant</a>
+            }
+        }
     }
     else if (Model.IsTasksActive)
     {
@@ -137,10 +167,13 @@
             }
         }
 
-        <hr />
-        <div class="px-3 small text-muted mb-2">Настройки системы</div>
-        <a href="/AppDefinitions" class="sub-link @(Model.Controller == "AppDefinitions" ? "active" : "")"><i class="bi bi-layers"></i> Список сущностей</a>
-        <a href="/AppCategories" class="sub-link @(Model.Controller == "AppCategories" ? "active" : "")"><i class="bi bi-folder2-open"></i> Разделы меню</a>
+        @if (canManageConstructors)
+        {
+            <hr />
+            <div class="px-3 small text-muted mb-2">Настройки системы</div>
+            <a href="/AppDefinitions" class="sub-link @(Model.Controller == "AppDefinitions" ? "active" : "")"><i class="bi bi-layers"></i> Список сущностей</a>
+            <a href="/AppCategories" class="sub-link @(Model.Controller == "AppCategories" ? "active" : "")"><i class="bi bi-folder2-open"></i> Разделы меню</a>
+        }
     }
     else if (activeCustomCategory != null)
     {

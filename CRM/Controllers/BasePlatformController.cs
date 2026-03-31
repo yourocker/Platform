@@ -100,9 +100,17 @@ namespace CRM.Controllers
 
             if (normalized == "employee")
             {
-                return await _context.Employees
-                    .AsNoTracking()
-                    .Where(e => !e.IsDismissed)
+                var employeeQuery = _context.Employees.AsNoTracking();
+                if (_context.CurrentTenantId.HasValue)
+                {
+                    var currentTenantId = _context.CurrentTenantId.Value;
+                    employeeQuery = employeeQuery.Where(e => e.TenantMemberships.Any(m =>
+                        m.TenantId == currentTenantId &&
+                        m.IsActive &&
+                        !m.IsDismissed));
+                }
+
+                return await employeeQuery
                     .OrderBy(e => e.LastName)
                     .ThenBy(e => e.FirstName)
                     .Select(e => new SelectListItem

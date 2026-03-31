@@ -151,7 +151,7 @@ namespace Core.Data
             AppDbContext context,
             Guid employeeId,
             Guid tenantId,
-            string roleCode = "employee",
+            string roleCode = "admin",
             bool isDefault = false)
         {
             var existingMemberships = await context.EmployeeTenantMemberships
@@ -167,8 +167,9 @@ namespace Core.Data
                     Id = Guid.NewGuid(),
                     EmployeeId = employeeId,
                     TenantId = tenantId,
-                    RoleCode = string.IsNullOrWhiteSpace(roleCode) ? "employee" : roleCode.Trim().ToLowerInvariant(),
+                    RoleCode = string.IsNullOrWhiteSpace(roleCode) ? "admin" : roleCode.Trim().ToLowerInvariant(),
                     IsActive = true,
+                    IsDismissed = false,
                     IsDefault = isDefault,
                     JoinedAt = DateTime.UtcNow
                 };
@@ -178,7 +179,9 @@ namespace Core.Data
             else
             {
                 membership.IsActive = true;
-                membership.RoleCode = string.IsNullOrWhiteSpace(roleCode) ? membership.RoleCode : roleCode.Trim().ToLowerInvariant();
+                membership.IsDismissed = false;
+                membership.DismissedAt = null;
+                membership.RoleCode = string.IsNullOrWhiteSpace(roleCode) ? "admin" : roleCode.Trim().ToLowerInvariant();
                 membership.IsDefault = membership.IsDefault || isDefault;
             }
 

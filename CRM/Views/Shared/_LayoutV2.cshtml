@@ -5,6 +5,7 @@
 @using Core.Entities.Company
 @using Core.Entities.System
 @using Core.Services
+@using Core.MultiTenancy
 
 @inject ICrmStyleService StyleService
 @inject UserManager<Employee> UserManager
@@ -19,6 +20,9 @@ var currentUser = User.Identity?.IsAuthenticated == true ? await UserManager.Get
 var currentTenantId = User.FindFirst("tenant_id")?.Value;
 var currentTenantName = string.Empty;
 var currentTenantRole = User.FindFirst("tenant_role")?.Value ?? User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value ?? string.Empty;
+var currentTenantRoleDisplayName = string.IsNullOrWhiteSpace(currentTenantRole)
+    ? string.Empty
+    : TenantRoleCatalog.GetDisplayName(currentTenantRole);
 var tenantMemberships = new List<EmployeeTenantMembership>();
 var currentReturnUrl = $"{Context.Request.Path}{Context.Request.QueryString}";
 
@@ -28,7 +32,7 @@ if (currentUser != null)
         .IgnoreQueryFilters()
         .AsNoTracking()
         .Include(x => x.Tenant)
-        .Where(x => x.EmployeeId == currentUser.Id && x.IsActive && x.Tenant.IsActive)
+        .Where(x => x.EmployeeId == currentUser.Id && x.IsActive && !x.IsDismissed && x.Tenant.IsActive)
         .OrderByDescending(x => x.IsDefault)
         .ThenBy(x => x.Tenant.Name)
         .ToListAsync();
@@ -344,9 +348,9 @@ if (currentUser != null)
                         {
                             <div class="fw-semibold">@currentTenantName</div>
                         }
-                        @if (!string.IsNullOrWhiteSpace(currentTenantRole))
+                        @if (!string.IsNullOrWhiteSpace(currentTenantRoleDisplayName))
                         {
-                            <small class="opacity-50 text-uppercase">@currentTenantRole</small>
+                            <small class="opacity-50">@currentTenantRoleDisplayName</small>
                         }
                     </div>
                     <div class="rounded-circle d-flex align-items-center justify-content-center"
@@ -376,7 +380,7 @@ if (currentUser != null)
                                     <input type="hidden" name="returnUrl" value="@currentReturnUrl" />
                                     <button type="submit" class="dropdown-item @(isCurrentTenant ? "active" : "")" style="color: var(--card-text);">
                                         <span>@membership.Tenant.Name</span>
-                                        <small class="opacity-50 text-uppercase ms-2">@membership.RoleCode</small>
+                                        <small class="opacity-50 ms-2">@TenantRoleCatalog.GetDisplayName(membership.RoleCode)</small>
                                     </button>
                                 </form>
                             </li>

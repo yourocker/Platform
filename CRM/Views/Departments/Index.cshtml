@@ -1,6 +1,26 @@
 ﻿@model IEnumerable<Core.Entities.Company.Department>
 @{
     ViewData["Title"] = "Оргструктура";
+    var currentTenantIdRaw = User.FindFirst("tenant_id")?.Value;
+    Guid.TryParse(currentTenantIdRaw, out var currentTenantId);
+
+    bool IsActiveInCurrentTenant(Core.Entities.Company.Employee? employee)
+    {
+        if (employee == null)
+        {
+            return false;
+        }
+
+        if (currentTenantId == Guid.Empty)
+        {
+            return !employee.IsDismissed;
+        }
+
+        return employee.TenantMemberships.Any(m =>
+            m.TenantId == currentTenantId &&
+            m.IsActive &&
+            !m.IsDismissed);
+    }
 
     // Выносим рекурсивную функцию в основной блок кода, чтобы избежать вложенности @{ @{ ... } }
     async Task RenderTree(Guid? parentId, int level)
@@ -16,7 +36,7 @@
                         <div>
                             <div class="fw-bold text-dark fs-5">@dept.Name</div>
                             
-                            @if (dept.Manager != null && !dept.Manager.IsDismissed)                            {
+                            @if (IsActiveInCurrentTenant(dept.Manager))                            {
                                 <div class="small text-muted mt-1">
                                     <i class="bi bi-person-badge text-primary me-1"></i>
                                     <span>Руководитель: </span>
@@ -27,7 +47,7 @@
                             @* Блок отображения сотрудников *@
                             @{
                                 var activeStaff = dept.StaffAppointments?
-                                    .Where(sa => sa.Employee != null && !sa.Employee.IsDismissed)
+                                    .Where(sa => IsActiveInCurrentTenant(sa.Employee))
                                     .Select(sa => sa.Employee)
                                     .Distinct()
                                     .ToList();

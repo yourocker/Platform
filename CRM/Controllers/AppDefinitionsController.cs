@@ -7,12 +7,14 @@ using Core.Data;
 using Core.Entities.Platform;
 using Core.Entities.Platform.Form;
 using CRM.Infrastructure;
+using CRM.Infrastructure.Security;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 
 namespace CRM.Controllers;
 
+ [TenantAuthorize(TenantPermissions.ManageConstructors)]
 public class AppDefinitionsController(AppDbContext context) : Controller
 {
     private readonly AppDbContext _context = context;

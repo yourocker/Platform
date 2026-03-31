@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 using Core.Entities.Company;
 using Core.Data;
 using System.Security.Claims;
+using Core.MultiTenancy;
 
 namespace CRM.Controllers
 {
@@ -107,12 +108,6 @@ namespace CRM.Controllers
                 return View();
             }
 
-            if (user.IsDismissed)
-            {
-                ModelState.AddModelError(string.Empty, "Доступ запрещен");
-                return View();
-            }
-
             var membership = await ResolveLoginMembershipAsync(user);
             if (membership == null)
             {
@@ -156,6 +151,7 @@ namespace CRM.Controllers
                     x.EmployeeId == user.Id &&
                     x.TenantId == tenantId &&
                     x.IsActive &&
+                    !x.IsDismissed &&
                     x.Tenant.IsActive);
 
             if (membership == null)
@@ -173,6 +169,14 @@ namespace CRM.Controllers
         {
             await _signInManager.SignOutAsync();
             return RedirectToAction("Login");
+        }
+
+        [HttpGet]
+        [AllowAnonymous]
+        public IActionResult AccessDenied(string? returnUrl = null)
+        {
+            ViewData["ReturnUrl"] = returnUrl;
+            return View();
         }
 
         private IActionResult RedirectToLocal(string? returnUrl)
@@ -197,6 +201,7 @@ namespace CRM.Controllers
                         x.EmployeeId == user.Id &&
                         x.TenantId == currentTenantId &&
                         x.IsActive &&
+                        !x.IsDismissed &&
                         x.Tenant.IsActive);
 
                 if (membershipByClaim != null)
@@ -209,7 +214,7 @@ namespace CRM.Controllers
                 .IgnoreQueryFilters()
                 .AsNoTracking()
                 .Include(x => x.Tenant)
-                .Where(x => x.EmployeeId == user.Id && x.IsActive && x.Tenant.IsActive)
+                .Where(x => x.EmployeeId == user.Id && x.IsActive && !x.IsDismissed && x.Tenant.IsActive)
                 .OrderByDescending(x => x.IsDefault)
                 .ThenBy(x => x.JoinedAt)
                 .FirstOrDefaultAsync();
@@ -217,12 +222,13 @@ namespace CRM.Controllers
 
         private async Task SignInWithTenantAsync(Employee user, EmployeeTenantMembership membership, bool isPersistent)
         {
+            var normalizedRole = TenantRoleCatalog.Normalize(membership.RoleCode);
             var claims = new List<Claim>
             {
                 new("tenant_id", membership.TenantId.ToString()),
                 new("tenant_membership_id", membership.Id.ToString()),
-                new("tenant_role", membership.RoleCode),
-                new(ClaimTypes.Role, membership.RoleCode)
+                new("tenant_role", normalizedRole),
+                new(ClaimTypes.Role, normalizedRole)
             };
 
             await _signInManager.SignOutAsync();

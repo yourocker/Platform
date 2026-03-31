@@ -3,12 +3,14 @@ using System.Linq;
 using System.Threading.Tasks;
 using Core.Data;
 using Core.Entities.Platform;
+using CRM.Infrastructure.Security;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.Hosting;
 
 namespace CRM.Controllers
 {
+    [TenantAuthorize(TenantPermissions.ManageConstructors)]
     public class AppCategoriesController : BasePlatformController
     {
         public AppCategoriesController(AppDbContext context, IWebHostEnvironment hostingEnvironment) 

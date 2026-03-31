@@ -107,7 +107,6 @@ var currentFilters = ViewBag.CurrentFilters as Dictionary<string, string> ?? new
                     <td class="text-end pe-4">
                         <div class="btn-group btn-group-sm shadow-sm crm-table-actions" onclick="event.stopPropagation();">
                             <a asp-action="Edit" asp-route-id="@item.Id" crm-button variant="white" icon="pencil-fill" icon-class="text-primary" class="border btn-sm crm-table-action" title="Редактировать"></a>
-                            <a asp-action="Delete" asp-route-id="@item.Id" crm-button variant="white" icon="trash-fill" icon-class="text-danger" class="border btn-sm crm-table-action" title="Удалить"></a>
                         </div>
                     </td>
                 </tr>

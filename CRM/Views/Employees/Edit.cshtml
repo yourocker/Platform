@@ -3,6 +3,7 @@
 @{
     ViewData["Title"] = "Редактирование сотрудника";
     bool isLocked = Model.IsDismissed;
+    var canManageEmployeeAccess = ViewBag.CanManageEmployeeAccess is bool flag && flag;
 }
 
 <script src="https://cdn.jsdelivr.net/npm/inputmask@5.0.8/dist/inputmask.min.js"></script>
@@ -56,6 +57,14 @@
                     <i class="bi bi-exclamation-triangle-fill me-2"></i> 
                     Сотрудник уволен. Редактирование данных невозможно до момента восстановления.
                 </div>
+            }
+            @if (TempData["Success"] != null)
+            {
+                <div class="alert alert-success border-0 shadow-sm mb-4">@TempData["Success"]</div>
+            }
+            @if (TempData["Error"] != null)
+            {
+                <div class="alert alert-danger border-0 shadow-sm mb-4">@TempData["Error"]</div>
             }
 
             <form asp-action="Edit" method="post" enctype="multipart/form-data">
@@ -150,31 +159,40 @@
                     </div>
 
                     @* 5. Доступ *@
-                    <div crm-card class="@(isLocked ? "bg-light" : "")">
-                        <div class="card-header bg-transparent border-0 pt-3 px-4">
-                            <h5 class="mb-0 fw-bold text-muted text-uppercase small"><i class="bi bi-shield-lock me-1"></i> Доступ в систему</h5>
-                        </div>
-                        <div class="card-body p-4 pt-2">
-                            @if (Model.HasLogin)
-                            {
-                                <div class="row g-3 align-items-end">
-                                    <div class="col-md-5"><crm-input label="Логин (Email)" asp-for="Login" autocomplete="off" /></div>
-                                    <div class="col-md-4"><crm-input label="Пароль" name="PassFake" value="********" readonly="readonly" /></div>
-                                    <div class="col-md-3">
-                                        <button type="button" crm-button variant="outline-danger" icon="key" class="w-100" data-bs-toggle="modal" data-bs-target="#resetPasswordModal">Сменить пароль</button>
+                    @if (canManageEmployeeAccess)
+                    {
+                        <div crm-card class="@(isLocked ? "bg-light" : "")">
+                            <div class="card-header bg-transparent border-0 pt-3 px-4">
+                                <h5 class="mb-0 fw-bold text-muted text-uppercase small"><i class="bi bi-shield-lock me-1"></i> Доступ в систему</h5>
+                            </div>
+                            <div class="card-body p-4 pt-2">
+                                @if (Model.HasLogin)
+                                {
+                                    <div class="row g-3 align-items-end">
+                                        <div class="col-md-5"><crm-input label="Логин (Email)" asp-for="Login" autocomplete="off" /></div>
+                                        <div class="col-md-4"><crm-input label="Пароль" name="PassFake" value="********" readonly="readonly" /></div>
+                                        <div class="col-md-3">
+                                            <button type="button" crm-button variant="outline-danger" icon="key" class="w-100" data-bs-toggle="modal" data-bs-target="#resetPasswordModal">Сменить пароль</button>
+                                        </div>
                                     </div>
-                                </div>
-                            }
-                            else
-                            {
-                                <div class="alert alert-warning border-0 small shadow-sm"><i class="bi bi-exclamation-circle me-1"></i> У сотрудника нет доступа. Заполните поля ниже для создания записи.</div>
-                                <div class="row g-3">
-                                    <div class="col-md-6"><crm-input label="Логин (Email)" asp-for="Login" placeholder="ivanov@example.com" autocomplete="off" /></div>
-                                    <div class="col-md-6"><crm-input label="Создайте Пароль" asp-for="NewPassword" type="password" autocomplete="new-password" /></div>
-                                </div>
-                            }
+                                }
+                                else
+                                {
+                                    <div class="alert alert-warning border-0 small shadow-sm"><i class="bi bi-exclamation-circle me-1"></i> У сотрудника нет доступа. Заполните поля ниже для создания записи.</div>
+                                    <div class="row g-3">
+                                        <div class="col-md-6"><crm-input label="Логин (Email)" asp-for="Login" placeholder="ivanov@example.com" autocomplete="off" /></div>
+                                        <div class="col-md-6"><crm-input label="Создайте Пароль" asp-for="NewPassword" type="password" autocomplete="new-password" /></div>
+                                    </div>
+                                }
+                            </div>
                         </div>
-                    </div>
+                    }
+                    else
+                    {
+                        <div class="alert alert-light border small">
+                            Доступом в систему, ролями и паролями сотрудника управляет администратор tenant или техподдержка.
+                        </div>
+                    }
 
                     @if (!isLocked)
                     {
@@ -189,26 +207,29 @@
     </div>
 </div>
 
-@* Модальное окно сброса пароля *@
-<div class="modal fade" id="resetPasswordModal" tabindex="-1">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content border-0 shadow-lg">
-            <div class="modal-header bg-danger text-white border-0">
-                <h5 class="modal-title fw-bold">Смена пароля сотрудника</h5>
-                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body p-4">
-                <p class="small">Установка нового пароля для <strong>@Model.FullName</strong>. Старый пароль будет сброшен.</p>
-                <form id="adminResetPassForm">
-                    @Html.AntiForgeryToken()
-                    <input type="hidden" name="id" value="@Model.Id" />
-                    <div class="mb-4"><crm-input label="Новый пароль" name="newPassword" type="password" required="required" /></div>
-                    <div class="d-grid"><button type="submit" crm-button variant="danger" icon="check-circle">Установить пароль</button></div>
-                </form>
+@if (canManageEmployeeAccess)
+{
+    @* Модальное окно сброса пароля *@
+    <div class="modal fade" id="resetPasswordModal" tabindex="-1">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content border-0 shadow-lg">
+                <div class="modal-header bg-danger text-white border-0">
+                    <h5 class="modal-title fw-bold">Смена пароля сотрудника</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <p class="small">Установка нового пароля для <strong>@Model.FullName</strong>. Старый пароль будет сброшен.</p>
+                    <form id="adminResetPassForm">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="id" value="@Model.Id" />
+                        <div class="mb-4"><crm-input label="Новый пароль" name="newPassword" type="password" required="required" /></div>
+                        <div class="d-grid"><button type="submit" crm-button variant="danger" icon="check-circle">Установить пароль</button></div>
+                    </form>
+                </div>
             </div>
         </div>
     </div>
-</div>
+}
 
 @section Scripts {
     @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
@@ -234,19 +255,24 @@
             newRow.querySelectorAll('select').forEach(select => select.value = "");
             container.appendChild(newRow);
         }
-        $('#adminResetPassForm').on('submit', function(e) {
-            e.preventDefault();
-            var form = $(this);
-            var btn = form.find('button[type="submit"]');
-            btn.prop('disabled', true).text('Сохранение...');
-            $.post('/Employees/AdminResetPassword', form.serialize())
-                .done(function() {
-                    alert('Пароль успешно изменен!');
-                    $('#resetPasswordModal').modal('hide');
-                    form[0].reset();
-                })
-                .fail(function(xhr) { alert('Ошибка: ' + xhr.responseText); })
-                .always(function() { btn.prop('disabled', false).html('<i class="bi bi-check-circle me-1"></i> Установить пароль'); });
-        });
+        @if (canManageEmployeeAccess)
+        {
+            <text>
+            $('#adminResetPassForm').on('submit', function(e) {
+                e.preventDefault();
+                var form = $(this);
+                var btn = form.find('button[type="submit"]');
+                btn.prop('disabled', true).text('Сохранение...');
+                $.post('/Employees/AdminResetPassword', form.serialize())
+                    .done(function() {
+                        alert('Пароль успешно изменен!');
+                        $('#resetPasswordModal').modal('hide');
+                        form[0].reset();
+                    })
+                    .fail(function(xhr) { alert('Ошибка: ' + xhr.responseText); })
+                    .always(function() { btn.prop('disabled', false).html('<i class="bi bi-check-circle me-1"></i> Установить пароль'); });
+            });
+            </text>
+        }
     </script>
 }

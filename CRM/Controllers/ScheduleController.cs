@@ -57,7 +57,10 @@ namespace CRM.Controllers
 
             ViewBag.Employees = await _context.Employees
                 .AsNoTracking()
-                .Where(e => !e.IsDismissed)
+                .Where(e => !_context.CurrentTenantId.HasValue || e.TenantMemberships.Any(m =>
+                    m.TenantId == _context.CurrentTenantId.Value &&
+                    m.IsActive &&
+                    !m.IsDismissed))
                 .OrderBy(e => e.LastName)
                 .ThenBy(e => e.FirstName)
                 .ToListAsync();

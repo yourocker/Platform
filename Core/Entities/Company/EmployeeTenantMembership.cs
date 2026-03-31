@@ -21,9 +21,13 @@ namespace Core.Entities.Company
         public Employee Employee { get; set; } = null!;
 
         [MaxLength(64)]
-        public string RoleCode { get; set; } = "employee";
+        public string RoleCode { get; set; } = "admin";
 
         public bool IsActive { get; set; } = true;
+
+        public bool IsDismissed { get; set; }
+
+        public DateTime? DismissedAt { get; set; }
 
         public bool IsDefault { get; set; }
 

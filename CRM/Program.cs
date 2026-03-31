@@ -19,6 +19,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.SignalR;
 using Core.MultiTenancy;
 using CRM.Infrastructure.Trash;
+using CRM.Infrastructure.Security;
 
 #pragma warning disable CS0618
 // Поддержка работы с jsonb в PostgreSQL
@@ -78,6 +79,7 @@ builder.Services.AddIdentity<Employee, IdentityRole<Guid>>(options =>
 builder.Services.ConfigureApplicationCookie(options =>
 {
     options.LoginPath = "/Account/Login";
+    options.AccessDeniedPath = "/Account/AccessDenied";
     options.ExpireTimeSpan = TimeSpan.FromHours(24);
     options.SlidingExpiration = true;
     options.Cookie.HttpOnly = true;
@@ -93,6 +95,8 @@ builder.Services.AddSingleton<IUserIdProvider, NameIdentifierUserIdProvider>();
 builder.Services.AddScoped<ITenantContextAccessor, TenantContextAccessor>();
 builder.Services.AddScoped<IFileStorageService, FileStorageService>();
 builder.Services.AddScoped<ITrashService, TrashService>();
+builder.Services.AddScoped<ITenantPermissionService, TenantPermissionService>();
+builder.Services.AddScoped<ITenantMembershipAdministrationService, TenantMembershipAdministrationService>();
 
 builder.Services.AddScoped<IContactService, ContactService>();
 builder.Services.AddScoped<ICrmService, CrmService>();

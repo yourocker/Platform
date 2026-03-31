@@ -1,52 +1,56 @@
-﻿using System;
-using System.IO;
-using System.Linq;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.Extensions.Configuration;
 
-namespace Core.Data
+namespace Core.Data;
+
+public sealed class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbContext>
 {
-    public class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbContext>
+    public AppDbContext CreateDbContext(string[] args)
     {
-        public AppDbContext CreateDbContext(string[] args)
+        var environment = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT") ?? "Development";
+        var configuration = BuildConfiguration(environment);
+        var connectionString = configuration.GetConnectionString("DefaultConnection");
+
+        if (string.IsNullOrWhiteSpace(connectionString))
         {
-            var basePath = ResolveConfigurationBasePath();
-            var environmentName = Environment.GetEnvironmentVariable("ASPNETCORE_ENVIRONMENT");
+            throw new InvalidOperationException("Не удалось получить строку подключения DefaultConnection для design-time AppDbContext.");
+        }
 
-            var configuration = new ConfigurationBuilder()
-                .SetBasePath(basePath)
-                .AddJsonFile("appsettings.json", optional: true)
-                .AddJsonFile($"appsettings.{environmentName}.json", optional: true)
-                .AddEnvironmentVariables()
-                .Build();
+        var optionsBuilder = new DbContextOptionsBuilder<AppDbContext>();
+        optionsBuilder.UseNpgsql(connectionString, npgsqlOptions => npgsqlOptions.EnableRetryOnFailure());
 
-            var connectionString = configuration.GetConnectionString("DefaultConnection");
+        return new AppDbContext(optionsBuilder.Options);
+    }
 
-            if (string.IsNullOrWhiteSpace(connectionString))
+    private static IConfiguration BuildConfiguration(string environment)
+    {
+        foreach (var basePath in GetCandidateBasePaths())
+        {
+            var appSettingsPath = Path.Combine(basePath, "appsettings.json");
+            if (!File.Exists(appSettingsPath))
             {
-                throw new InvalidOperationException(
-                    "Connection string 'DefaultConnection' is not configured for design-time AppDbContext creation.");
+                continue;
             }
 
-            var optionsBuilder = new DbContextOptionsBuilder<AppDbContext>();
-            optionsBuilder.UseNpgsql(connectionString);
-
-            return new AppDbContext(optionsBuilder.Options);
+            return new ConfigurationBuilder()
+                .SetBasePath(basePath)
+                .AddJsonFile("appsettings.json", optional: false)
+                .AddJsonFile($"appsettings.{environment}.json", optional: true)
+                .AddEnvironmentVariables()
+                .Build();
         }
 
-        private static string ResolveConfigurationBasePath()
-        {
-            var currentDirectory = Directory.GetCurrentDirectory();
-            var candidatePaths = new[]
-            {
-                currentDirectory,
-                Path.Combine(currentDirectory, "CRM"),
-                Path.GetFullPath(Path.Combine(currentDirectory, "..", "CRM"))
-            };
+        throw new InvalidOperationException("Не найден appsettings.json для design-time AppDbContext.");
+    }
 
-            return candidatePaths.FirstOrDefault(path => File.Exists(Path.Combine(path, "appsettings.json")))
-                ?? currentDirectory;
-        }
+    private static IEnumerable<string> GetCandidateBasePaths()
+    {
+        var currentDirectory = Directory.GetCurrentDirectory();
+
+        yield return currentDirectory;
+        yield return Path.Combine(currentDirectory, "CRM");
+        yield return Path.GetFullPath(Path.Combine(currentDirectory, "..", "CRM"));
+        yield return Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "CRM"));
     }
 }

@@ -65,7 +65,7 @@ public sealed class TenantResolutionMiddleware
                 .IgnoreQueryFilters()
                 .AsNoTracking()
                 .Include(x => x.Tenant)
-                .Where(x => x.EmployeeId == employeeId.Value && x.IsActive && x.Tenant.IsActive)
+                .Where(x => x.EmployeeId == employeeId.Value && x.IsActive && !x.IsDismissed && x.Tenant.IsActive)
                 .OrderByDescending(x => x.IsDefault)
                 .ThenBy(x => x.JoinedAt)
                 .FirstOrDefaultAsync();
@@ -137,6 +137,7 @@ public sealed class TenantResolutionMiddleware
                 x.EmployeeId == employeeId &&
                 x.TenantId == tenantId &&
                 x.IsActive &&
+                !x.IsDismissed &&
                 x.Tenant.IsActive);
     }
 
@@ -152,6 +153,7 @@ public sealed class TenantResolutionMiddleware
             .FirstOrDefaultAsync(x =>
                 x.EmployeeId == employeeId &&
                 x.IsActive &&
+                !x.IsDismissed &&
                 x.Tenant.IsActive &&
                 x.Tenant.Key == tenantKey);
     }

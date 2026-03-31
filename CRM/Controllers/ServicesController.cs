@@ -16,9 +16,11 @@ using CRM.ViewModels;
 using System.IO;
 using Microsoft.AspNetCore.Http;
 using Core.Services.CRM;
+using CRM.Infrastructure.Security;
 
 namespace CRM.Controllers
 {
+    [TenantAuthorize(TenantPermissions.ManageServiceCatalog)]
     public class ServicesController : Controller
     {
         private readonly AppDbContext _context;
@@ -97,9 +99,17 @@ namespace CRM.Controllers
 
             if (normalized == "employee")
             {
-                return await _context.Employees
-                    .AsNoTracking()
-                    .Where(item => !item.IsDismissed)
+                var employeeQuery = _context.Employees.AsNoTracking();
+                if (_context.CurrentTenantId.HasValue)
+                {
+                    var currentTenantId = _context.CurrentTenantId.Value;
+                    employeeQuery = employeeQuery.Where(item => item.TenantMemberships.Any(m =>
+                        m.TenantId == currentTenantId &&
+                        m.IsActive &&
+                        !m.IsDismissed));
+                }
+
+                return await employeeQuery
                     .OrderBy(item => item.LastName)
                     .ThenBy(item => item.FirstName)
                     .Select(item => new SelectListItem

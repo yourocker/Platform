@@ -8,9 +8,11 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using Microsoft.AspNetCore.Hosting;
+using CRM.Infrastructure.Security;
 
 namespace CRM.Controllers
 {
+    [TenantAuthorize(TenantPermissions.ManageCompanyStructure)]
     public class EmployeeScheduleController : BasePlatformController
     {
         private readonly IBookingCalendarDecorationService _calendarDecorationService;
@@ -49,7 +51,16 @@ namespace CRM.Controllers
         [HttpGet]
         public async Task<IActionResult> GetEmployees(Guid? departmentId)
         {
-            var query = _context.Employees.AsNoTracking().Where(e => !e.IsDismissed);
+            var query = _context.Employees.AsNoTracking();
+            if (_context.CurrentTenantId.HasValue)
+            {
+                var currentTenantId = _context.CurrentTenantId.Value;
+                query = query.Where(e => e.TenantMemberships.Any(m =>
+                    m.TenantId == currentTenantId &&
+                    m.IsActive &&
+                    !m.IsDismissed));
+            }
+
             if (departmentId.HasValue && departmentId.Value != Guid.Empty)
             {
                 query = query.Where(e => _context.StaffAppointments.Any(sa => sa.EmployeeId == e.Id && sa.DepartmentId == departmentId.Value));
