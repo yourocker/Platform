@@ -1,4 +1,6 @@
-﻿using Microsoft.AspNetCore.Razor.TagHelpers;
+﻿using System.Globalization;
+using System.Linq;
+using Microsoft.AspNetCore.Razor.TagHelpers;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.AspNetCore.Mvc.ViewFeatures;
 using Core.Services;
@@ -18,6 +20,10 @@ namespace CRM.TagHelpers
 
         [HtmlAttributeName("asp-for")]
         public ModelExpression? For { get; set; }
+
+        [ViewContext]
+        [HtmlAttributeNotBound]
+        public ViewContext? ViewContext { get; set; }
 
         public string? Label { get; set; }
         public string? Placeholder { get; set; }
@@ -87,8 +93,23 @@ namespace CRM.TagHelpers
                     input.Attributes.Add("id", inputName);
                 }
                 
-                // Значение
-                var finalValue = For?.Model?.ToString() ?? Value ?? "";
+                var fieldKey = For?.Name ?? Name ?? "";
+                var validationError = !string.IsNullOrWhiteSpace(fieldKey)
+                    && ViewContext?.ViewData.ModelState.TryGetValue(fieldKey, out var state) == true
+                    ? state.Errors.Select(x => x.ErrorMessage).FirstOrDefault(x => !string.IsNullOrWhiteSpace(x))
+                    : null;
+
+                var attemptedValue = !string.IsNullOrWhiteSpace(fieldKey)
+                    && ViewContext?.ViewData.ModelState.TryGetValue(fieldKey, out var modelState) == true
+                    ? modelState.AttemptedValue
+                    : null;
+
+                var finalValue = !string.IsNullOrWhiteSpace(attemptedValue)
+                    ? attemptedValue
+                    : !string.IsNullOrWhiteSpace(Value)
+                        ? Value
+                        : FormatValue(For?.Model, Type);
+
                 if (!string.IsNullOrEmpty(finalValue))
                 {
                     input.Attributes.Add("value", finalValue);
@@ -107,11 +128,64 @@ namespace CRM.TagHelpers
                     input.Attributes.Add("placeholder", Placeholder);
 
                 input.AddCssClass("form-control form-control-sm");
+                if (!string.IsNullOrWhiteSpace(validationError))
+                    input.AddCssClass("is-invalid");
                 if (!string.IsNullOrEmpty(Class)) 
                     input.AddCssClass(Class);
 
+                var excludedAttributes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+                {
+                    "asp-for",
+                    "label",
+                    "placeholder",
+                    "class",
+                    "type",
+                    "name",
+                    "value",
+                    "readonly"
+                };
+
+                foreach (var attribute in context.AllAttributes.ToList())
+                {
+                    if (excludedAttributes.Contains(attribute.Name) ||
+                        attribute.Name.StartsWith("asp-", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    input.Attributes[attribute.Name] = attribute.Value?.ToString() ?? string.Empty;
+                    output.Attributes.RemoveAll(attribute.Name);
+                }
+
                 output.Content.AppendHtml(input);
+
+                if (!string.IsNullOrWhiteSpace(validationError))
+                {
+                    var feedback = new TagBuilder("div");
+                    feedback.AddCssClass("invalid-feedback d-block");
+                    feedback.InnerHtml.Append(validationError);
+                    output.Content.AppendHtml(feedback);
+                }
             }
+        }
+
+        private static string FormatValue(object? value, string? type)
+        {
+            if (value == null)
+            {
+                return string.Empty;
+            }
+
+            var normalizedType = (type ?? "text").Trim().ToLowerInvariant();
+            return normalizedType switch
+            {
+                "number" or "range" => value is IFormattable number
+                    ? number.ToString(null, CultureInfo.InvariantCulture)
+                    : Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty,
+                "date" when value is DateTime dateValue => dateValue.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                "datetime-local" when value is DateTime dateTimeValue => dateTimeValue.ToString("yyyy-MM-ddTHH:mm", CultureInfo.InvariantCulture),
+                _ => Convert.ToString(value, CultureInfo.CurrentCulture) ?? string.Empty
+            };
         }
     }
 }

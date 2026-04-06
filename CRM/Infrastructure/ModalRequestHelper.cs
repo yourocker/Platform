@@ -97,12 +97,29 @@ public static class ModalRequestHelper
         });
     }
 
-    public static ContentResult BuildRedirectContent(string? url)
+    public static ContentResult BuildRedirectContent(string? url, bool reloadOnClose = false)
     {
         return BuildParentMessageContent(new
         {
             type = "crm-modal-navigate",
-            url = EnsureModalFlag(url)
+            url = EnsureModalFlag(url),
+            reloadOnClose
+        });
+    }
+
+    public static ContentResult BuildRefreshContent()
+    {
+        return BuildParentMessageContent(new
+        {
+            type = "crm-modal-refresh"
+        });
+    }
+
+    public static ContentResult BuildCloseContent()
+    {
+        return BuildParentMessageContent(new
+        {
+            type = "crm-modal-close"
         });
     }
 

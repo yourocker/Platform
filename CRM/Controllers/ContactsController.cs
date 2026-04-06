@@ -187,7 +187,7 @@ namespace CRM.Controllers
             return View(contactDtos);
         }
 
-        public async Task<IActionResult> Details(Guid? id)
+        public async Task<IActionResult> Details(Guid? id, bool modal = false)
         {
             if (id == null) return NotFound();
             
@@ -203,6 +203,7 @@ namespace CRM.Controllers
             
             var dto = ContactMapper.ToDetailsDto(contact);
             ViewBag.TimelineEvents = await _timelineService.GetEventsAsync(contact.Id, "Contact");
+            ViewBag.IsModal = modal;
             return View(dto);
         }
 

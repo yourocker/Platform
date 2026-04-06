@@ -68,19 +68,22 @@ namespace Core.Data
             // --- ШАГ 4: Глобальная политика бронирования ---
             await EnsureBookingPolicyAsync(context);
 
-            // --- ШАГ 5: Обязательное системное поле "Название" для пользовательских сущностей ---
+            // --- ШАГ 5: Базовые tenant-настройки CRM ---
+            await EnsureCrmSettingsAsync(context);
+
+            // --- ШАГ 6: Обязательное системное поле "Название" для пользовательских сущностей ---
             await EnsureNameFieldsAsync(context);
 
-            // --- ШАГ 6: Базовые формы (Create/Edit/View) с полем "Название" ---
+            // --- ШАГ 7: Базовые формы (Create/Edit/View) с полем "Название" ---
             await EnsureDefaultFormsAsync(context);
 
-            // --- ШАГ 7: Специфические поля для CRM ---
+            // --- ШАГ 8: Специфические поля для CRM ---
             await EnsureCrmFieldsAsync(context);
 
-            // --- ШАГ 8: Базовые воронки и этапы ---
+            // --- ШАГ 9: Базовые воронки и этапы ---
             await EnsureDefaultPipelinesAsync(context);
 
-            // --- ШАГ 9: Создание администратора из конфигурации ---
+            // --- ШАГ 10: Создание администратора из конфигурации ---
             await EnsureAdminAsync(context, userManager, configuration);
         }
 
@@ -200,9 +203,11 @@ namespace Core.Data
         {
             var categories = new List<AppCategory>
             {
-                new AppCategory { Id = Guid.Parse("e5555555-5555-5555-5555-555555555555"), Name = "CRM", Icon = "wallet-fill", SortOrder = 2, IsSystem = true },
+                new AppCategory { Id = Guid.Parse("d4444444-4444-4444-4444-444444444444"), Name = "Рабочий стол", Icon = "speedometer2", SortOrder = 0, IsSystem = true },
                 new AppCategory { Id = Guid.Parse("a1111111-1111-1111-1111-111111111111"), Name = "Компания", Icon = "building", SortOrder = 1, IsSystem = true },
-                new AppCategory { Id = Guid.Parse("c3333333-3333-3333-3333-333333333333"), Name = "Задачи", Icon = "list-check", SortOrder = 3, IsSystem = true }
+                new AppCategory { Id = Guid.Parse("e5555555-5555-5555-5555-555555555555"), Name = "CRM", Icon = "wallet-fill", SortOrder = 2, IsSystem = true },
+                new AppCategory { Id = Guid.Parse("b2222222-2222-2222-2222-222222222222"), Name = "Расписание", Icon = "calendar2-week", SortOrder = 3, IsSystem = true },
+                new AppCategory { Id = Guid.Parse("c3333333-3333-3333-3333-333333333333"), Name = "Задачи", Icon = "list-check", SortOrder = 4, IsSystem = true }
             };
 
             foreach (var cat in categories)
@@ -229,6 +234,7 @@ namespace Core.Data
             var systemApps = new List<AppDefinition>
             {
                 new AppDefinition { Name = "Контакты", EntityCode = "Contact", Icon = "person-lines-fill", IsSystem = true, AppCategoryId = catCRM?.Id },
+                new AppDefinition { Name = "Компании", EntityCode = "Company", Icon = "buildings", IsSystem = true, AppCategoryId = catCRM?.Id },
                 new AppDefinition { Name = "Лиды", EntityCode = "Lead", Icon = "person-plus", IsSystem = true, AppCategoryId = catCRM?.Id },
                 new AppDefinition { Name = "Сделки", EntityCode = "Deal", Icon = "briefcase", IsSystem = true, AppCategoryId = catCRM?.Id },
                 new AppDefinition { Name = "Сотрудники", EntityCode = "Employee", Icon = "person-badge", IsSystem = true, AppCategoryId = catCompany?.Id },
@@ -314,6 +320,24 @@ namespace Core.Data
                 AllowOverbooking = false,
                 MaxParallelBookings = 2,
                 AllowManualItemPriceChange = false,
+                UpdatedAt = DateTime.UtcNow
+            });
+
+            await context.SaveChangesAsync();
+        }
+
+        private static async Task EnsureCrmSettingsAsync(AppDbContext context)
+        {
+            var existing = await context.CrmSettings.FirstOrDefaultAsync();
+            if (existing != null)
+            {
+                return;
+            }
+
+            context.CrmSettings.Add(new CrmSettings
+            {
+                Id = Guid.NewGuid(),
+                UseLeads = true,
                 UpdatedAt = DateTime.UtcNow
             });
 

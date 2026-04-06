@@ -2,6 +2,7 @@
 @{
     ViewData["Title"] = "Оформление системы";
     Layout = "_LayoutV2";
+    var useLeadsEnabled = ViewBag.UseLeadsEnabled as bool? ?? true;
 }
 
 @* Заголовок страницы с кнопкой сохранения *@
@@ -102,6 +103,17 @@
                             <input type="hidden" asp-for="LogoPath" />
                             @*<div class="form-text">Загрузите файл изображения (PNG, SVG, JPG).</div>*@
                         </div>
+                    </div>
+
+                    <hr class="my-5" />
+
+                    <h5 class="mb-4 fw-bold text-primary">5. Режим CRM</h5>
+                    <div class="form-check form-switch mb-2">
+                        <input class="form-check-input" type="checkbox" id="crm-use-leads" name="useLeads" value="true" checked="@useLeadsEnabled">
+                        <label class="form-check-label fw-semibold" for="crm-use-leads">Использовать лиды в CRM</label>
+                    </div>
+                    <div class="form-text">
+                        Если режим отключен, раздел лидов скрывается из CRM-навигации, а работа начинается сразу с контактов и сделок.
                     </div>
                 </form>
             </div>

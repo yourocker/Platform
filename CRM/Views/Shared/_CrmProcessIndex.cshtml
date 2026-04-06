@@ -1,0 +1,488 @@
+@model CRM.ViewModels.CRM.CrmProcessIndexViewModel
+
+@{
+    var changeStageUrl = Url.Action("ChangeStage", Model.ControllerName) ?? $"/{Model.ControllerName}/ChangeStage";
+}
+
+<div class="container-fluid px-4">
+    <crm-page-header title="" icon="" subtitle="">
+        <div class="crm-process-toolbar">
+            <form method="get" class="crm-process-toolbar__filters">
+                <input type="hidden" name="view" value="@Model.ViewMode" />
+                <div>
+                    <label class="form-label small text-muted mb-1">Воронка</label>
+                    <select class="form-select shadow-sm" name="pipelineId" onchange="this.form.submit()">
+                        <option value="">Все воронки</option>
+                        @foreach (var pipeline in Model.Pipelines)
+                        {
+                            <option value="@pipeline.Id" selected="@(Model.SelectedPipelineId == pipeline.Id)">
+                                @pipeline.Name
+                            </option>
+                        }
+                    </select>
+                </div>
+                <div>
+                    <label class="form-label small text-muted mb-1">Поиск</label>
+                    <input type="search" class="form-control shadow-sm" name="searchString" value="@Model.SearchString" placeholder="Название или данные карточки">
+                </div>
+                <input type="hidden" name="pageSize" value="@Model.PageSize" />
+                <button type="submit" crm-button variant="outline-secondary" icon="search" class="shadow-sm">Найти</button>
+                <a asp-controller="@Model.ControllerName" asp-action="Index" asp-route-view="@Model.ViewMode" crm-button variant="outline-secondary" icon="x-lg" class="shadow-sm">Сбросить</a>
+            </form>
+
+            <div class="crm-process-toolbar__actions">
+                <a asp-controller="@Model.ControllerName"
+                   asp-action="Index"
+                   asp-route-pipelineId="@Model.SelectedPipelineId"
+                   asp-route-searchString="@Model.SearchString"
+                   asp-route-view="kanban"
+                   crm-button
+                   variant="@(Model.IsKanbanView ? "primary" : "outline-secondary")"
+                   icon="kanban"
+                   class="shadow-sm">
+                    Канбан
+                </a>
+                <a asp-controller="@Model.ControllerName"
+                   asp-action="Index"
+                   asp-route-pipelineId="@Model.SelectedPipelineId"
+                   asp-route-searchString="@Model.SearchString"
+                   asp-route-view="list"
+                   crm-button
+                   variant="@(Model.IsListView ? "primary" : "outline-secondary")"
+                   icon="list-ul"
+                   class="shadow-sm">
+                    Таблица
+                </a>
+                <a asp-controller="@Model.ControllerName" asp-action="Create" crm-button variant="primary" icon="plus-lg" class="shadow-sm px-4" data-crm-modal="true" data-crm-modal-size="workspace">
+                    Создать @Model.EntityNameSingular.ToLowerInvariant()
+                </a>
+            </div>
+        </div>
+    </crm-page-header>
+
+    @if (!Model.Pipelines.Any())
+    {
+        <div class="alert alert-warning border-0 shadow-sm">
+            Для раздела пока не настроены воронки. Следующий шаг после CRUD я заведу отдельным конструктором воронок, но сейчас без воронки канбан работать не сможет.
+        </div>
+    }
+    else if (Model.IsKanbanView)
+    {
+        <div class="d-flex justify-content-between align-items-center mb-3 text-muted small">
+            <div>
+                @if (!string.IsNullOrWhiteSpace(Model.SelectedPipelineName))
+                {
+                    <span>Воронка: <strong class="text-dark">@Model.SelectedPipelineName</strong></span>
+                }
+                else
+                {
+                    <span>Выберите воронку для канбан-режима</span>
+                }
+            </div>
+            <div>Всего карточек: <strong class="text-dark">@Model.TotalItems</strong></div>
+        </div>
+
+        <div class="crm-process-kanban" data-change-stage-url="@changeStageUrl" data-entity-id-param="@Model.StageChangeEntityIdParameter">
+            @foreach (var column in Model.KanbanColumns)
+            {
+                <section class="crm-process-kanban__column" data-stage-id="@column.StageId">
+                    <header class="crm-process-kanban__header" style="--stage-color:@column.StageColor;">
+                        <div>
+                            <div class="fw-semibold">@column.StageName</div>
+                            @if (column.IsFinal)
+                            {
+                                <div class="small text-muted">Финальная стадия</div>
+                            }
+                        </div>
+                        <span class="badge rounded-pill text-bg-light crm-process-kanban__count" data-role="column-count">@column.Cards.Count</span>
+                    </header>
+
+                    <div class="crm-process-kanban__cards" data-stage-id="@column.StageId">
+                        @foreach (var card in column.Cards)
+                        {
+                            <article class="crm-process-kanban__card"
+                                     data-id="@card.Id"
+                                     data-crm-modal-size="workspace"
+                                     data-url="@Url.Action("Details", Model.ControllerName, new { id = card.Id })">
+                                <div class="crm-process-kanban__card-title">@card.Name</div>
+
+                                <div class="crm-process-kanban__card-meta">
+                                    @if (!string.IsNullOrWhiteSpace(card.ContactName))
+                                    {
+                                        <div><i class="bi bi-person me-1"></i>@card.ContactName</div>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(card.CompanyName))
+                                    {
+                                        <div><i class="bi bi-building me-1"></i>@card.CompanyName</div>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(card.ResponsibleName))
+                                    {
+                                        <div><i class="bi bi-person-badge me-1"></i>@card.ResponsibleName</div>
+                                    }
+                                </div>
+
+                                <div class="crm-process-kanban__card-footer">
+                                    <span class="fw-semibold">@card.Amount.ToString("N2") @card.Currency</span>
+                                    @if (Model.SupportsLeadConversion && card.IsConverted)
+                                    {
+                                        <span class="badge bg-success-subtle text-success-emphasis">Сконвертирован</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted small">@card.CreatedAt.ToString("dd.MM")</span>
+                                    }
+                                </div>
+                            </article>
+                        }
+                    </div>
+                </section>
+            }
+        </div>
+    }
+    else
+    {
+        <div crm-card class="overflow-hidden">
+            <div class="table-responsive">
+                <table class="table table-hover align-middle mb-0" id="entityTable">
+                    <thead class="bg-light text-muted small text-uppercase">
+                        <tr>
+                            <th class="ps-4">Название</th>
+                            <th>Воронка</th>
+                            <th>Стадия</th>
+                            <th>Ответственный</th>
+                            <th>Контакт</th>
+                            @if (Model.EntityCode == "Deal")
+                            {
+                                <th>Компания</th>
+                            }
+                            <th>Сумма</th>
+                            @if (Model.SupportsLeadConversion)
+                            {
+                                <th>Статус</th>
+                            }
+                            <th>Создано</th>
+                            <th class="text-end pe-4 no-row-click" style="width: 150px;">Действия</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (!Model.Items.Any())
+                        {
+                            <crm-table-empty is-search="@(!string.IsNullOrWhiteSpace(Model.SearchString) || Model.SelectedPipelineId.HasValue)" />
+                        }
+                        else
+                        {
+                            @foreach (var item in Model.Items)
+                            {
+                                <tr class="crm-clickable-row" data-href="@Url.Action("Details", Model.ControllerName, new { id = item.Id })" data-crm-modal-size="workspace">
+                                    <td class="ps-4 fw-semibold">
+                                        <a asp-controller="@Model.ControllerName" asp-action="Details" asp-route-id="@item.Id" class="text-decoration-none text-dark" data-crm-modal="true" data-crm-modal-size="workspace">
+                                            @item.Name
+                                        </a>
+                                    </td>
+                                    <td>@(item.PipelineName ?? "—")</td>
+                                    <td>
+                                        <span class="badge border text-dark" style="background-color:@StageColor20(item.StageColor); border-color:@item.StageColor;">
+                                            @item.StageName
+                                        </span>
+                                    </td>
+                                    <td>@(item.ResponsibleName ?? "—")</td>
+                                    <td>@(item.ContactName ?? "—")</td>
+                                    @if (Model.EntityCode == "Deal")
+                                    {
+                                        <td>@(item.CompanyName ?? "—")</td>
+                                    }
+                                    <td>@item.Amount.ToString("N2") @item.Currency</td>
+                                    @if (Model.SupportsLeadConversion)
+                                    {
+                                        <td>
+                                            @if (item.IsConverted)
+                                            {
+                                                <span class="badge bg-success-subtle text-success-emphasis">Сконвертирован</span>
+                                            }
+                                            else
+                                            {
+                                                <span class="badge bg-light text-muted border">В работе</span>
+                                            }
+                                        </td>
+                                    }
+                                    <td class="text-muted small">@item.CreatedAt.ToString("dd.MM.yyyy HH:mm")</td>
+                                    <td class="text-end pe-4 no-row-click">
+                                        <div class="btn-group btn-group-sm shadow-sm crm-table-actions" onclick="event.stopPropagation();">
+                                            <a asp-controller="@Model.ControllerName" asp-action="Details" asp-route-id="@item.Id" crm-button variant="white" icon="eye-fill" icon-class="text-secondary" class="border crm-table-action" title="Открыть" data-crm-modal="true" data-crm-modal-size="workspace"></a>
+                                            <a asp-controller="@Model.ControllerName" asp-action="Edit" asp-route-id="@item.Id" crm-button variant="white" icon="pencil-fill" icon-class="text-primary" class="border crm-table-action" title="Редактировать" data-crm-modal="true" data-crm-modal-size="workspace"></a>
+                                            <form asp-controller="@Model.ControllerName" asp-action="Delete" asp-route-id="@item.Id" method="post" onsubmit="return confirm('Переместить запись в корзину?');" style="display:inline;">
+                                                @Html.AntiForgeryToken()
+                                                <button type="submit" crm-button variant="white" icon="trash-fill" icon-class="text-danger" class="border crm-table-action" title="Удалить"></button>
+                                            </form>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="card-footer bg-transparent py-3 border-top">
+                <div class="row align-items-center">
+                    <div class="col-md-3 text-muted small">
+                        Показано <strong>@Model.Items.Count</strong> из <strong>@Model.TotalItems</strong>
+                    </div>
+                    <div class="col-md-6 d-flex justify-content-center">
+                        <crm-pagination total-pages="@Model.TotalPages" current-page="@Model.PageNumber" />
+                    </div>
+                    <div class="col-md-3 text-end">
+                        <select class="form-select form-select-sm d-inline-block w-auto" onchange="changeProcessPageSize(this.value)">
+                            @foreach (var size in new[] { 10, 25, 50, 100 })
+                            {
+                                <option value="@size" selected="@(Model.PageSize == size)">@size на стр.</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+</div>
+
+<style>
+    .crm-process-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: end;
+        justify-content: space-between;
+        gap: 12px 16px;
+        width: 100%;
+    }
+
+    .crm-process-toolbar__filters,
+    .crm-process-toolbar__actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: end;
+        gap: 10px;
+    }
+
+    .crm-process-toolbar__actions {
+        margin-left: auto;
+    }
+
+    .crm-process-kanban {
+        display: grid;
+        grid-auto-flow: column;
+        grid-auto-columns: minmax(280px, 320px);
+        gap: 16px;
+        overflow-x: auto;
+        padding-bottom: 12px;
+        min-height: 62vh;
+    }
+
+    .crm-process-kanban__column {
+        display: flex;
+        flex-direction: column;
+        background: rgba(255, 255, 255, 0.72);
+        border: 1px solid rgba(15, 23, 42, 0.08);
+        border-radius: 18px;
+        backdrop-filter: blur(8px);
+        min-height: 100%;
+    }
+
+    .crm-process-kanban__header {
+        display: flex;
+        justify-content: space-between;
+        gap: 12px;
+        align-items: flex-start;
+        padding: 14px 16px;
+        border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+        box-shadow: inset 0 3px 0 var(--stage-color, #6c757d);
+    }
+
+    .crm-process-kanban__cards {
+        flex: 1;
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        min-height: 220px;
+    }
+
+    .crm-process-kanban__card {
+        border: 1px solid rgba(15, 23, 42, 0.08);
+        border-radius: 14px;
+        background: #fff;
+        padding: 14px;
+        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+        cursor: grab;
+        transition: transform 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .crm-process-kanban__card:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 14px 28px rgba(15, 23, 42, 0.1);
+    }
+
+    .crm-process-kanban__card-title {
+        font-weight: 700;
+        margin-bottom: 10px;
+        line-height: 1.35;
+    }
+
+    .crm-process-kanban__card-meta {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        color: #6b7280;
+        font-size: 0.88rem;
+        margin-bottom: 12px;
+    }
+
+    .crm-process-kanban__card-footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+    }
+
+</style>
+
+<script>
+    function changeProcessPageSize(pageSize) {
+        const url = new URL(window.location.href);
+        url.searchParams.set('pageSize', pageSize);
+        url.searchParams.set('pageNumber', '1');
+        window.location.href = url.toString();
+    }
+
+    function refreshKanbanColumnState(board) {
+        board.querySelectorAll('.crm-process-kanban__cards').forEach(column => {
+            const cards = column.querySelectorAll('.crm-process-kanban__card');
+            const columnContainer = column.closest('.crm-process-kanban__column');
+            const countBadge = columnContainer?.querySelector('[data-role="column-count"]');
+            if (countBadge) {
+                countBadge.textContent = cards.length.toString();
+            }
+        });
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        document.querySelectorAll('.crm-clickable-row').forEach(row => {
+            row.addEventListener('click', function (event) {
+                if (event.target.closest('a, button, form, .no-row-click')) {
+                    return;
+                }
+
+                const href = row.dataset.href;
+                if (!href) {
+                    return;
+                }
+
+                if (window.crmModalHost?.canHandleUrl?.(href)) {
+                    window.crmModalHost.open(href, { size: row.dataset.crmModalSize });
+                    return;
+                }
+
+                window.location.href = href;
+            });
+        });
+
+        const board = document.querySelector('.crm-process-kanban');
+        if (!board || typeof Sortable === 'undefined') {
+            return;
+        }
+
+        const changeStageUrl = board.dataset.changeStageUrl;
+        const entityIdParam = board.dataset.entityIdParam;
+        if (!changeStageUrl || !entityIdParam) {
+            return;
+        }
+
+        refreshKanbanColumnState(board);
+        const antiForgeryToken = document.getElementById('notificationAntiforgeryToken')?.value || '';
+
+        board.querySelectorAll('.crm-process-kanban__cards').forEach(column => {
+            new Sortable(column, {
+                group: 'crm-process-kanban',
+                draggable: '.crm-process-kanban__card',
+                animation: 150,
+                delay: 80,
+                delayOnTouchOnly: true,
+                ghostClass: 'opacity-50',
+                onEnd: async function (evt) {
+                    if (evt.from === evt.to && evt.oldIndex === evt.newIndex) {
+                        return;
+                    }
+
+                    const card = evt.item;
+                    const cardId = card?.dataset?.id;
+                    const targetStageId = evt.to?.dataset?.stageId;
+                    if (!cardId || !targetStageId) {
+                        return;
+                    }
+
+                    const payload = new URLSearchParams();
+                    payload.set(entityIdParam, cardId);
+                    payload.set('newStageId', targetStageId);
+
+                    const response = await fetch(changeStageUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                            'X-CSRF-TOKEN': antiForgeryToken
+                        },
+                        body: payload.toString()
+                    });
+
+                    if (!response.ok) {
+                        try {
+                            const error = await response.json();
+                            const missingFields = Array.isArray(error?.missingFields) && error.missingFields.length > 0
+                                ? '\n\nНужно заполнить:\n• ' + error.missingFields.join('\n• ')
+                                : '';
+                            window.alert((error?.message || 'Не удалось изменить стадию.') + missingFields);
+                        } catch {
+                            window.alert('Не удалось изменить стадию.');
+                        }
+                        window.location.reload();
+                        return;
+                    }
+
+                    refreshKanbanColumnState(board);
+                }
+            });
+        });
+
+        board.querySelectorAll('.crm-process-kanban__card').forEach(card => {
+            card.addEventListener('click', function (event) {
+                if (event.target.closest('a, button, form')) {
+                    return;
+                }
+
+                const url = card.dataset.url;
+                if (!url) {
+                    return;
+                }
+
+                if (window.crmModalHost?.canHandleUrl?.(url)) {
+                    window.crmModalHost.open(url, { size: card.dataset.crmModalSize });
+                    return;
+                }
+
+                window.location.href = url;
+            });
+        });
+    });
+</script>
+
+@functions {
+    private static string StageColor20(string color)
+    {
+        if (string.IsNullOrWhiteSpace(color))
+        {
+            return "#f8f9fa";
+        }
+
+        return color.EndsWith("20", StringComparison.OrdinalIgnoreCase)
+            ? color
+            : color + "20";
+    }
+}

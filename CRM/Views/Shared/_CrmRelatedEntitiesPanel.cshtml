@@ -1,0 +1,130 @@
+@using CRM.ViewModels.CRM
+@model CRM.ViewModels.CRM.CrmRelatedEntitiesPanelViewModel
+
+<div class="card border-0 shadow-sm mb-3">
+    <div class="card-body p-4">
+        <div class="crm-related-panel__title">@Model.Title</div>
+
+        @if (Model.Items.Any())
+        {
+            <div class="crm-related-panel__list">
+                @foreach (var item in Model.Items)
+                {
+                    <button type="button"
+                            class="crm-related-panel__item"
+                            data-crm-related-open-url="@item.Url"
+                            data-modal-size="@item.ModalSize"
+                            data-open-title="@item.Title">
+                        <span class="crm-related-panel__content">
+                            <span class="crm-related-panel__name">@item.Title</span>
+                            @if (!string.IsNullOrWhiteSpace(item.Subtitle))
+                            {
+                                <span class="crm-related-panel__subtitle">@item.Subtitle</span>
+                            }
+                        </span>
+                        @if (!string.IsNullOrWhiteSpace(item.BadgeText))
+                        {
+                            <span class="badge bg-primary-subtle text-primary-emphasis">@item.BadgeText</span>
+                        }
+                    </button>
+                }
+            </div>
+        }
+        else
+        {
+            <div class="text-muted">@Model.EmptyText</div>
+        }
+    </div>
+</div>
+
+<style>
+    .crm-related-panel__title {
+        margin-bottom: 16px;
+        color: #64748b;
+        font-size: 0.85rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+    }
+
+    .crm-related-panel__list {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .crm-related-panel__item {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        width: 100%;
+        padding: 14px 16px;
+        border-radius: 14px;
+        border: 1px solid rgba(148, 163, 184, 0.14);
+        background: #f8fafc;
+        color: #0f172a;
+        text-align: left;
+        appearance: none;
+        transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+    }
+
+    .crm-related-panel__item:hover {
+        border-color: rgba(59, 130, 246, 0.26);
+        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+        transform: translateY(-1px);
+    }
+
+    .crm-related-panel__content {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+        min-width: 0;
+    }
+
+    .crm-related-panel__name {
+        font-weight: 600;
+        color: #0f172a;
+    }
+
+    .crm-related-panel__subtitle {
+        color: #64748b;
+        font-size: 0.92rem;
+    }
+</style>
+
+<script>
+    (() => {
+        if (window.__crmRelatedPanelInit) {
+            return;
+        }
+
+        window.__crmRelatedPanelInit = true;
+
+        document.addEventListener('click', event => {
+            const button = event.target.closest('[data-crm-related-open-url]');
+            if (!button) {
+                return;
+            }
+
+            event.preventDefault();
+
+            const url = button.dataset.crmRelatedOpenUrl;
+            if (!url) {
+                return;
+            }
+
+            if (window.crmModalHost?.open) {
+                window.crmModalHost.open(url, {
+                    title: button.dataset.openTitle || 'Связанная карточка',
+                    iconClass: 'bi bi-box-arrow-up-right me-2',
+                    size: button.dataset.modalSize || 'xl',
+                    reloadOnComplete: false
+                });
+                return;
+            }
+
+            window.location.href = url;
+        });
+    })();
+</script>

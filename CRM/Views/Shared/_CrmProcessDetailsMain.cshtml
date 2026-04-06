@@ -1,0 +1,795 @@
+@using CRM.ViewModels.CRM
+@model CRM.ViewModels.CRM.CrmProcessDetailsViewModel
+
+@{
+    var timelineFeed = ViewBag.TimelineFeed as CrmActivityFeedViewModel ?? new CrmActivityFeedViewModel();
+    var inlineModel = ViewBag.InlineFormModel as CrmProcessFormViewModel ?? new CrmProcessFormViewModel();
+    var cardLayoutModel = ViewBag.CrmCardLayoutRenderModel as CrmCardLayoutRenderViewModel
+        ?? new CrmCardLayoutRenderViewModel
+        {
+            EntityCode = inlineModel.EntityCode,
+            FormModel = inlineModel
+        };
+    var stageChangeUrl = Url.Action("ChangeStage", Model.IsDeal ? "Deals" : "Leads");
+    var stageEntityParameter = Model.IsDeal ? "dealId" : "leadId";
+    var formController = Model.IsDeal ? "Deals" : "Leads";
+    const string inlineFormId = "crm-process-inline-form";
+}
+
+@if (Model.StageSteps.Any())
+{
+    <div class="crm-process-stage-strip mb-4"
+         data-crm-stage-strip="true"
+         data-change-stage-url="@stageChangeUrl"
+         data-entity-id="@Model.Id"
+         data-entity-param="@stageEntityParameter">
+        @foreach (var stage in Model.StageSteps)
+        {
+            var stageClass = stage.IsCurrent
+                ? "is-current"
+                : stage.IsReached
+                    ? "is-reached"
+                    : string.Empty;
+
+            <button type="button"
+                    class="crm-process-stage-strip__item @stageClass @(stage.IsCurrent ? "is-locked" : "is-actionable")"
+                    style="--stage-color:@stage.Color;"
+                    data-stage-id="@stage.StageId"
+                    disabled="@(stage.IsCurrent ? "disabled" : null)">
+                <span class="crm-process-stage-strip__name">@stage.Name</span>
+            </button>
+        }
+    </div>
+}
+
+<div class="crm-process-workspace">
+    <form id="@inlineFormId"
+          asp-controller="@formController"
+          asp-action="Edit"
+          asp-route-id="@Model.Id"
+          asp-route-modal="true"
+          method="post"
+          novalidate
+          class="crm-process-workspace__main crm-process-inline-form"
+          data-crm-inline-form="true">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="Id" value="@inlineModel.Id" />
+        <input type="hidden" name="EntityCode" value="@inlineModel.EntityCode" />
+        <input type="hidden" name="PipelineId" value="@inlineModel.PipelineId" />
+        <input type="hidden" name="StageId" value="@inlineModel.StageId" />
+        <input type="hidden" name="IsConverted" value="@inlineModel.IsConverted.ToString().ToLowerInvariant()" />
+        <input type="hidden" name="ConvertedAt" value="@(inlineModel.ConvertedAt?.ToString("O") ?? string.Empty)" />
+
+        <div class="card border-0 shadow-sm mb-3">
+            <div class="card-body p-4 p-xxl-5">
+                <div class="crm-process-overview__heading">@(Model.IsDeal ? "О сделке" : "О лиде")</div>
+
+                <div class="crm-process-overview__hero">
+                    <div class="crm-process-overview__hero-meta">
+                        <div class="crm-process-overview__hero-item">
+                            <span class="crm-process-overview__hero-label">Стадия</span>
+                            <span class="badge border text-dark" style="background-color:@(Model.StageColor + "20"); border-color:@Model.StageColor;">
+                                @(Model.StageName ?? "—")
+                            </span>
+                        </div>
+                        <div class="crm-process-overview__hero-item">
+                            <span class="crm-process-overview__hero-label">Создано</span>
+                            <span>@Model.CreatedAt.ToString("dd.MM.yyyy HH:mm")</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="crm-process-overview__grid">
+                    <div class="crm-process-overview__field">
+                        <div class="crm-process-overview__label">Воронка</div>
+                        <div class="crm-process-overview__value">@(Model.PipelineName ?? "—")</div>
+                    </div>
+                    @if (Model.IsDeal)
+                    {
+                        <div class="crm-process-overview__field">
+                            <div class="crm-process-overview__label">Источник</div>
+                            <div class="crm-process-overview__value">@(Model.SourceLeadName ?? "Без лида")</div>
+                        </div>
+                    }
+                    @if (Model.IsLead)
+                    {
+                        <div class="crm-process-overview__field">
+                            <div class="crm-process-overview__label">Статус конверсии</div>
+                            <div class="crm-process-overview__value">
+                                @if (Model.IsConverted)
+                                {
+                                    <span class="badge bg-success-subtle text-success-emphasis">Сконвертирован</span>
+                                }
+                                else
+                                {
+                                    <span class="badge bg-light text-muted border">Ожидает успешной стадии</span>
+                                }
+                            </div>
+                        </div>
+                        <div class="crm-process-overview__field">
+                            <div class="crm-process-overview__label">Дата конверсии</div>
+                            <div class="crm-process-overview__value">@(Model.ConvertedAt?.ToString("dd.MM.yyyy HH:mm") ?? "—")</div>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        @{
+            ViewBag.CrmCardLayoutPrefix = "crm-process";
+        }
+        <partial name="_CrmProcessCardLayout" model="cardLayoutModel" />
+    </form>
+
+    <aside class="crm-process-workspace__timeline">
+        <div class="crm-process-workspace__timeline-card card border-0 shadow-sm">
+            <div class="card-body p-0">
+                <partial name="_CrmProcessTimeline" model="timelineFeed" />
+            </div>
+        </div>
+    </aside>
+</div>
+
+<style>
+    .crm-process-workspace {
+        display: grid;
+        grid-template-columns: minmax(0, 1.08fr) minmax(360px, 0.92fr);
+        gap: 22px;
+        align-items: start;
+    }
+
+    .crm-process-workspace__main,
+    .crm-process-workspace__timeline {
+        min-width: 0;
+    }
+
+    .crm-process-inline-form {
+        margin: 0;
+    }
+
+    .crm-process-workspace__timeline-card {
+        position: sticky;
+        top: 0;
+        overflow: hidden;
+    }
+
+    .crm-process-stage-strip {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+        gap: 8px;
+    }
+
+    .crm-process-stage-strip__item {
+        min-height: 58px;
+        padding: 14px 18px;
+        border-radius: 14px;
+        display: flex;
+        align-items: center;
+        font-size: 0.96rem;
+        font-weight: 600;
+        color: #475569;
+        background: linear-gradient(180deg, #eef2f7 0%, #f8fafc 100%);
+        border: 1px solid rgba(148, 163, 184, 0.2);
+        box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75);
+        text-align: left;
+        appearance: none;
+        width: 100%;
+    }
+
+    .crm-process-stage-strip__item.is-reached {
+        background: color-mix(in srgb, var(--stage-color, #cbd5e1) 10%, white);
+        border-color: color-mix(in srgb, var(--stage-color, #94a3b8) 50%, white);
+        color: #1e293b;
+    }
+
+    .crm-process-stage-strip__item.is-current {
+        background: color-mix(in srgb, var(--stage-color, #60a5fa) 18%, white);
+        border-color: var(--stage-color, #60a5fa);
+        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--stage-color, #60a5fa) 35%, white), 0 8px 20px rgba(15, 23, 42, 0.06);
+        color: #0f172a;
+    }
+
+    .crm-process-stage-strip__item.is-actionable {
+        cursor: pointer;
+        transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+    }
+
+    .crm-process-stage-strip__item.is-actionable:hover {
+        transform: translateY(-1px);
+        box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--stage-color, #60a5fa) 24%, white), 0 12px 26px rgba(15, 23, 42, 0.08);
+    }
+
+    .crm-process-stage-strip__item.is-locked {
+        cursor: default;
+    }
+
+    .crm-process-stage-strip__item:disabled {
+        opacity: 1;
+    }
+
+    .crm-process-overview__heading,
+    .crm-process-section-title {
+        margin-bottom: 18px;
+        color: #64748b;
+        font-size: 0.85rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+    }
+
+    .crm-process-overview__hero {
+        display: flex;
+        justify-content: space-between;
+        gap: 20px;
+        padding-bottom: 24px;
+        margin-bottom: 24px;
+        border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+    }
+
+    .crm-process-overview__hero-primary {
+        min-width: 0;
+    }
+
+    .crm-process-overview__hero-label,
+    .crm-process-overview__label {
+        display: block;
+        color: #94a3b8;
+        font-size: 0.78rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+
+    .crm-process-overview__amount-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 8px;
+        align-items: center;
+    }
+
+    .crm-process-inline-control {
+        width: 100%;
+        min-height: 44px;
+        padding: 10px 12px;
+        border: 1px solid rgba(148, 163, 184, 0.12);
+        border-radius: 12px;
+        background: transparent;
+        color: #0f172a;
+        transition: border-color 0.15s ease, box-shadow 0.15s ease, background-color 0.15s ease;
+    }
+
+    .crm-process-inline-control:hover {
+        background: rgba(248, 250, 252, 0.7);
+        border-color: rgba(148, 163, 184, 0.26);
+    }
+
+    .crm-process-inline-control:focus {
+        outline: none;
+        background: #fff;
+        border-color: rgba(59, 130, 246, 0.7);
+        box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.12);
+    }
+
+    .crm-process-inline-control--amount {
+        width: clamp(220px, 24vw, 320px);
+        font-size: clamp(2rem, 3vw, 3rem);
+        line-height: 1;
+        font-weight: 700;
+        padding: 10px 0;
+        border: 0;
+        border-bottom: 2px solid transparent;
+        border-radius: 0;
+    }
+
+    .crm-process-inline-control--amount:hover,
+    .crm-process-inline-control--amount:focus {
+        box-shadow: none;
+        background: transparent;
+        border-color: rgba(59, 130, 246, 0.72);
+    }
+
+    .crm-process-inline-control--currency {
+        width: 110px;
+        font-size: 1.1rem;
+        font-weight: 600;
+    }
+
+    .crm-process-inline-control--select {
+        appearance: auto;
+    }
+
+    .crm-process-inline-link-row {
+        display: flex;
+        gap: 10px;
+        align-items: stretch;
+    }
+
+    .crm-process-inline-link-row--top {
+        align-items: flex-start;
+    }
+
+    .crm-process-inline-link-row .crm-process-inline-control {
+        flex: 1 1 auto;
+    }
+
+    .crm-process-inline-link-row .btn {
+        flex: 0 0 auto;
+        min-width: 44px;
+        border-radius: 12px;
+    }
+
+    .crm-process-link-array-field {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .crm-process-link-array {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .crm-process-related-contact-row .btn {
+        min-width: 44px;
+        border-radius: 12px;
+    }
+
+    .crm-process-related-contact-primary.is-active {
+        border-color: #f59e0b;
+        color: #b45309;
+        background: rgba(245, 158, 11, 0.12);
+    }
+
+    .crm-process-overview__hero-meta {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+        min-width: 220px;
+    }
+
+    .crm-process-overview__hero-item {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        align-items: flex-start;
+    }
+
+    .crm-process-overview__grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 24px 28px;
+    }
+
+    .crm-process-overview__value {
+        margin-top: 8px;
+        color: #0f172a;
+        font-size: 1.04rem;
+        line-height: 1.45;
+    }
+
+    .crm-process-relations-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 24px 28px;
+    }
+
+    .crm-process-relations-grid__contacts {
+        grid-column: 1 / -1;
+    }
+
+    @@media (max-width: 1199.98px) {
+        .crm-process-workspace {
+            grid-template-columns: 1fr;
+        }
+
+        .crm-process-workspace__timeline-card {
+            position: static;
+        }
+    }
+
+    @@media (max-width: 767.98px) {
+        .crm-process-overview__hero {
+            flex-direction: column;
+        }
+
+        .crm-process-overview__grid {
+            grid-template-columns: 1fr;
+            gap: 18px;
+        }
+
+        .crm-process-relations-grid {
+            grid-template-columns: 1fr;
+            gap: 18px;
+        }
+
+        .crm-process-inline-control--amount {
+            width: 100%;
+        }
+    }
+</style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const strip = document.querySelector('[data-crm-stage-strip="true"]');
+        const inlineForm = document.getElementById('@inlineFormId');
+        const actionBars = Array.from(document.querySelectorAll('[data-crm-inline-action-bar="true"]'));
+        const saveButtons = Array.from(document.querySelectorAll('[data-crm-inline-save="true"]'));
+        const cancelButtons = Array.from(document.querySelectorAll('[data-crm-inline-cancel="true"]'));
+        const externalFields = Array.from(document.querySelectorAll('[form="@inlineFormId"]'))
+            .filter(field => field instanceof HTMLElement && field.getAttribute('type') !== 'submit');
+        const titleInput = externalFields.find(field => field instanceof HTMLInputElement && field.name === 'Name');
+        let isDirty = false;
+        let isSaving = false;
+
+        function postToParent(payload) {
+            if (window.parent && window.parent !== window) {
+                window.parent.postMessage(payload, window.location.origin);
+            }
+        }
+
+        function syncInlineActions() {
+            actionBars.forEach(bar => bar.classList.toggle('d-none', !isDirty));
+
+            saveButtons.forEach(button => {
+                button.disabled = isSaving;
+            });
+
+            cancelButtons.forEach(button => {
+                button.disabled = isSaving;
+            });
+        }
+
+        function setDirty(nextValue) {
+            const normalizedValue = Boolean(nextValue);
+            if (isDirty === normalizedValue && !isSaving) {
+                syncInlineActions();
+                return;
+            }
+
+            isDirty = normalizedValue;
+            syncInlineActions();
+            postToParent({
+                type: 'crm-modal-dirty-state',
+                dirty: isDirty
+            });
+        }
+
+        function revealSaveButtons() {
+            if (isSaving) {
+                return;
+            }
+
+            setDirty(true);
+        }
+
+        function submitInlineForm() {
+            if (!inlineForm || isSaving) {
+                return false;
+            }
+
+            setDirty(false);
+            isSaving = true;
+            syncInlineActions();
+            return true;
+        }
+
+        function cancelInlineChanges() {
+            if (isSaving || !isDirty) {
+                return;
+            }
+
+            if (!window.confirm('Отменить несохраненные изменения?')) {
+                return;
+            }
+
+            window.location.reload();
+        }
+
+        if (inlineForm) {
+            inlineForm.addEventListener('input', revealSaveButtons);
+            inlineForm.addEventListener('change', revealSaveButtons);
+            inlineForm.addEventListener('submit', event => {
+                const shouldContinue = submitInlineForm();
+                if (!shouldContinue) {
+                    event.preventDefault();
+                }
+            });
+        }
+
+        externalFields.forEach(field => {
+            field.addEventListener('input', revealSaveButtons);
+            field.addEventListener('change', revealSaveButtons);
+        });
+
+        cancelButtons.forEach(button => {
+            button.addEventListener('click', cancelInlineChanges);
+        });
+
+        syncInlineActions();
+        postToParent({
+            type: 'crm-modal-dirty-state',
+            dirty: false
+        });
+
+        const contactsContainer = document.getElementById('crm-process-contact-links-container');
+        const companySelect = document.getElementById('crm-process-company');
+
+        function bindSelect2DirtyState(select) {
+            if (!select || typeof window.jQuery === 'undefined') {
+                return;
+            }
+
+            window.jQuery(select)
+                .off('select2:select.crmInlineDirty select2:clear.crmInlineDirty')
+                .on('select2:select.crmInlineDirty select2:clear.crmInlineDirty', revealSaveButtons);
+        }
+
+        function bindRelatedSelect2DirtyState(container) {
+            if (!container || typeof window.jQuery === 'undefined') {
+                return;
+            }
+
+            window.jQuery(container)
+                .off('select2:select.crmInlineDirtyRelated select2:clear.crmInlineDirtyRelated', 'select[data-crm-related-contact-select="true"]')
+                .on(
+                    'select2:select.crmInlineDirtyRelated select2:clear.crmInlineDirtyRelated',
+                    'select[data-crm-related-contact-select="true"]',
+                    revealSaveButtons);
+        }
+
+        function entityCodesMatch(left, right) {
+            const normalize = value => String(value || '').trim().replace(/s$/i, '').toLowerCase();
+            return normalize(left) && normalize(left) === normalize(right);
+        }
+
+        function getSelectedValues(select) {
+            if (!select) {
+                return [];
+            }
+
+            return Array.from(select.selectedOptions || [])
+                .map(option => option.value)
+                .filter(Boolean);
+        }
+
+        function ensureSelectOption(select, value, text, selectAfterCreate) {
+            if (!select || !value) {
+                return;
+            }
+
+            let option = Array.from(select.options).find(item => item.value === String(value));
+            if (!option) {
+                option = document.createElement('option');
+                option.value = String(value);
+                select.appendChild(option);
+            }
+
+            option.textContent = text || value;
+
+            if (select.multiple) {
+                if (selectAfterCreate) {
+                    option.selected = true;
+                }
+            } else if (selectAfterCreate) {
+                select.value = String(value);
+            }
+        }
+
+        function buildDetailsUrl(template, id) {
+            return String(template || '').replace('__ID__', encodeURIComponent(String(id || '')));
+        }
+
+        function openLinkedDetails(button) {
+            if (!window.crmModalHost?.open) {
+                return;
+            }
+
+            const url = button.dataset.url
+                || (() => {
+                    const selectId = button.dataset.selectId;
+                    const selectElement = selectId ? document.getElementById(selectId) : null;
+                    if (!selectElement) {
+                        return '';
+                    }
+
+                    const value = selectElement.multiple
+                        ? getSelectedValues(selectElement)[0]
+                        : selectElement.value;
+                    return value ? buildDetailsUrl(button.dataset.detailUrlTemplate, value) : '';
+                })();
+
+            if (!url) {
+                return;
+            }
+
+            window.crmModalHost.open(url, {
+                title: button.dataset.openTitle || 'Связанный объект',
+                iconClass: 'bi bi-box-arrow-up-right me-2',
+                size: 'xl',
+                reloadOnComplete: false
+            });
+        }
+
+        function refreshOpenButtons() {
+            document.querySelectorAll('[data-crm-linked-open="true"]').forEach(button => {
+                const selectId = button.dataset.selectId;
+                const selectElement = selectId ? document.getElementById(selectId) : null;
+                if (!selectElement) {
+                    button.disabled = false;
+                    return;
+                }
+
+                const hasValue = selectElement.multiple
+                    ? getSelectedValues(selectElement).length > 0
+                    : !!selectElement.value;
+
+                button.disabled = !hasValue;
+            });
+        }
+
+        function openLinkedCreateDialog(options) {
+            const createUrl = String(options?.url || '').trim();
+            const targetEntityCode = String(options?.targetEntityCode || '').trim();
+            const selectElement = options?.selectElement || null;
+
+            if (!createUrl || !targetEntityCode || !window.crmModalHost?.open) {
+                return;
+            }
+
+            window.crmModalHost.open(createUrl, {
+                title: options?.title || 'Новый связанный объект',
+                iconClass: options?.iconClass || 'bi bi-box-seam me-2',
+                size: options?.size || 'lg',
+                reloadOnComplete: false,
+                onEntityCreated: data => {
+                    if (!entityCodesMatch(data?.entityCode, targetEntityCode)) {
+                        return false;
+                    }
+
+                    if (typeof options?.onCreated === 'function') {
+                        options.onCreated(data);
+                    } else if (selectElement && document.body.contains(selectElement)) {
+                        ensureSelectOption(selectElement, data.id, data.name, true);
+                        selectElement.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+
+                    revealSaveButtons();
+                    refreshOpenButtons();
+                    return true;
+                }
+            });
+        }
+
+        document.querySelectorAll('[data-crm-linked-open="true"], [data-crm-linked-direct-open="true"]').forEach(button => {
+            button.addEventListener('click', function () {
+                openLinkedDetails(button);
+            });
+        });
+
+        document.querySelectorAll('[data-crm-linked-create="true"]').forEach(button => {
+            button.addEventListener('click', function () {
+                const selectId = button.dataset.selectId;
+                const selectElement = selectId ? document.getElementById(selectId) : null;
+
+                openLinkedCreateDialog({
+                    url: button.dataset.createUrl,
+                    title: button.dataset.createTitle,
+                    targetEntityCode: button.dataset.targetEntityCode,
+                    iconClass: entityCodesMatch(button.dataset.targetEntityCode, 'Contact')
+                        ? 'bi bi-person-plus me-2'
+                        : 'bi bi-building me-2',
+                    onCreated: data => {
+                        ensureSelectOption(selectElement, data.id, data.name, true);
+                        selectElement?.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                });
+            });
+        });
+
+        document.querySelectorAll('[data-crm-dynamic-create="true"]').forEach(button => {
+            button.addEventListener('click', function () {
+                const item = button.closest('[data-dynamic-field-item]');
+                const selectElement = item?.querySelector('select[name], input[list]');
+
+                openLinkedCreateDialog({
+                    url: button.dataset.createUrl,
+                    title: button.dataset.title ? `Новый объект: ${button.dataset.title}` : 'Новый связанный объект',
+                    targetEntityCode: button.dataset.targetEntityCode,
+                    selectElement
+                });
+            });
+        });
+
+        if (companySelect) {
+            companySelect.addEventListener('change', function () {
+                revealSaveButtons();
+                refreshOpenButtons();
+            });
+
+            bindSelect2DirtyState(companySelect);
+        }
+
+        contactsContainer?.addEventListener('crm:related-contacts-change', function () {
+            revealSaveButtons();
+        });
+
+        contactsContainer?.addEventListener('click', function (event) {
+            const button = event.target.closest('button');
+            if (!button) {
+                return;
+            }
+
+            if (button.matches('[data-crm-related-contact-remove="true"], [data-crm-related-contact-create="true"]') ||
+                button.id === 'crm-process-contact-links-add') {
+                revealSaveButtons();
+            }
+        });
+
+        const visibleLayoutSections = document.querySelector('.crm-card-layout__sections');
+        window.crmSearchableSelect?.initSearchableSelects(visibleLayoutSections || document, { onChange: revealSaveButtons });
+        window.crmRelatedContacts?.init(visibleLayoutSections || document);
+        bindRelatedSelect2DirtyState(contactsContainer);
+        refreshOpenButtons();
+
+        if (!strip) {
+            return;
+        }
+
+        const changeStageUrl = strip.dataset.changeStageUrl;
+        const entityId = strip.dataset.entityId;
+        const entityParam = strip.dataset.entityParam;
+        const token = document.getElementById('notificationAntiforgeryToken')?.value
+            || window.parent?.document?.getElementById('notificationAntiforgeryToken')?.value
+            || '';
+
+        if (!changeStageUrl || !entityId || !entityParam || !token) {
+            return;
+        }
+
+        strip.querySelectorAll('[data-stage-id]').forEach(button => {
+            button.addEventListener('click', async function () {
+                if (button.disabled || button.dataset.busy === 'true') {
+                    return;
+                }
+
+                if (isDirty && !window.confirm('Изменения не сохранены. Переключить стадию без сохранения?')) {
+                    return;
+                }
+
+                button.dataset.busy = 'true';
+
+                const payload = new URLSearchParams();
+                payload.set(entityParam, entityId);
+                payload.set('newStageId', button.dataset.stageId || '');
+
+                try {
+                    const response = await fetch(changeStageUrl, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                            'X-CSRF-TOKEN': token
+                        },
+                        body: payload.toString()
+                    });
+
+                    if (!response.ok) {
+                        const error = await response.json().catch(() => null);
+                        const missingFields = Array.isArray(error?.missingFields) && error.missingFields.length > 0
+                            ? '\n\nНужно заполнить:\n• ' + error.missingFields.join('\n• ')
+                            : '';
+                        window.alert((error?.message || 'Не удалось изменить стадию.') + missingFields);
+                        return;
+                    }
+
+                    window.location.reload();
+                } finally {
+                    delete button.dataset.busy;
+                }
+            });
+        });
+
+        refreshOpenButtons();
+    });
+</script>

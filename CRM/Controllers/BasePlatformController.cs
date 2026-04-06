@@ -326,11 +326,27 @@ namespace CRM.Controllers
 
         protected async Task<Dictionary<string, string>> LoadFieldLabelMapAsync(string entityCode)
         {
-            return await _context.AppDefinitions
+            var fieldPairs = await _context.AppDefinitions
                 .AsNoTracking()
                 .Where(d => d.EntityCode == entityCode)
                 .SelectMany(d => d.Fields.Where(f => !f.IsDeleted))
-                .ToDictionaryAsync(f => f.SystemName, f => f.Label, StringComparer.OrdinalIgnoreCase);
+                .Select(f => new
+                {
+                    f.SystemName,
+                    f.Label
+                })
+                .ToListAsync();
+
+            return fieldPairs
+                .Where(item => !string.IsNullOrWhiteSpace(item.SystemName))
+                .GroupBy(item => item.SystemName, StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(
+                    group => group.Key,
+                    group => group
+                        .Select(item => item.Label)
+                        .FirstOrDefault(label => !string.IsNullOrWhiteSpace(label))
+                        ?? group.Key,
+                    StringComparer.OrdinalIgnoreCase);
         }
 
         protected ContentResult BuildModalCreatedContentResult(string entityCode, Guid id, string? name)
@@ -341,6 +357,43 @@ namespace CRM.Controllers
         protected ContentResult BuildModalUpdatedContentResult(string entityCode, Guid id, string? name)
         {
             return ModalRequestHelper.BuildEntityUpdatedContent(entityCode, id, name);
+        }
+
+        protected bool IsInlineSaveRequest()
+        {
+            var header = Request.Headers["X-CRM-Inline-Save"].ToString();
+            return string.Equals(header, "true", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(header, "1", StringComparison.OrdinalIgnoreCase);
+        }
+
+        protected JsonResult BuildInlineSaveSuccessResult(string entityCode, Guid id, string? name)
+        {
+            return Json(new
+            {
+                success = true,
+                entityCode,
+                id,
+                name = name ?? string.Empty
+            });
+        }
+
+        protected BadRequestObjectResult BuildInlineSaveValidationResult(string fallbackMessage = "Не удалось сохранить изменения. Проверьте заполнение полей.")
+        {
+            var errors = ModelState.Values
+                .SelectMany(entry => entry.Errors)
+                .Select(error => string.IsNullOrWhiteSpace(error.ErrorMessage)
+                    ? "Проверьте корректность введенных данных."
+                    : error.ErrorMessage.Trim())
+                .Where(error => !string.IsNullOrWhiteSpace(error))
+                .Distinct()
+                .ToList();
+
+            return BadRequest(new
+            {
+                success = false,
+                message = errors.FirstOrDefault() ?? fallbackMessage,
+                errors
+            });
         }
 
         protected void DeletePhysicalFile(string webPath)

@@ -1,11 +1,6 @@
-﻿using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
-using Core.Data;
-using Core.Services.Platform;
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.EntityFrameworkCore;
+﻿using Core.Data;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Mvc;
 
 namespace CRM.Controllers
 {
@@ -17,30 +12,22 @@ namespace CRM.Controllers
         }
 
         [Route("Data/{entityCode}")]
-        public async Task<IActionResult> Index(string entityCode)
+        public IActionResult Index(string entityCode)
         {
-            var definition = await _context.AppDefinitions
-                .Include(a => a.Fields)
-                .FirstOrDefaultAsync(a => a.EntityCode == entityCode);
+            var dedicatedRedirect = entityCode.ToLowerInvariant() switch
+            {
+                "contact" => RedirectToAction("Index", "Contacts"),
+                "lead" => RedirectToAction("Index", "Leads"),
+                "deal" => RedirectToAction("Index", "Deals"),
+                _ => null
+            };
 
-            if (definition == null) return NotFound();
+            if (dedicatedRedirect != null)
+            {
+                return dedicatedRedirect;
+            }
 
-            var objects = await _context.GenericObjects
-                .Where(o => o.EntityCode == entityCode)
-                .OrderByDescending(o => o.CreatedAt)
-                .ToListAsync();
-
-            ViewBag.Definition = definition;
-            ViewBag.EntityCode = entityCode;
-            ViewBag.DynamicFields = definition.Fields.OrderBy(f => f.SortOrder).ToList();
-            ViewBag.NamesMap = new Dictionary<System.Guid, string>();
-            ViewBag.TotalItems = objects.Count;
-            ViewBag.PageNumber = 1;
-            ViewBag.PageSize = 10;
-            ViewBag.TotalPages = 1;
-            ViewBag.CurrentFilters = new Dictionary<string, string>();
-            
-            return View("~/Views/GenericObjects/Index.cshtml", objects.Select(GenericObjectMapper.ToListDto).ToList());
+            return RedirectToAction("Index", "GenericObjects", new { entityCode });
         }
     }
 }

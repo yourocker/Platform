@@ -5,6 +5,12 @@
 @model Core.DTOs.CRM.ContactDetailsDto
 @{
     ViewData["Title"] = Model.FullName;
+    var isModal = ViewBag.IsModal as bool? ?? false;
+    if (isModal)
+    {
+        Layout = "_LayoutModal";
+        ViewData["ModalSize"] = "xl";
+    }
 
     var tabsModel = new EntityDetailsTabsViewModel
     {
@@ -40,12 +46,26 @@
             </div>
 
             <div class="mt-4 d-flex gap-2">
-                <a asp-action="Edit" asp-route-id="@Model.Id" crm-button variant="primary" icon="pencil-square" class="px-5 py-2 fs-6 shadow">
+                <a asp-action="Edit" asp-route-id="@Model.Id" asp-route-modal="@(isModal ? "true" : null)" crm-button variant="primary" icon="pencil-square" class="px-5 py-2 fs-6 shadow">
                     Изменить
                 </a>
-                <a asp-action="Index" crm-button variant="outline-secondary" icon="arrow-left" class="px-4 py-2 fs-6 shadow-none">
-                    К списку
-                </a>
+                @if (isModal)
+                {
+                    <button type="button"
+                            crm-button
+                            variant="outline-secondary"
+                            icon="x-lg"
+                            class="px-4 py-2 fs-6 shadow-none"
+                            onclick="window.parent.postMessage({ type: 'crm-modal-close' }, window.location.origin)">
+                        Закрыть
+                    </button>
+                }
+                else
+                {
+                    <a asp-action="Index" crm-button variant="outline-secondary" icon="arrow-left" class="px-4 py-2 fs-6 shadow-none">
+                        К списку
+                    </a>
+                }
             </div>
 
             @* Удаление вынесено под кнопки *@

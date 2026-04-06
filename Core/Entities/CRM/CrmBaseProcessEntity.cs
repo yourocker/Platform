@@ -25,6 +25,9 @@ namespace Core.Entities.CRM
         [ForeignKey(nameof(ResponsibleId))]
         public virtual Employee? Responsible { get; set; }
 
+        /// <summary>
+        /// Основной контакт процесса. Для сделок дополнительные контакты хранятся в отдельной таблице связей.
+        /// </summary>
         public Guid? ContactId { get; set; }
 
         [ForeignKey(nameof(ContactId))]

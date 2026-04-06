@@ -1,0 +1,509 @@
+@using System.Text.Json
+@using CRM.Infrastructure
+@using CRM.ViewModels.CRM
+@model CRM.ViewModels.CRM.CrmProcessFormViewModel
+
+@{
+    var submitLabel = ViewBag.SubmitLabel as string ?? "Сохранить";
+    var cancelUrl = ViewBag.CancelUrl as string ?? "/";
+    var title = ViewBag.FormTitle as string ?? Model.Name;
+    var subtitle = ViewBag.FormSubtitle as string ?? string.Empty;
+    var isModal = ViewBag.IsModal as bool? ?? ModalRequestHelper.IsModalRequest(Context.Request);
+    var stageMap = Model.StagesByPipeline.ToDictionary(
+        pair => pair.Key.ToString(),
+        pair => pair.Value.Select(item => new { value = item.Value, text = item.Text }).ToList());
+    var stageMapJson = JsonSerializer.Serialize(stageMap);
+    var cardLayoutModel = ViewBag.CrmCardLayoutRenderModel as CrmCardLayoutRenderViewModel
+        ?? new CrmCardLayoutRenderViewModel
+        {
+            EntityCode = Model.EntityCode,
+            FormModel = Model
+        };
+
+    bool HasError(string key) => ViewData.ModelState.TryGetValue(key, out var entry) && entry.Errors.Count > 0;
+}
+
+<div class="container-fluid px-0 crm-process-editor-page">
+    <form method="post" enctype="multipart/form-data" novalidate>
+        @Html.AntiForgeryToken()
+        <input type="hidden" asp-for="Id" />
+        <input type="hidden" asp-for="EntityCode" />
+        @if (isModal)
+        {
+            <input type="hidden" name="modal" value="true" />
+        }
+
+        <div class="crm-process-editor-page__header">
+            <div>
+                <div class="crm-process-editor-page__eyebrow">@(Model.IsDeal ? "Сделка" : "Лид")</div>
+                <h1 class="crm-process-editor-page__title">@title</h1>
+                @if (!string.IsNullOrWhiteSpace(subtitle))
+                {
+                    <div class="crm-process-editor-page__subtitle">@subtitle</div>
+                }
+            </div>
+
+            <div class="crm-process-editor-page__actions">
+                <a href="@cancelUrl" crm-button variant="outline-secondary" data-crm-modal-close="@(isModal ? "true" : "false")">Отмена</a>
+                <button type="submit" crm-button variant="primary" icon="check-lg" class="px-5 shadow">@submitLabel</button>
+            </div>
+        </div>
+
+        <div class="crm-process-editor-page__workspace">
+            <div class="crm-process-editor-page__main">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body p-4 p-xxl-5">
+                        @if (!ViewData.ModelState.IsValid)
+                        {
+                            <div asp-validation-summary="ModelOnly" class="alert alert-danger border-0 shadow-sm mb-4"></div>
+                        }
+
+                        <div class="crm-process-editor-section-title">Основное</div>
+
+                        <div class="row g-4">
+                            <div class="col-12">
+                                <crm-input label="Название" asp-for="Name" />
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Воронка</label>
+                                <select asp-for="PipelineId" asp-items="Model.PipelineOptions" class="form-select shadow-sm @(HasError(nameof(Model.PipelineId)) ? "is-invalid" : string.Empty)" data-stage-source="true"></select>
+                                <span asp-validation-for="PipelineId" class="invalid-feedback d-block"></span>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">Стадия</label>
+                                <select asp-for="StageId" asp-items="Model.StageOptions" class="form-select shadow-sm @(HasError(nameof(Model.StageId)) ? "is-invalid" : string.Empty)" data-stage-target="true"></select>
+                                <span asp-validation-for="StageId" class="invalid-feedback d-block"></span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                @{
+                    ViewBag.CrmCardLayoutPrefix = "crm-editor";
+                }
+                <partial name="_CrmProcessCardLayout" model="cardLayoutModel" />
+
+                @if (Model.IsDeal && Model.SourceLeadId.HasValue)
+                {
+                    <div class="alert alert-light border mt-3 mb-0">
+                        Сделка создана из лида. Источник сохранён в карточке и в истории конверсии.
+                    </div>
+                }
+
+                @if (Model.IsLead && Model.IsConverted)
+                {
+                    <div class="alert alert-success-subtle border mt-3 mb-0">
+                        Лид уже сконвертирован. Его можно продолжать хранить в CRM и при необходимости создавать новые сделки повторно.
+                    </div>
+                }
+            </div>
+
+            <aside class="crm-process-editor-page__sidebar">
+                <div class="card border-0 shadow-sm">
+                    <div class="card-body p-4">
+                        <div class="crm-process-editor-section-title">Резюме</div>
+                        <div class="crm-process-editor-summary">
+                            <div class="crm-process-editor-summary__item">
+                                <span>Тип</span>
+                                <strong>@(Model.IsDeal ? "Сделка" : "Лид")</strong>
+                            </div>
+                            <div class="crm-process-editor-summary__item">
+                                <span>Воронка</span>
+                                <strong>@(Model.PipelineOptions.FirstOrDefault(x => x.Value == Model.PipelineId.ToString())?.Text ?? "—")</strong>
+                            </div>
+                            <div class="crm-process-editor-summary__item">
+                                <span>Стадия</span>
+                                <strong>@(Model.StageOptions.FirstOrDefault(x => x.Value == Model.StageId.ToString())?.Text ?? "—")</strong>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </aside>
+        </div>
+
+        <div class="crm-process-editor-page__footer">
+            <a href="@cancelUrl" crm-button variant="outline-secondary" data-crm-modal-close="@(isModal ? "true" : "false")">Отмена</a>
+            <button type="submit" crm-button variant="primary" icon="check-lg" class="px-5 shadow">@submitLabel</button>
+        </div>
+    </form>
+</div>
+
+<style>
+    .crm-process-editor-page {
+        padding: 18px 24px 24px 30px;
+    }
+
+    .crm-process-editor-page__header,
+    .crm-process-editor-page__footer {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+    }
+
+    .crm-process-editor-page__header {
+        margin-bottom: 14px;
+        padding: 6px 84px 0 6px;
+    }
+
+    .crm-process-editor-page__footer {
+        margin-top: 18px;
+        align-items: center;
+    }
+
+    .crm-process-editor-page__eyebrow {
+        font-size: 0.78rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #64748b;
+        margin-bottom: 6px;
+    }
+
+    .crm-process-editor-page__title {
+        margin: 0;
+        font-size: clamp(1.4rem, 1.18rem + 0.8vw, 1.85rem);
+        line-height: 1.05;
+        color: #0f172a;
+        font-weight: 700;
+    }
+
+    .crm-process-editor-page__subtitle {
+        margin-top: 4px;
+        color: #64748b;
+        max-width: 760px;
+    }
+
+    .crm-process-editor-page__actions {
+        display: flex;
+        gap: 12px;
+        flex-wrap: nowrap;
+        justify-content: flex-end;
+        align-items: center;
+        flex-shrink: 0;
+    }
+
+    .crm-process-editor-page__workspace {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) 320px;
+        gap: 22px;
+        align-items: start;
+    }
+
+    .crm-process-editor-page__sidebar .card {
+        position: sticky;
+        top: 0;
+    }
+
+    .crm-process-editor-section-title {
+        margin-bottom: 18px;
+        color: #64748b;
+        font-size: 0.85rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+    }
+
+    .crm-process-editor-summary {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+    }
+
+    .crm-process-editor-summary__item {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding-bottom: 14px;
+        border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+    }
+
+    .crm-process-editor-summary__item:last-child {
+        padding-bottom: 0;
+        border-bottom: 0;
+    }
+
+    .crm-process-editor-summary__item span {
+        color: #94a3b8;
+        font-size: 0.78rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+    }
+
+    .crm-process-editor-summary__item strong {
+        color: #0f172a;
+        font-size: 1rem;
+    }
+
+    .crm-process-link-editor {
+        display: flex;
+        align-items: stretch;
+        gap: 10px;
+    }
+
+    .crm-process-link-editor--top {
+        align-items: flex-start;
+    }
+
+    .crm-process-link-editor .form-select {
+        flex: 1 1 auto;
+    }
+
+    .crm-process-link-editor .btn {
+        flex: 0 0 auto;
+        min-width: 44px;
+        border-radius: 12px;
+    }
+
+    .crm-process-link-array-field {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .crm-process-link-array {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+    }
+
+    .crm-process-related-contact-row .btn {
+        min-width: 44px;
+        border-radius: 12px;
+    }
+
+    .crm-process-related-contact-primary.is-active {
+        border-color: #f59e0b;
+        color: #b45309;
+        background: rgba(245, 158, 11, 0.12);
+    }
+
+    @@media (max-width: 1279.98px) {
+        .crm-process-editor-page__workspace {
+            grid-template-columns: 1fr;
+        }
+
+        .crm-process-editor-page__sidebar .card {
+            position: static;
+        }
+    }
+
+    @@media (max-width: 991.98px) {
+        .crm-process-editor-page {
+            padding: 18px 18px 22px;
+        }
+
+        .crm-process-editor-page__header,
+        .crm-process-editor-page__footer {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .crm-process-editor-page__actions {
+            justify-content: flex-start;
+        }
+    }
+</style>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const stageMap = @Html.Raw(stageMapJson);
+        const pipelineSelect = document.querySelector('[data-stage-source="true"]');
+        const stageSelect = document.querySelector('[data-stage-target="true"]');
+        if (!pipelineSelect || !stageSelect) {
+            return;
+        }
+
+        function refreshStages() {
+            const pipelineId = pipelineSelect.value;
+            const currentValue = stageSelect.value;
+            const stages = stageMap[pipelineId] || [];
+            stageSelect.innerHTML = '';
+
+            for (const stage of stages) {
+                const option = document.createElement('option');
+                option.value = stage.value;
+                option.textContent = stage.text;
+                if (stage.value === currentValue) {
+                    option.selected = true;
+                }
+                stageSelect.appendChild(option);
+            }
+
+            if (stageSelect.options.length > 0 && !Array.from(stageSelect.options).some(option => option.selected)) {
+                stageSelect.options[0].selected = true;
+            }
+        }
+
+        pipelineSelect.addEventListener('change', refreshStages);
+        refreshStages();
+
+        const companySelect = document.getElementById('crm-editor-company');
+
+        function getSelectedValues(select) {
+            if (!select) {
+                return [];
+            }
+
+            return Array.from(select.selectedOptions || [])
+                .map(option => option.value)
+                .filter(Boolean);
+        }
+
+        function ensureSelectOption(select, value, text, selectAfterCreate) {
+            if (!select || !value) {
+                return;
+            }
+
+            let option = Array.from(select.options).find(item => item.value === String(value));
+            if (!option) {
+                option = document.createElement('option');
+                option.value = String(value);
+                select.appendChild(option);
+            }
+
+            option.textContent = text || value;
+
+            if (select.multiple) {
+                if (selectAfterCreate) {
+                    option.selected = true;
+                }
+            } else if (selectAfterCreate) {
+                select.value = String(value);
+            }
+        }
+
+        function buildDetailsUrl(template, id) {
+            return String(template || '').replace('__ID__', encodeURIComponent(String(id || '')));
+        }
+
+        function openLinkedDetails(button) {
+            const selectId = button.dataset.selectId;
+            const selectElement = selectId ? document.getElementById(selectId) : null;
+            if (!selectElement || !window.crmModalHost?.open) {
+                return;
+            }
+
+            const value = selectElement.multiple
+                ? getSelectedValues(selectElement)[0]
+                : selectElement.value;
+
+            if (!value) {
+                return;
+            }
+
+            const url = buildDetailsUrl(button.dataset.detailUrlTemplate, value);
+            if (!url) {
+                return;
+            }
+
+            window.crmModalHost.open(url, {
+                title: button.dataset.openTitle || 'Связанный объект',
+                iconClass: 'bi bi-box-arrow-up-right me-2',
+                size: 'xl',
+                reloadOnComplete: false
+            });
+        }
+
+        function refreshOpenButtons() {
+            document.querySelectorAll('[data-crm-linked-open="true"]').forEach(button => {
+                const selectId = button.dataset.selectId;
+                const selectElement = selectId ? document.getElementById(selectId) : null;
+                const hasValue = selectElement
+                    ? (selectElement.multiple ? getSelectedValues(selectElement).length > 0 : !!selectElement.value)
+                    : false;
+                button.disabled = !hasValue;
+            });
+        }
+
+        function openLinkedCreateDialog(options) {
+            const createUrl = String(options?.url || '').trim();
+            const targetEntityCode = String(options?.targetEntityCode || '').trim();
+            const selectElement = options?.selectElement || null;
+            if (!createUrl || !targetEntityCode || !window.crmModalHost?.open) {
+                return;
+            }
+
+            window.crmModalHost.open(createUrl, {
+                title: options?.title || 'Новый связанный объект',
+                iconClass: options?.iconClass || 'bi bi-box-seam me-2',
+                size: options?.size || 'lg',
+                reloadOnComplete: false,
+                onEntityCreated: data => {
+                    if (String(data?.entityCode || '').toLowerCase() !== targetEntityCode.toLowerCase()) {
+                        return false;
+                    }
+
+                    if (typeof options?.onCreated === 'function') {
+                        options.onCreated(data);
+                    } else if (selectElement && document.body.contains(selectElement)) {
+                        ensureSelectOption(selectElement, data.id, data.name, true);
+                        selectElement.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+
+                    refreshOpenButtons();
+                    return true;
+                }
+            });
+        }
+
+        if (companySelect) {
+            companySelect.addEventListener('change', refreshOpenButtons);
+        }
+
+        document.querySelectorAll('[data-crm-linked-open="true"]').forEach(button => {
+            button.addEventListener('click', function () {
+                openLinkedDetails(button);
+            });
+        });
+
+        document.querySelectorAll('[data-crm-linked-create="true"]').forEach(button => {
+            button.addEventListener('click', function () {
+                const selectId = button.dataset.selectId;
+                const selectElement = selectId ? document.getElementById(selectId) : null;
+
+                openLinkedCreateDialog({
+                    url: button.dataset.createUrl,
+                    title: button.dataset.createTitle,
+                    targetEntityCode: button.dataset.targetEntityCode,
+                    iconClass: button.dataset.targetEntityCode === 'Contact'
+                        ? 'bi bi-person-plus me-2'
+                        : 'bi bi-building me-2',
+                    onCreated: data => {
+                        ensureSelectOption(selectElement, data.id, data.name, true);
+
+                        selectElement?.dispatchEvent(new Event('change', { bubbles: true }));
+                    }
+                });
+            });
+        });
+
+        document.querySelectorAll('[data-crm-dynamic-create="true"]').forEach(button => {
+            button.addEventListener('click', function () {
+                const item = button.closest('[data-dynamic-field-item]');
+                const selectElement = item?.querySelector('select[name], input[list]');
+
+                openLinkedCreateDialog({
+                    url: button.dataset.createUrl,
+                    title: button.dataset.title ? `Новый объект: ${button.dataset.title}` : 'Новый связанный объект',
+                    targetEntityCode: button.dataset.targetEntityCode,
+                    selectElement
+                });
+            });
+        });
+
+        const visibleLayoutSections = document.querySelector('.crm-card-layout__sections');
+        window.crmSearchableSelect?.initSearchableSelects(visibleLayoutSections || document);
+        window.crmRelatedContacts?.init(visibleLayoutSections || document);
+        refreshOpenButtons();
+
+        const firstInvalidField = document.querySelector('.is-invalid');
+        if (firstInvalidField) {
+            firstInvalidField.focus();
+            if (typeof firstInvalidField.scrollIntoView === 'function') {
+                firstInvalidField.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+    });
+</script>

@@ -1,0 +1,11 @@
+@model CRM.ViewModels.CRM.CrmProcessFormViewModel
+@{
+    ViewData["Title"] = "Редактирование лида";
+    ViewData["ModalSize"] = "workspace";
+    ViewBag.FormTitle = "Редактирование лида";
+    ViewBag.FormSubtitle = "Изменение карточки обращения";
+    ViewBag.SubmitLabel = "Сохранить лид";
+    ViewBag.CancelUrl = Url.Action("Details", "Leads", new { id = Model.Id });
+}
+
+<partial name="~/Views/Shared/_CrmProcessForm.cshtml" model="Model" />

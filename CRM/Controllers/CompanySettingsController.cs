@@ -3,6 +3,7 @@ using Core.Data;
 using Core.Entities.Company;
 using Core.Entities.CRM;
 using Core.Entities.System;
+using Core.Interfaces.CRM;
 using Core.Interfaces.Platform;
 using Core.Services;
 using Microsoft.AspNetCore.Hosting;
@@ -25,6 +26,7 @@ namespace CRM.Controllers
         private readonly ICrmStyleService _styleService;
         private readonly IBookingPolicyService _bookingPolicyService;
         private readonly IFeatureToggleService _featureToggleService;
+        private readonly ICrmSettingsService _crmSettingsService;
         private readonly ITrashService _trashService;
         private readonly ITenantMembershipAdministrationService _tenantMembershipAdministrationService;
 
@@ -34,6 +36,7 @@ namespace CRM.Controllers
             ICrmStyleService styleService,
             IBookingPolicyService bookingPolicyService,
             IFeatureToggleService featureToggleService,
+            ICrmSettingsService crmSettingsService,
             ITrashService trashService,
             ITenantMembershipAdministrationService tenantMembershipAdministrationService)
             : base(context, hostingEnvironment)
@@ -41,6 +44,7 @@ namespace CRM.Controllers
             _styleService = styleService;
             _bookingPolicyService = bookingPolicyService;
             _featureToggleService = featureToggleService;
+            _crmSettingsService = crmSettingsService;
             _trashService = trashService;
             _tenantMembershipAdministrationService = tenantMembershipAdministrationService;
         }
@@ -48,9 +52,10 @@ namespace CRM.Controllers
         /// <summary>
         /// Страница настройки оформления интерфейса CRM.
         /// </summary>
-        public IActionResult InterfaceSettings()
+        public async Task<IActionResult> InterfaceSettings()
         {
             var settings = _styleService.GetSettings();
+            ViewBag.UseLeadsEnabled = await _crmSettingsService.UseLeadsAsync();
             return View(settings);
         }
 
@@ -58,7 +63,7 @@ namespace CRM.Controllers
         /// Сохранение настроек оформления.
         /// </summary>
         [HttpPost]
-        public async Task<IActionResult> SaveInterfaceSettings(UiSettings settings, IFormFile? logoFile)
+        public async Task<IActionResult> SaveInterfaceSettings(UiSettings settings, bool useLeads, IFormFile? logoFile)
         {
             if (settings == null) return RedirectToAction(nameof(InterfaceSettings));
 
@@ -85,6 +90,7 @@ namespace CRM.Controllers
             }
 
             await _styleService.SaveSettingsAsync(settings);
+            await _crmSettingsService.SetUseLeadsAsync(useLeads);
 
             return RedirectToAction(nameof(InterfaceSettings));
         }

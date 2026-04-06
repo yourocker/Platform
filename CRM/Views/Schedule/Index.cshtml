@@ -515,6 +515,7 @@
 
 @section Scripts {
 <script src="~/lib/select2/js/select2.min.js"></script>
+<script src="~/js/crm-searchable-select.js"></script>
 <script>
     document.addEventListener('DOMContentLoaded', function() {
         try {
@@ -1096,48 +1097,8 @@
             }
 
             function initSearchableSelects(root) {
-                if (!hasSelect2) {
-                    return;
-                }
-
-                (root || document).querySelectorAll('select.searchable-select').forEach(select => {
-                    const $select = window.jQuery(select);
-                    if ($select.hasClass('select2-hidden-accessible')) {
-                        return;
-                    }
-
-                    const options = {
-                        theme: 'bootstrap-5',
-                        width: '100%',
-                        language: {
-                            noResults: () => 'Ничего не найдено',
-                            searching: () => 'Поиск...',
-                            inputTooShort: () => 'Введите текст для поиска'
-                        },
-                        minimumResultsForSearch: 0,
-                        closeOnSelect: !select.multiple
-                    };
-
-                    const placeholderFromData = select.dataset.searchPlaceholder || '';
-                    const placeholderFromFirstOption = (!select.multiple && select.options.length > 0)
-                        ? select.options[0].textContent
-                        : '';
-                    const placeholder = (placeholderFromData || placeholderFromFirstOption || '').trim();
-                    if (placeholder.length > 0) {
-                        options.placeholder = placeholder;
-                    }
-
-                    if (!select.multiple) {
-                        options.allowClear = !select.required;
-                    }
-
-                    const parentModal = select.closest('.modal');
-                    if (parentModal) {
-                        options.dropdownParent = window.jQuery(parentModal);
-                    }
-
-                    $select.select2(options);
-                    $select.on('change', () => setFieldInvalid(select, false));
+                window.crmSearchableSelect?.initSearchableSelects(root, {
+                    onChange: select => setFieldInvalid(select, false)
                 });
             }
 

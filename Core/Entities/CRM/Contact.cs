@@ -28,6 +28,9 @@ namespace Core.Entities.CRM
         
         public virtual ICollection<ContactPhone> Phones { get; set; } = new List<ContactPhone>();
         public virtual ICollection<ContactEmail> Emails { get; set; } = new List<ContactEmail>();
+        public virtual ICollection<CrmCompanyContact> CompanyLinks { get; set; } = new List<CrmCompanyContact>();
+        public virtual ICollection<CrmLeadContact> LeadLinks { get; set; } = new List<CrmLeadContact>();
+        public virtual ICollection<CrmDealContact> DealLinks { get; set; } = new List<CrmDealContact>();
 
         // --- Логика ---
 

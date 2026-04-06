@@ -1,4 +1,5 @@
 using Core.Constants;
+using Core.Interfaces.CRM;
 using Core.Interfaces.Platform;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
@@ -13,12 +14,14 @@ namespace CRM.Infrastructure
         private static readonly HashSet<string> CrmControllers = new(StringComparer.OrdinalIgnoreCase)
         {
             "Contacts",
-            "Leads"
+            "Leads",
+            "Deals"
         };
 
         private static readonly HashSet<string> CrmEntityCodes = new(StringComparer.OrdinalIgnoreCase)
         {
             "Contact",
+            "Company",
             "Lead",
             "Deal"
         };
@@ -29,10 +32,14 @@ namespace CRM.Infrastructure
         };
 
         private readonly IFeatureToggleService _featureToggleService;
+        private readonly ICrmSettingsService _crmSettingsService;
 
-        public FeatureGateFilter(IFeatureToggleService featureToggleService)
+        public FeatureGateFilter(
+            IFeatureToggleService featureToggleService,
+            ICrmSettingsService crmSettingsService)
         {
             _featureToggleService = featureToggleService;
+            _crmSettingsService = crmSettingsService;
         }
 
         public async Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
@@ -46,6 +53,16 @@ namespace CRM.Infrastructure
                 if (!isEnabled)
                 {
                     context.Result = new RedirectToActionResult("Index", "Home", null);
+                    return;
+                }
+            }
+
+            if (RequiresLeadMode(controller, entityCode))
+            {
+                var useLeads = await _crmSettingsService.UseLeadsAsync();
+                if (!useLeads)
+                {
+                    context.Result = new RedirectToActionResult("Index", "Contacts", null);
                     return;
                 }
             }
@@ -75,8 +92,7 @@ namespace CRM.Infrastructure
                 return true;
             }
 
-            if (controller.Equals("Data", StringComparison.OrdinalIgnoreCase) &&
-                !string.IsNullOrWhiteSpace(entityCode) &&
+            if (!string.IsNullOrWhiteSpace(entityCode) &&
                 CrmEntityCodes.Contains(entityCode))
             {
                 return true;
@@ -88,6 +104,18 @@ namespace CRM.Infrastructure
         private static bool RequiresBookingFeature(string? controller)
         {
             return !string.IsNullOrWhiteSpace(controller) && BookingControllers.Contains(controller);
+        }
+
+        private static bool RequiresLeadMode(string? controller, string? entityCode)
+        {
+            if (!string.IsNullOrWhiteSpace(controller) &&
+                controller.Equals("Leads", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            return !string.IsNullOrWhiteSpace(entityCode) &&
+                   entityCode.Equals("Lead", StringComparison.OrdinalIgnoreCase);
         }
     }
 }

@@ -1,0 +1,944 @@
+@using System.Text.Json
+@using Core.Entities.Platform
+@using CRM.ViewModels.CRM
+@using Microsoft.AspNetCore.Html
+@model CRM.ViewModels.CRM.CrmCardLayoutRenderViewModel
+
+@{
+    var prefix = ViewBag.CrmCardLayoutPrefix as string ?? "crm-layout";
+    var fieldsById = Model.DynamicFields.ToDictionary(field => field.Id);
+    var palette = CrmCardLayoutCatalog.BuildPalette(Model.EntityCode, Model.DynamicFields);
+    var paletteByIdentity = palette.ToDictionary(item => item.Identity, StringComparer.OrdinalIgnoreCase);
+    var visibleIdentities = Model.Layout.Sections
+        .SelectMany(section => section.Items)
+        .Select(item => item.Identity)
+        .ToHashSet(StringComparer.OrdinalIgnoreCase);
+    var hiddenPaletteItems = palette
+        .Where(item => !visibleIdentities.Contains(item.Identity))
+        .ToList();
+    var contactCreateUrl = ViewBag.ContactCreateUrl as string ?? "/Contacts/Create?modal=true";
+    var companyCreateUrl = ViewBag.CompanyCreateUrl as string ?? "/Data/Company/Create?modal=true";
+    var dynamicFieldCreateUrls = Model.DynamicFieldCreateUrls ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+    var layoutJson = JsonSerializer.Serialize(Model.Layout);
+    var paletteJson = JsonSerializer.Serialize(palette.Select(item => new
+    {
+        identity = item.Identity,
+        kind = item.Kind,
+        key = item.Key,
+        fieldId = item.FieldId,
+        label = item.Label,
+        isBuiltIn = item.IsBuiltIn
+    }).ToList());
+    var fieldsJson = JsonSerializer.Serialize(Model.DynamicFields.Select(field => new
+    {
+        id = field.Id,
+        label = field.Label,
+        systemName = field.SystemName,
+        dataType = field.DataType.ToString(),
+        isRequired = field.IsRequired,
+        isArray = field.IsArray,
+        targetEntityCode = field.TargetEntityCode,
+        sortOrder = field.SortOrder,
+        selectOptions = field.GetSelectOptions()
+            .OrderBy(option => option.SortOrder)
+            .Select(option => new
+            {
+                value = option.Value,
+                label = option.Label
+            })
+            .ToList()
+    }).ToList());
+    var lookupDataJson = JsonSerializer.Serialize(Model.LookupData.ToDictionary(
+        pair => pair.Key,
+        pair => pair.Value.Select(item => new
+        {
+            value = item.Value,
+            text = item.Text
+        }).ToList(),
+        StringComparer.OrdinalIgnoreCase));
+    var dynamicFieldCreateUrlsJson = JsonSerializer.Serialize(dynamicFieldCreateUrls);
+    var definitionsJson = JsonSerializer.Serialize(Model.AllDefinitions.Select(item => new
+    {
+        entityCode = item.EntityCode,
+        name = item.Name
+    }).ToList());
+
+    Dictionary<string, object> values = Model.FormModel.DynamicValues ?? new Dictionary<string, object>();
+
+    List<string> GetCurrentValues(AppFieldDefinition field)
+    {
+        values.TryGetValue(field.SystemName, out var rawValue);
+        var currentValues = new List<string>();
+
+        if (rawValue is JsonElement element)
+        {
+            if (element.ValueKind == JsonValueKind.Array)
+            {
+                currentValues = element.EnumerateArray().Select(x => x.ToString()).ToList();
+            }
+            else
+            {
+                currentValues.Add(element.ToString());
+            }
+        }
+        else if (rawValue is List<object> listObj)
+        {
+            currentValues = listObj.Select(x => x?.ToString() ?? string.Empty).ToList();
+        }
+        else if (rawValue is string[] arrStr)
+        {
+            currentValues = arrStr.ToList();
+        }
+        else if (rawValue != null)
+        {
+            currentValues.Add(rawValue.ToString() ?? string.Empty);
+        }
+
+        if (!currentValues.Any())
+        {
+            currentValues.Add(string.Empty);
+        }
+
+        return currentValues;
+    }
+
+    string ResolveDynamicFieldCreateUrl(AppFieldDefinition field)
+    {
+        return dynamicFieldCreateUrls.TryGetValue(field.SystemName, out var url)
+            ? url
+            : string.Empty;
+    }
+
+    string ResolveItemIdentity(string itemKind, string? itemKey, Guid? fieldId)
+    {
+        return string.Equals(itemKind, "dynamic", StringComparison.OrdinalIgnoreCase) && fieldId.HasValue
+            ? $"dynamic:{fieldId.Value:D}"
+            : $"system:{itemKey?.Trim().ToLowerInvariant()}";
+    }
+
+    string ResolveItemLabel(string itemKind, string? itemKey, Guid? fieldId)
+    {
+        var identity = ResolveItemIdentity(itemKind, itemKey, fieldId);
+        return paletteByIdentity.TryGetValue(identity, out var paletteItem)
+            ? paletteItem.Label
+            : identity;
+    }
+
+    async Task RenderBuilderToolbar(string itemKind, string? itemKey, Guid? fieldId)
+    {
+        <div class="crm-card-layout-builder-toolbar">
+            <span class="crm-card-layout-builder-handle" title="Переместить">
+                <i class="bi bi-grip-vertical"></i>
+            </span>
+            <button type="button"
+                    class="btn btn-sm btn-link text-danger p-0"
+                    title="Скрыть поле"
+                    data-crm-card-layout-remove-item="true"
+                    data-item-kind="@itemKind"
+                    data-item-key="@itemKey"
+                    data-field-id="@(fieldId?.ToString() ?? string.Empty)">
+                <i class="bi bi-eye-slash"></i>
+            </button>
+        </div>
+    }
+
+    async Task RenderLayoutItem(CrmCardLayoutItemViewModel item)
+    {
+        var itemIdentity = ResolveItemIdentity(item.Kind, item.Key, item.FieldId);
+        var itemLabel = ResolveItemLabel(item.Kind, item.Key, item.FieldId);
+
+        <div class="crm-card-layout__item"
+             data-item-kind="@item.Kind"
+             data-item-key="@item.Key"
+             data-field-id="@(item.FieldId?.ToString() ?? string.Empty)"
+             data-item-identity="@itemIdentity"
+             data-item-label="@itemLabel">
+            @{
+                await RenderBuilderToolbar(item.Kind, item.Key, item.FieldId);
+            }
+
+            @if (string.Equals(item.Kind, "dynamic", StringComparison.OrdinalIgnoreCase) &&
+                 item.FieldId.HasValue &&
+                 fieldsById.TryGetValue(item.FieldId.Value, out var field))
+            {
+                await RenderDynamicField(field);
+            }
+            else if (string.Equals(item.Kind, "system", StringComparison.OrdinalIgnoreCase) &&
+                     !string.IsNullOrWhiteSpace(item.Key))
+            {
+                await RenderSystemField(item.Key);
+            }
+        </div>
+    }
+
+    async Task RenderDynamicField(AppFieldDefinition field)
+    {
+        var currentValues = GetCurrentValues(field);
+        var formKey = $"DynamicProps[{field.SystemName}]";
+        var hasError = ViewData.ModelState.ContainsKey(formKey) && ViewData.ModelState[formKey]!.Errors.Any();
+        var recordId = Model.FormModel.Id.ToString();
+        var createUrl = ResolveDynamicFieldCreateUrl(field);
+
+        <div class="crm-card-layout-field">
+            <label class="form-label text-muted fw-bold">
+                @field.Label
+                @if (field.IsRequired)
+                {
+                    <span class="text-danger">*</span>
+                }
+            </label>
+
+            <div id="container_@field.SystemName" class="dynamic-field-container">
+                @for (var valueIndex = 0; valueIndex < currentValues.Count; valueIndex++)
+                {
+                    var value = currentValues[valueIndex];
+                    var wrapperId = "wrapper_" + Guid.NewGuid().ToString("N");
+
+                    <div class="mb-2 dynamic-field-item" id="@wrapperId" data-dynamic-field-item="@field.SystemName">
+                        @if (field.DataType == FieldDataType.File && !string.IsNullOrWhiteSpace(value))
+                        {
+                            <div class="mb-1 d-flex align-items-center">
+                                <a href="@value" target="_blank" class="text-decoration-none small">
+                                    <i class="bi bi-paperclip"></i> Текущий файл: @System.IO.Path.GetFileName(value)
+                                </a>
+                                @if (!string.IsNullOrEmpty(recordId))
+                                {
+                                    <button type="button"
+                                            class="btn btn-link text-danger p-0 ms-2"
+                                            title="Удалить файл"
+                                            onclick="deleteExistingFile('@recordId', '@Model.EntityCode', '@field.SystemName', '@value', '@wrapperId')">
+                                        <i class="bi bi-x-circle-fill"></i>
+                                    </button>
+                                }
+                            </div>
+                        }
+
+                        <div class="dynamic-field-control">
+                            @RenderDynamicFieldInput(field, value, hasError, Model.LookupData, field.IsRequired)
+
+                            @if (field.DataType == FieldDataType.EntityLink &&
+                                 !string.IsNullOrWhiteSpace(field.TargetEntityCode) &&
+                                 !string.IsNullOrWhiteSpace(createUrl))
+                            {
+                                <button type="button"
+                                        class="btn btn-outline-secondary ms-2"
+                                        title="Создать связанный объект"
+                                        data-crm-dynamic-create="true"
+                                        data-create-url="@createUrl"
+                                        data-target-entity-code="@field.TargetEntityCode"
+                                        data-title="@field.Label">
+                                    <i class="bi bi-plus-lg"></i>
+                                </button>
+                            }
+
+                            @if (field.IsArray)
+                            {
+                                <button type="button"
+                                        class="btn btn-outline-danger dynamic-field-remove @(valueIndex == 0 ? "d-none" : string.Empty)"
+                                        data-dynamic-field-remove="@field.SystemName"
+                                        onclick="removeDynamicFieldItem(this, '@field.SystemName')">
+                                    <i class="bi bi-x"></i>
+                                </button>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+
+            @if (hasError)
+            {
+                <div class="text-danger small mt-1">
+                    @foreach (var error in ViewData.ModelState[formKey]!.Errors)
+                    {
+                        <div><i class="bi bi-exclamation-circle"></i> @error.ErrorMessage</div>
+                    }
+                </div>
+            }
+
+            @if (field.IsArray)
+            {
+                <button type="button"
+                        class="btn btn-sm btn-outline-secondary mt-1"
+                        onclick="addDynamicField('@field.SystemName', '@field.DataType')">
+                    <i class="bi bi-plus-lg"></i> Добавить еще
+                </button>
+            }
+        </div>
+    }
+
+    async Task RenderSystemField(string key)
+    {
+        switch (key)
+        {
+            case "Amount":
+                <div class="crm-card-layout-field">
+                    <label class="form-label text-muted fw-bold">Сумма</label>
+                    <input type="text"
+                           name="Amount"
+                           value="@Model.FormModel.Amount.ToString("0.##")"
+                           class="form-control"
+                           inputmode="decimal"
+                           autocomplete="off" />
+                </div>
+                break;
+            case "Currency":
+                <div class="crm-card-layout-field">
+                    <label class="form-label text-muted fw-bold">Валюта</label>
+                    <input type="text"
+                           name="Currency"
+                           value="@Model.FormModel.Currency"
+                           maxlength="10"
+                           class="form-control"
+                           autocomplete="off" />
+                </div>
+                break;
+            case "ResponsibleId":
+                <div class="crm-card-layout-field">
+                    <label class="form-label text-muted fw-bold">Ответственный</label>
+                    <select id="@($"{prefix}-responsible")"
+                            name="ResponsibleId"
+                            class="form-select searchable-select"
+                            data-search-placeholder="Поиск сотрудника...">
+                        <option value="">Не назначен</option>
+                        @foreach (var option in Model.FormModel.ResponsibleOptions)
+                        {
+                            var selected = Model.FormModel.ResponsibleId.HasValue &&
+                                           string.Equals(option.Value, Model.FormModel.ResponsibleId.Value.ToString(), StringComparison.OrdinalIgnoreCase);
+                            <option value="@option.Value" selected="@(selected ? "selected" : null)">@option.Text</option>
+                        }
+                    </select>
+                </div>
+                break;
+            case "CompanyId":
+                <div class="crm-card-layout-field">
+                    <label class="form-label text-muted fw-bold">Компания</label>
+                    <div class="crm-process-link-editor">
+                        <select id="@($"{prefix}-company")"
+                                name="CompanyId"
+                                class="form-select searchable-select"
+                                data-search-placeholder="Поиск компании...">
+                            <option value="">Не выбрана</option>
+                            @foreach (var option in Model.FormModel.CompanyOptions)
+                            {
+                                var selected = Model.FormModel.CompanyId.HasValue &&
+                                               string.Equals(option.Value, Model.FormModel.CompanyId.Value.ToString(), StringComparison.OrdinalIgnoreCase);
+                                <option value="@option.Value" selected="@(selected ? "selected" : null)">@option.Text</option>
+                            }
+                        </select>
+                        <button type="button"
+                                class="btn btn-outline-secondary"
+                                title="Открыть компанию"
+                                data-crm-linked-open="true"
+                                data-select-id="@($"{prefix}-company")"
+                                data-detail-url-template="/Data/Details/__ID__?modal=true"
+                                data-open-title="Компания">
+                            <i class="bi bi-box-arrow-up-right"></i>
+                        </button>
+                        <button type="button"
+                                class="btn btn-outline-secondary"
+                                title="Создать компанию"
+                                data-crm-linked-create="true"
+                                data-select-id="@($"{prefix}-company")"
+                                data-create-url="@companyCreateUrl"
+                                data-target-entity-code="Company"
+                                data-create-title="Новая компания">
+                            <i class="bi bi-plus-lg"></i>
+                        </button>
+                    </div>
+                </div>
+                break;
+            case "ContactLinks":
+                {
+                    var contactFieldValues = Model.FormModel.ContactIds
+                        .Select(id => id.ToString())
+                        .Distinct()
+                        .ToList();
+
+                    if (Model.FormModel.ContactId.HasValue)
+                    {
+                        var primaryContactValue = Model.FormModel.ContactId.Value.ToString();
+                        if (!contactFieldValues.Contains(primaryContactValue))
+                        {
+                            contactFieldValues.Insert(0, primaryContactValue);
+                        }
+                    }
+
+                    if (!contactFieldValues.Any())
+                    {
+                        contactFieldValues.Add(string.Empty);
+                    }
+
+                    <div class="crm-card-layout-field">
+                        <label class="form-label text-muted fw-bold">Контакты</label>
+                        <input type="hidden"
+                               id="@($"{prefix}-primary-contact-id")"
+                               name="ContactId"
+                               value="@(Model.FormModel.ContactId?.ToString() ?? string.Empty)" />
+                        <div class="crm-process-link-array-field">
+                            <div id="@($"{prefix}-contact-links-container")"
+                                 class="crm-process-link-array"
+                                 data-crm-related-contacts="true"
+                                 data-template-id="@($"{prefix}-contact-link-template")"
+                                 data-add-button-id="@($"{prefix}-contact-links-add")"
+                                 data-primary-input-id="@($"{prefix}-primary-contact-id")"
+                                 data-create-url="@contactCreateUrl"
+                                 data-create-title="Новый контакт"
+                                 data-open-title="Контакт"
+                                 data-detail-url-template="/Contacts/Details/__ID__?modal=true"
+                                 data-field-name="ContactIds">
+                                @foreach (var contactValue in contactFieldValues)
+                                {
+                                    var isPrimaryRow = Model.FormModel.ContactId.HasValue &&
+                                                       string.Equals(contactValue, Model.FormModel.ContactId.Value.ToString(), StringComparison.OrdinalIgnoreCase);
+                                    <div class="mb-2 crm-process-related-contact-row"
+                                         data-crm-related-contact-row="true"
+                                         data-crm-primary="@(isPrimaryRow ? "true" : "false")">
+                                        <div class="dynamic-field-control">
+                                            <button type="button"
+                                                    class="btn btn-outline-secondary crm-process-related-contact-primary"
+                                                    title="Сделать основным"
+                                                    data-crm-related-contact-primary="true">
+                                                <i class="bi @(isPrimaryRow ? "bi-star-fill" : "bi-star")"></i>
+                                            </button>
+                                            <select class="form-select searchable-select"
+                                                    data-crm-related-contact-select="true"
+                                                    data-field-name="ContactIds"
+                                                    data-search-placeholder="Поиск контакта..."
+                                                    name="@(string.IsNullOrWhiteSpace(contactValue) ? null : "ContactIds")">
+                                                <option value="">Поиск контакта...</option>
+                                                @foreach (var option in Model.FormModel.ContactOptions)
+                                                {
+                                                    var isSelected = string.Equals(option.Value, contactValue, StringComparison.OrdinalIgnoreCase);
+                                                    <option value="@option.Value" selected="@(isSelected ? "selected" : null)">@option.Text</option>
+                                                }
+                                            </select>
+                                            <button type="button"
+                                                    class="btn btn-outline-secondary"
+                                                    title="Открыть контакт"
+                                                    data-crm-related-contact-open="true">
+                                                <i class="bi bi-box-arrow-up-right"></i>
+                                            </button>
+                                            <button type="button"
+                                                    class="btn btn-outline-primary"
+                                                    title="Создать контакт"
+                                                    data-crm-related-contact-create="true">
+                                                <i class="bi bi-plus-lg"></i>
+                                            </button>
+                                            <button type="button"
+                                                    class="btn btn-outline-danger"
+                                                    title="Удалить контакт"
+                                                    data-crm-related-contact-remove="true">
+                                                <i class="bi bi-x-lg"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                            <template id="@($"{prefix}-contact-link-template")">
+                                <div class="mb-2 crm-process-related-contact-row"
+                                     data-crm-related-contact-row="true"
+                                     data-crm-primary="false">
+                                    <div class="dynamic-field-control">
+                                        <button type="button"
+                                                class="btn btn-outline-secondary crm-process-related-contact-primary"
+                                                title="Сделать основным"
+                                                data-crm-related-contact-primary="true">
+                                            <i class="bi bi-star"></i>
+                                        </button>
+                                        <select class="form-select searchable-select"
+                                                data-crm-related-contact-select="true"
+                                                data-field-name="ContactIds"
+                                                data-search-placeholder="Поиск контакта...">
+                                            <option value="">Поиск контакта...</option>
+                                            @foreach (var option in Model.FormModel.ContactOptions)
+                                            {
+                                                <option value="@option.Value">@option.Text</option>
+                                            }
+                                        </select>
+                                        <button type="button"
+                                                class="btn btn-outline-secondary"
+                                                title="Открыть контакт"
+                                                data-crm-related-contact-open="true">
+                                            <i class="bi bi-box-arrow-up-right"></i>
+                                        </button>
+                                        <button type="button"
+                                                class="btn btn-outline-primary"
+                                                title="Создать контакт"
+                                                data-crm-related-contact-create="true">
+                                            <i class="bi bi-plus-lg"></i>
+                                        </button>
+                                        <button type="button"
+                                                class="btn btn-outline-danger"
+                                                title="Удалить контакт"
+                                                data-crm-related-contact-remove="true">
+                                            <i class="bi bi-x-lg"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </template>
+                            <button type="button"
+                                    class="btn btn-sm btn-outline-secondary"
+                                    id="@($"{prefix}-contact-links-add")">
+                                <i class="bi bi-plus-lg me-1"></i> Добавить еще
+                            </button>
+                        </div>
+                        <div class="form-text">Можно указать несколько контактов. Звёздочка отмечает основной контакт, и основным может быть только один.</div>
+                    </div>
+                }
+                break;
+        }
+    }
+}
+
+<div class="crm-card-layout"
+     data-crm-card-layout-root="true"
+     data-prefix="@prefix">
+    <div class="crm-card-layout__toolbar">
+        <button type="button"
+                class="btn btn-outline-secondary btn-sm"
+                data-crm-card-layout-toggle="true">
+            <i class="bi bi-layout-three-columns me-1"></i> Конструктор карточки
+        </button>
+    </div>
+
+    <div class="crm-card-layout__workspace">
+        <div class="crm-card-layout__canvas">
+            <div class="crm-card-layout__sections" data-crm-card-layout-sections="true">
+                @foreach (var layoutSection in Model.Layout.Sections)
+                {
+                    <section class="card border-0 shadow-sm mb-3 crm-card-layout__section"
+                             data-section-id="@(layoutSection.Id)">
+                        <div class="card-body p-4">
+                            <div class="crm-card-layout__section-header">
+                                <div class="crm-card-layout__section-title">
+                                    @layoutSection.Title
+                                </div>
+                                <div class="crm-card-layout__section-tools">
+                                    <button type="button"
+                                            class="btn btn-sm btn-link text-secondary p-0"
+                                            title="Выбрать раздел"
+                                            data-crm-card-layout-select-section="true"
+                                            data-section-id="@(layoutSection.Id)">
+                                        <i class="bi bi-cursor"></i>
+                                    </button>
+                                    <button type="button"
+                                            class="btn btn-sm btn-link text-secondary p-0"
+                                            title="Переименовать раздел"
+                                            data-crm-card-layout-rename-section="true"
+                                            data-section-id="@(layoutSection.Id)">
+                                        <i class="bi bi-pencil-square"></i>
+                                    </button>
+                                    <span class="crm-card-layout-builder-handle" title="Переместить раздел">
+                                        <i class="bi bi-grip-vertical"></i>
+                                    </span>
+                                    <button type="button"
+                                            class="btn btn-sm btn-link text-danger p-0"
+                                            title="Удалить раздел"
+                                            data-crm-card-layout-remove-section="true"
+                                            data-section-id="@(layoutSection.Id)">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="crm-card-layout__items"
+                                 data-crm-card-layout-items="true"
+                                 data-section-id="@(layoutSection.Id)">
+                                @foreach (var item in layoutSection.Items)
+                                {
+                                    await RenderLayoutItem(item);
+                                }
+                            </div>
+                        </div>
+                    </section>
+                }
+            </div>
+
+            <div class="crm-card-layout__stash d-none"
+                 data-crm-card-layout-stash="true"
+                 aria-hidden="true">
+                @foreach (var paletteItem in hiddenPaletteItems)
+                {
+                    var hiddenItem = new CrmCardLayoutItemViewModel
+                    {
+                        Kind = paletteItem.Kind,
+                        Key = paletteItem.Key,
+                        FieldId = paletteItem.FieldId
+                    };
+
+                    await RenderLayoutItem(hiddenItem);
+                }
+            </div>
+        </div>
+
+        <aside class="crm-card-layout__builder" data-crm-card-layout-builder="true">
+            <div class="crm-card-layout__builder-header">
+                <div class="fw-bold">Конструктор карточки</div>
+                <div class="small text-muted">Изменения применяются ко всей воронке</div>
+            </div>
+
+            <div class="crm-card-layout__builder-actions">
+                <button type="button" class="btn btn-outline-secondary btn-sm" data-crm-card-layout-add-section="true">
+                    <i class="bi bi-plus-square me-1"></i> Добавить раздел
+                </button>
+                <button type="button" class="btn btn-outline-primary btn-sm" data-crm-card-layout-open-create-field="true">
+                    <i class="bi bi-plus-circle me-1"></i> Создать поле
+                </button>
+            </div>
+
+            <div class="small text-muted mb-2" data-crm-card-layout-selected-section-label="true">
+                Выберите раздел, чтобы добавить поле
+            </div>
+
+            <div class="crm-card-layout__palette" data-crm-card-layout-palette="true"></div>
+
+            <div class="crm-card-layout__builder-footer">
+                <button type="button" class="btn btn-light border" data-crm-card-layout-cancel="true">Отмена</button>
+                <button type="button" class="btn btn-primary" data-crm-card-layout-save="true">Сохранить layout</button>
+            </div>
+        </aside>
+    </div>
+</div>
+
+<div class="modal fade" id="crmCardCreateFieldModal" tabindex="-1" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content border-0 shadow-lg">
+            <div class="modal-header border-bottom">
+                <h5 class="modal-title fw-bold">Новое поле</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body bg-light">
+                <div id="crmCardCreateFieldForm">
+                    <div class="p-3 bg-white rounded border">
+                        <div class="mb-3">
+                            <label class="form-label">Заголовок поля</label>
+                            <input type="text" name="label" class="form-control" required />
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Тип данных</label>
+                            <select name="dataType" id="crmCardFieldDataTypeSelect" class="form-select">
+                                @foreach (var type in Enum.GetValues<FieldDataType>())
+                                {
+                                    <option value="@((int)type)">@type.ToRuName()</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="mb-3 d-none" id="crmCardTargetEntityWrapper">
+                            <label class="form-label">Целевая сущность</label>
+                            <select name="targetEntityCode" id="crmCardTargetEntitySelect" class="form-select">
+                                <option value="">-- Выберите объект --</option>
+                                @foreach (var definition in Model.AllDefinitions)
+                                {
+                                    <option value="@definition.EntityCode">@definition.Name (@definition.EntityCode)</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="mb-3 d-none" id="crmCardSelectOptionsWrapper">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <label class="form-label mb-0">Пункты списка</label>
+                                <button type="button" class="btn btn-sm btn-outline-success" data-crm-card-add-select-option="true">
+                                    <i class="bi bi-plus-lg"></i> Добавить
+                                </button>
+                            </div>
+                            <div id="crmCardSelectOptionsContainer" class="d-grid gap-2"></div>
+                        </div>
+                        <div class="row">
+                            <div class="col-6">
+                                <div class="form-check form-switch mt-2">
+                                    <input class="form-check-input" type="checkbox" name="isRequired" id="crmCardFieldRequired">
+                                    <label class="form-check-label small" for="crmCardFieldRequired">Обязательное</label>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <div class="form-check form-switch mt-2">
+                                    <input class="form-check-input" type="checkbox" name="isArray" id="crmCardFieldArray">
+                                    <label class="form-check-label small" for="crmCardFieldArray">Множественное</label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="mt-4 d-flex gap-2">
+                        <button type="button" class="btn btn-light border flex-grow-1" data-bs-dismiss="modal">Отмена</button>
+                        <button type="button"
+                                class="btn btn-primary flex-grow-1"
+                                data-crm-card-create-field-submit="true">
+                            Создать поле
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script type="application/json" id="@($"{prefix}-crm-card-layout-payload")">
+@Html.Raw(JsonSerializer.Serialize(new
+{
+    appDefinitionId = Model.AppDefinitionId,
+    pipelineId = Model.PipelineId,
+    entityCode = Model.EntityCode,
+    layout = Model.Layout,
+    layoutJson,
+    palette = JsonSerializer.Deserialize<object>(paletteJson),
+    fields = JsonSerializer.Deserialize<object>(fieldsJson),
+    lookupData = JsonSerializer.Deserialize<object>(lookupDataJson),
+    dynamicFieldCreateUrls = JsonSerializer.Deserialize<object>(dynamicFieldCreateUrlsJson),
+    definitions = JsonSerializer.Deserialize<object>(definitionsJson)
+}))
+</script>
+
+<script src="~/js/crm-card-layout-builder.js?v=20260403e"></script>
+
+<style>
+    .crm-card-layout__toolbar {
+        display: flex;
+        justify-content: flex-end;
+        margin-bottom: 12px;
+    }
+
+    .crm-card-layout__workspace {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr);
+        gap: 20px;
+    }
+
+    .crm-card-layout__builder {
+        display: none;
+        position: sticky;
+        top: 0;
+        align-self: start;
+        border: 1px solid rgba(148, 163, 184, 0.22);
+        border-radius: 18px;
+        background: #fff;
+        box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
+        padding: 18px;
+        gap: 14px;
+    }
+
+    .crm-card-layout.is-builder-active .crm-card-layout__workspace {
+        grid-template-columns: minmax(0, 1fr) 320px;
+    }
+
+    .crm-card-layout.is-builder-active .crm-card-layout__builder {
+        display: grid;
+    }
+
+    .crm-card-layout__builder-actions,
+    .crm-card-layout__builder-footer {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+    }
+
+    .crm-card-layout__builder-footer {
+        justify-content: flex-end;
+        margin-top: 8px;
+    }
+
+    .crm-card-layout__palette {
+        display: grid;
+        gap: 8px;
+        max-height: min(54vh, 640px);
+        overflow: auto;
+    }
+
+    .crm-card-layout__palette-item {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 10px 12px;
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        border-radius: 12px;
+        background: #fff;
+    }
+
+    .crm-card-layout__palette-item span {
+        min-width: 0;
+    }
+
+    .crm-card-layout__palette-item.is-placed {
+        opacity: 0.55;
+        background: #f8fafc;
+    }
+
+    .crm-card-layout__palette-item button:disabled {
+        opacity: 0.65;
+    }
+
+    .crm-card-layout__section-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 14px;
+    }
+
+    .crm-card-layout__section-title {
+        color: #64748b;
+        font-size: 0.85rem;
+        font-weight: 700;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+    }
+
+    .crm-card-layout__section-tools,
+    .crm-card-layout-builder-toolbar {
+        display: none;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .crm-card-layout.is-builder-active .crm-card-layout__section-tools,
+    .crm-card-layout.is-builder-active .crm-card-layout-builder-toolbar {
+        display: inline-flex;
+    }
+
+    .crm-card-layout__section.is-selected {
+        outline: 2px solid rgba(59, 130, 246, 0.7);
+    }
+
+    .crm-card-layout__items {
+        display: grid;
+        gap: 16px;
+    }
+
+    .crm-card-layout__item {
+        position: relative;
+        padding-top: 4px;
+    }
+
+    .crm-card-layout__item.sortable-ghost,
+    .crm-card-layout__section.sortable-ghost {
+        opacity: 0.45;
+    }
+
+    .crm-card-layout__item.sortable-chosen,
+    .crm-card-layout__section.sortable-chosen {
+        cursor: grabbing;
+    }
+
+    .crm-card-layout-builder-toolbar {
+        position: absolute;
+        top: -6px;
+        right: 0;
+        z-index: 3;
+        padding: 4px 8px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.96);
+        border: 1px solid rgba(148, 163, 184, 0.18);
+        box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
+    }
+
+    .crm-card-layout-builder-handle {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        color: #64748b;
+        cursor: grab;
+    }
+
+    .crm-card-layout__section.is-selected .crm-card-layout__section-title {
+        color: #2563eb;
+    }
+
+    .crm-card-layout-field .crm-process-link-editor,
+    .crm-card-layout-field .dynamic-field-control {
+        align-items: stretch;
+    }
+
+    .crm-card-layout-field .crm-process-link-editor .btn,
+    .crm-card-layout-field .dynamic-field-control .btn,
+    .crm-card-layout-field .crm-process-related-contact-row .btn {
+        min-width: 44px;
+        border-radius: 12px;
+    }
+
+    .crm-card-layout-field .crm-process-related-contact-primary.is-active {
+        border-color: #f59e0b;
+        color: #b45309;
+        background: rgba(245, 158, 11, 0.12);
+    }
+
+    .crm-card-layout__section.is-empty .crm-card-layout__items::before {
+        content: "Перетащите сюда поле или добавьте его из панели справа";
+        color: #94a3b8;
+        font-size: 0.92rem;
+    }
+
+    @@media (max-width: 1279.98px) {
+        .crm-card-layout.is-builder-active .crm-card-layout__workspace {
+            grid-template-columns: 1fr;
+        }
+
+        .crm-card-layout__builder {
+            position: static;
+        }
+    }
+</style>
+
+@functions {
+    IHtmlContent RenderDynamicFieldInput(AppFieldDefinition field, string value, bool hasError, Dictionary<string, List<SelectListItem>> lookupData, bool isRequired)
+    {
+        var fieldName = $"DynamicProps[{field.SystemName}]";
+        var required = (isRequired && !field.IsArray) ? "required" : string.Empty;
+        var errorClass = hasError ? "is-invalid" : string.Empty;
+
+        switch (field.DataType)
+        {
+            case FieldDataType.EntityLink:
+            case FieldDataType.Select:
+                var options = new System.Text.StringBuilder();
+                options.Append("<option value=\"\">-- Выберите --</option>");
+                if (lookupData.TryGetValue(field.SystemName, out var items))
+                {
+                    foreach (var item in items)
+                    {
+                        var selected = item.Value == value ? "selected" : string.Empty;
+                        options.Append($"<option value=\"{item.Value}\" {selected}>{item.Text}</option>");
+                    }
+                }
+
+                if (!string.IsNullOrWhiteSpace(value) && (items == null || items.All(item => item.Value != value)))
+                {
+                    options.Append($"<option value=\"{value}\" selected>{value}</option>");
+                }
+
+                return new HtmlString($"<select name=\"{fieldName}\" class=\"form-control searchable-select {errorClass}\" data-search-placeholder=\"Поиск...\" {required}>{options}</select>");
+            case FieldDataType.Number:
+                return new HtmlString($"<input type=\"number\" step=\"any\" name=\"{fieldName}\" value=\"{NormalizeInputValue(value)}\" class=\"form-control {errorClass}\" {required} />");
+            case FieldDataType.Money:
+                return new HtmlString($"<input type=\"number\" step=\"0.01\" name=\"{fieldName}\" value=\"{NormalizeInputValue(value)}\" class=\"form-control {errorClass}\" placeholder=\"0.00\" {required} />");
+            case FieldDataType.Date:
+                return new HtmlString($"<input type=\"date\" name=\"{fieldName}\" value=\"{NormalizeDateValue(value)}\" class=\"form-control {errorClass}\" {required} />");
+            case FieldDataType.DateTime:
+                return new HtmlString($"<input type=\"datetime-local\" name=\"{fieldName}\" value=\"{NormalizeDateValue(value, true)}\" class=\"form-control {errorClass}\" {required} />");
+            case FieldDataType.File:
+                return new HtmlString($"<input type=\"file\" name=\"{fieldName}\" class=\"form-control {errorClass}\" {required} />");
+            case FieldDataType.Boolean:
+                var checkedAttr = string.Equals(value, "true", StringComparison.OrdinalIgnoreCase) ? "checked" : string.Empty;
+                return new HtmlString($@"
+                    <div class=""form-check form-switch mt-2"">
+                        <input type=""hidden"" name=""{fieldName}"" value=""false"" />
+                        <input class=""form-check-input"" type=""checkbox"" name=""{fieldName}"" value=""true"" {checkedAttr} />
+                        <label class=""form-check-label"">Да</label>
+                    </div>");
+            case FieldDataType.Text:
+                return new HtmlString($"<textarea name=\"{fieldName}\" class=\"form-control {errorClass}\" rows=\"3\" {required}>{value}</textarea>");
+            default:
+                return new HtmlString($"<input type=\"text\" name=\"{fieldName}\" value=\"{value}\" class=\"form-control {errorClass}\" {required} />");
+        }
+    }
+
+    string? NormalizeInputValue(string? value) => value?.Replace(",", ".");
+
+    string NormalizeDateValue(string? value, bool withTime = false)
+    {
+        if (DateTime.TryParse(value, out var parsed))
+        {
+            return parsed.ToString(withTime ? "yyyy-MM-ddTHH:mm" : "yyyy-MM-dd");
+        }
+
+        return string.Empty;
+    }
+}

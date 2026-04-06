@@ -23,3 +23,6 @@ _ReSharper.Caches/
 appsettings.json
 appsettings.Development.json
 appsettingsWORK.json
+
+# Local documentation drafts
+docs/

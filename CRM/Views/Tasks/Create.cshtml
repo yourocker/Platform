@@ -2,6 +2,10 @@
 
 @{
     ViewData["Title"] = "Новая задача";
+    if (CRM.Infrastructure.ModalRequestHelper.IsModalRequest(Context.Request))
+    {
+        ViewData["ModalSize"] = "xl";
+    }
 }
 
 <div class="container-fluid">

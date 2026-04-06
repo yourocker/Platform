@@ -73,6 +73,75 @@ namespace Core.Migrations
                     b.ToTable("ContactPhones", (string)null);
                 });
 
+            modelBuilder.Entity("Core.Entities.CRM.CrmCompanyContact", b =>
+                {
+                    b.Property<Guid>("CompanyId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ContactId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsPrimary")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("CompanyId", "ContactId");
+
+                    b.HasIndex("ContactId");
+
+                    b.HasIndex("TenantId", "ContactId");
+
+                    b.ToTable("CrmCompanyContacts", (string)null);
+                });
+
+            modelBuilder.Entity("Core.Entities.CRM.CrmDealContact", b =>
+                {
+                    b.Property<Guid>("DealId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ContactId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsPrimary")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("DealId", "ContactId");
+
+                    b.HasIndex("ContactId");
+
+                    b.HasIndex("TenantId", "ContactId");
+
+                    b.ToTable("CrmDealContacts", (string)null);
+                });
+
+            modelBuilder.Entity("Core.Entities.CRM.CrmLeadContact", b =>
+                {
+                    b.Property<Guid>("LeadId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("ContactId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsPrimary")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("LeadId", "ContactId");
+
+                    b.HasIndex("ContactId");
+
+                    b.HasIndex("TenantId", "ContactId");
+
+                    b.ToTable("CrmLeadContacts", (string)null);
+                });
+
             modelBuilder.Entity("Core.Entities.CRM.CrmDealItem", b =>
                 {
                     b.Property<Guid>("Id")
@@ -107,6 +176,135 @@ namespace Core.Migrations
                     b.HasIndex("ServiceItemId");
 
                     b.ToTable("CrmDealItems", (string)null);
+                });
+
+            modelBuilder.Entity("Core.Entities.CRM.CrmActivity", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid?>("AuthorId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("CompletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<string>("Content")
+                        .HasColumnType("text");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<DateTime?>("DueAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<bool>("IsPinned")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid?>("LinkedTaskId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("Subject")
+                        .IsRequired()
+                        .HasMaxLength(255)
+                        .HasColumnType("character varying(255)");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<int>("Type")
+                        .HasColumnType("integer");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("AuthorId");
+
+                    b.HasIndex("LinkedTaskId");
+
+                    b.HasIndex("TenantId", "CreatedAt");
+
+                    b.HasIndex("TenantId", "Type", "CreatedAt");
+
+                    b.ToTable("CrmActivities", (string)null);
+                });
+
+            modelBuilder.Entity("Core.Entities.CRM.CrmActivityBinding", b =>
+                {
+                    b.Property<Guid>("ActivityId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("EntityCode")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid>("EntityId")
+                        .HasColumnType("uuid");
+
+                    b.Property<bool>("IsPrimary")
+                        .HasColumnType("boolean");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("ActivityId", "EntityCode", "EntityId");
+
+                    b.HasIndex("TenantId", "EntityCode", "EntityId");
+
+                    b.ToTable("CrmActivityBindings", (string)null);
+                });
+
+            modelBuilder.Entity("Core.Entities.CRM.CrmEntityRelation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid?>("CreatedByEmployeeId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime?>("DeletedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<bool>("IsDeleted")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("RelationType")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<string>("SourceEntityCode")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid>("SourceEntityId")
+                        .HasColumnType("uuid");
+
+                    b.Property<string>("TargetEntityCode")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)");
+
+                    b.Property<Guid>("TargetEntityId")
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("CreatedByEmployeeId");
+
+                    b.HasIndex("TenantId", "SourceEntityCode", "SourceEntityId", "RelationType");
+
+                    b.HasIndex("TenantId", "TargetEntityCode", "TargetEntityId", "RelationType");
+
+                    b.ToTable("CrmEntityRelations", (string)null);
                 });
 
             modelBuilder.Entity("Core.Entities.CRM.CrmEvent", b =>
@@ -347,6 +545,29 @@ namespace Core.Migrations
                     b.HasIndex("ServiceItemId");
 
                     b.ToTable("CrmResourceBookingItems", (string)null);
+                });
+
+            modelBuilder.Entity("Core.Entities.CRM.CrmSettings", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid");
+
+                    b.Property<DateTime>("UpdatedAt")
+                        .HasColumnType("timestamp without time zone");
+
+                    b.Property<bool>("UseLeads")
+                        .HasColumnType("boolean");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("TenantId")
+                        .IsUnique();
+
+                    b.ToTable("CrmSettings", (string)null);
                 });
 
             modelBuilder.Entity("Core.Entities.CRM.CrmStage", b =>
@@ -621,19 +842,19 @@ namespace Core.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("uuid");
 
-                    b.Property<Guid>("EmployeeId")
-                        .HasColumnType("uuid");
-
                     b.Property<DateTime?>("DismissedAt")
                         .HasColumnType("timestamp without time zone");
+
+                    b.Property<Guid>("EmployeeId")
+                        .HasColumnType("uuid");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
-                    b.Property<bool>("IsDismissed")
+                    b.Property<bool>("IsDefault")
                         .HasColumnType("boolean");
 
-                    b.Property<bool>("IsDefault")
+                    b.Property<bool>("IsDismissed")
                         .HasColumnType("boolean");
 
                     b.Property<DateTime>("JoinedAt")
@@ -1529,12 +1750,24 @@ namespace Core.Migrations
                     b.ToTable("Contacts", (string)null);
                 });
 
+            modelBuilder.Entity("Core.Entities.CRM.CrmCompany", b =>
+                {
+                    b.HasBaseType("Core.Entities.Platform.GenericObject");
+
+                    b.HasIndex("Name");
+
+                    b.ToTable("CrmCompanies", (string)null);
+                });
+
             modelBuilder.Entity("Core.Entities.CRM.Deal", b =>
                 {
                     b.HasBaseType("Core.Entities.Platform.GenericObject");
 
                     b.Property<decimal>("Amount")
                         .HasColumnType("decimal(18,2)");
+
+                    b.Property<Guid?>("CompanyId")
+                        .HasColumnType("uuid");
 
                     b.Property<Guid?>("ContactId")
                         .HasColumnType("uuid");
@@ -1558,11 +1791,15 @@ namespace Core.Migrations
                     b.Property<Guid>("StageId")
                         .HasColumnType("uuid");
 
+                    b.HasIndex("CompanyId");
+
                     b.HasIndex("ContactId");
 
                     b.HasIndex("PipelineId");
 
                     b.HasIndex("ResponsibleId");
+
+                    b.HasIndex("SourceLeadId");
 
                     b.HasIndex("StageId");
 
@@ -1576,11 +1813,14 @@ namespace Core.Migrations
                     b.Property<decimal>("Amount")
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<Guid?>("CompanyId")
+                        .HasColumnType("uuid");
+
                     b.Property<Guid?>("ContactId")
                         .HasColumnType("uuid");
 
-                    b.Property<Guid?>("ConvertedDealId")
-                        .HasColumnType("uuid");
+                    b.Property<DateTime?>("ConvertedAt")
+                        .HasColumnType("timestamp without time zone");
 
                     b.Property<string>("Currency")
                         .IsRequired()
@@ -1600,6 +1840,8 @@ namespace Core.Migrations
 
                     b.Property<Guid>("StageId")
                         .HasColumnType("uuid");
+
+                    b.HasIndex("CompanyId");
 
                     b.HasIndex("ContactId");
 
@@ -1706,6 +1948,63 @@ namespace Core.Migrations
                     b.Navigation("Contact");
                 });
 
+            modelBuilder.Entity("Core.Entities.CRM.CrmCompanyContact", b =>
+                {
+                    b.HasOne("Core.Entities.CRM.CrmCompany", "Company")
+                        .WithMany("ContactLinks")
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Core.Entities.CRM.Contact", "Contact")
+                        .WithMany("CompanyLinks")
+                        .HasForeignKey("ContactId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Company");
+
+                    b.Navigation("Contact");
+                });
+
+            modelBuilder.Entity("Core.Entities.CRM.CrmDealContact", b =>
+                {
+                    b.HasOne("Core.Entities.CRM.Contact", "Contact")
+                        .WithMany("DealLinks")
+                        .HasForeignKey("ContactId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Core.Entities.CRM.Deal", "Deal")
+                        .WithMany("ContactLinks")
+                        .HasForeignKey("DealId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Contact");
+
+                    b.Navigation("Deal");
+                });
+
+            modelBuilder.Entity("Core.Entities.CRM.CrmLeadContact", b =>
+                {
+                    b.HasOne("Core.Entities.CRM.Contact", "Contact")
+                        .WithMany("LeadLinks")
+                        .HasForeignKey("ContactId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Core.Entities.CRM.Lead", "Lead")
+                        .WithMany("ContactLinks")
+                        .HasForeignKey("LeadId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Contact");
+
+                    b.Navigation("Lead");
+                });
+
             modelBuilder.Entity("Core.Entities.CRM.CrmDealItem", b =>
                 {
                     b.HasOne("Core.Entities.CRM.Deal", "Deal")
@@ -1723,6 +2022,44 @@ namespace Core.Migrations
                     b.Navigation("Deal");
 
                     b.Navigation("ServiceItem");
+                });
+
+            modelBuilder.Entity("Core.Entities.CRM.CrmActivity", b =>
+                {
+                    b.HasOne("Core.Entities.Company.Employee", "Author")
+                        .WithMany()
+                        .HasForeignKey("AuthorId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Core.Entities.Tasks.EmployeeTask", "LinkedTask")
+                        .WithMany()
+                        .HasForeignKey("LinkedTaskId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("Author");
+
+                    b.Navigation("LinkedTask");
+                });
+
+            modelBuilder.Entity("Core.Entities.CRM.CrmActivityBinding", b =>
+                {
+                    b.HasOne("Core.Entities.CRM.CrmActivity", "Activity")
+                        .WithMany("Bindings")
+                        .HasForeignKey("ActivityId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Activity");
+                });
+
+            modelBuilder.Entity("Core.Entities.CRM.CrmEntityRelation", b =>
+                {
+                    b.HasOne("Core.Entities.Company.Employee", "CreatedByEmployee")
+                        .WithMany()
+                        .HasForeignKey("CreatedByEmployeeId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("CreatedByEmployee");
                 });
 
             modelBuilder.Entity("Core.Entities.CRM.CrmEvent", b =>
@@ -2032,8 +2369,22 @@ namespace Core.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("Core.Entities.CRM.CrmCompany", b =>
+                {
+                    b.HasOne("Core.Entities.Platform.GenericObject", null)
+                        .WithOne()
+                        .HasForeignKey("Core.Entities.CRM.CrmCompany", "Id")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("Core.Entities.CRM.Deal", b =>
                 {
+                    b.HasOne("Core.Entities.CRM.CrmCompany", "Company")
+                        .WithMany("Deals")
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("Core.Entities.CRM.Contact", "Contact")
                         .WithMany()
                         .HasForeignKey("ContactId");
@@ -2054,11 +2405,18 @@ namespace Core.Migrations
                         .WithMany()
                         .HasForeignKey("ResponsibleId");
 
+                    b.HasOne("Core.Entities.CRM.Lead", "SourceLead")
+                        .WithMany("ConvertedDeals")
+                        .HasForeignKey("SourceLeadId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("Core.Entities.CRM.CrmStage", "CurrentStage")
                         .WithMany()
                         .HasForeignKey("StageId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Company");
 
                     b.Navigation("Contact");
 
@@ -2067,6 +2425,8 @@ namespace Core.Migrations
                     b.Navigation("Pipeline");
 
                     b.Navigation("Responsible");
+
+                    b.Navigation("SourceLead");
                 });
 
             modelBuilder.Entity("Core.Entities.CRM.Lead", b =>
@@ -2207,14 +2567,45 @@ namespace Core.Migrations
 
             modelBuilder.Entity("Core.Entities.CRM.Contact", b =>
                 {
+                    b.Navigation("CompanyLinks");
+
+                    b.Navigation("DealLinks");
+
+                    b.Navigation("LeadLinks");
+
                     b.Navigation("Emails");
 
                     b.Navigation("Phones");
                 });
 
+            modelBuilder.Entity("Core.Entities.CRM.CrmCompany", b =>
+                {
+                    b.Navigation("ContactLinks");
+
+                    b.Navigation("Deals");
+
+                    b.Navigation("Leads");
+                });
+
             modelBuilder.Entity("Core.Entities.CRM.Deal", b =>
                 {
+                    b.Navigation("ContactLinks");
+
                     b.Navigation("Items");
+                });
+
+            modelBuilder.Entity("Core.Entities.CRM.Lead", b =>
+                {
+                    b.HasOne("Core.Entities.CRM.CrmCompany", "Company")
+                        .WithMany("Leads")
+                        .HasForeignKey("CompanyId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("ConvertedDeals");
+
+                    b.Navigation("Company");
+
+                    b.Navigation("ContactLinks");
                 });
 
             modelBuilder.Entity("Core.Entities.CRM.ServiceCategory", b =>

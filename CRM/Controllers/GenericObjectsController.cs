@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Linq;
 using System.Threading.Tasks;
+using Core.Constants;
 using Core.Data;
 using Core.DTOs.Platform;
 using Core.Entities.Platform;
@@ -11,10 +12,11 @@ using Microsoft.AspNetCore.Hosting;
 //using Newtonsoft.Json;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
+using Core.Interfaces.CRM;
+using Core.Interfaces.Platform;
 using Core.Entities.Platform.Form;
 using System.Text.Json;
 using Core.Entities.CRM;
-using Core.Interfaces.Platform;
 using Core.Services.Platform;
 using CRM.Infrastructure;
 using CRM.ViewModels.Filters;
@@ -26,9 +28,13 @@ namespace CRM.Controllers;
 public class GenericObjectsController(
     AppDbContext context,
     IWebHostEnvironment hostingEnvironment,
-    IEntityTimelineService timelineService) : BasePlatformController(context, hostingEnvironment)
+    IEntityTimelineService timelineService,
+    IFeatureToggleService featureToggleService,
+    ICrmSettingsService crmSettingsService) : BasePlatformController(context, hostingEnvironment)
 {
     private readonly IEntityTimelineService _timelineService = timelineService;
+    private readonly IFeatureToggleService _featureToggleService = featureToggleService;
+    private readonly ICrmSettingsService _crmSettingsService = crmSettingsService;
 
     private FilterPanelViewModel BuildFilterPanelModel(
         string entityCode,
@@ -169,11 +175,90 @@ public class GenericObjectsController(
         return null;
     }
 
+    private async Task<IActionResult?> GuardEntityAvailabilityAsync(string? entityCode)
+    {
+        if (string.IsNullOrWhiteSpace(entityCode))
+        {
+            return null;
+        }
+
+        if (RequiresCrmModule(entityCode))
+        {
+            var isCrmEnabled = await _featureToggleService.IsEnabledAsync(PlatformFeatures.Crm);
+            if (!isCrmEnabled)
+            {
+                return RedirectToAction("Index", "Home");
+            }
+        }
+
+        if (string.Equals(entityCode, "Lead", StringComparison.OrdinalIgnoreCase))
+        {
+            var useLeads = await _crmSettingsService.UseLeadsAsync();
+            if (!useLeads)
+            {
+                return RedirectToAction("Index", "Contacts");
+            }
+        }
+
+        return null;
+    }
+
+    private static bool RequiresCrmModule(string entityCode)
+    {
+        return entityCode.Equals("Contact", StringComparison.OrdinalIgnoreCase) ||
+               entityCode.Equals("Company", StringComparison.OrdinalIgnoreCase) ||
+               entityCode.Equals("Lead", StringComparison.OrdinalIgnoreCase) ||
+               entityCode.Equals("Deal", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private IActionResult? RedirectToDedicatedCrmProcessController(string entityCode, string action, Guid? id = null)
+    {
+        string? controller = entityCode.ToLowerInvariant() switch
+        {
+            "lead" => "Leads",
+            "deal" => "Deals",
+            _ => null
+        };
+
+        if (controller == null)
+        {
+            return null;
+        }
+
+        var routeValues = id.HasValue
+            ? new { id = id.Value }
+            : null;
+
+        return RedirectToAction(action, controller, routeValues);
+    }
+
+    private static GenericObject CreateEntity(GenericObjectDto dto, string entityCode)
+    {
+        if (entityCode.Equals("Company", StringComparison.OrdinalIgnoreCase))
+        {
+            return new CrmCompany
+            {
+                Id = dto.Id,
+                Name = dto.Name?.Trim() ?? string.Empty,
+                EntityCode = entityCode,
+                CreatedAt = dto.CreatedAt
+            };
+        }
+
+        return GenericObjectMapper.ToEntity(dto, entityCode);
+    }
+
     // Маршрут: /Data/{entityCode} (например /Data/Sklad)
     [HttpGet("{entityCode}")]
     public async Task<IActionResult> Index(string entityCode, string? searchString, int? pageNumber, int? pageSize, [FromQuery] Dictionary<string, string>? filters)
     {
         if (string.IsNullOrEmpty(entityCode)) return NotFound();
+
+        var availabilityResult = await GuardEntityAvailabilityAsync(entityCode);
+        if (availabilityResult != null) return availabilityResult;
+
+        var dedicatedRedirect = RedirectToDedicatedCrmProcessController(entityCode, nameof(Index));
+        if (dedicatedRedirect != null) return dedicatedRedirect;
         
         var definition = await _context.AppDefinitions
             .Include(d => d.Fields)
@@ -289,6 +374,13 @@ public class GenericObjectsController(
     public async Task<IActionResult> Create(string entityCode, bool modal = false)
     {
         if (string.IsNullOrEmpty(entityCode)) return NotFound();
+
+        var availabilityResult = await GuardEntityAvailabilityAsync(entityCode);
+        if (availabilityResult != null) return availabilityResult;
+
+        var dedicatedRedirect = RedirectToDedicatedCrmProcessController(entityCode, nameof(Create));
+        if (dedicatedRedirect != null) return dedicatedRedirect;
+
         await LoadDefinitionWithFields(entityCode, FormType.Create);
         ViewBag.EntityCode = entityCode;
         ViewBag.IsModal = modal;
@@ -301,7 +393,10 @@ public class GenericObjectsController(
     {
         if (string.IsNullOrEmpty(entityCode)) return NotFound();
 
-        var obj = GenericObjectMapper.ToEntity(dto, entityCode);
+        var availabilityResult = await GuardEntityAvailabilityAsync(entityCode);
+        if (availabilityResult != null) return availabilityResult;
+
+        var obj = CreateEntity(dto, entityCode);
         obj.Id = Guid.NewGuid();
         obj.CreatedAt = DateTime.UtcNow;
         await SaveDynamicProperties(obj, form, obj.EntityCode);
@@ -342,6 +437,13 @@ public class GenericObjectsController(
     {
         var obj = await _context.GenericObjects.FindAsync(id);
         if (obj == null) return NotFound();
+
+        var availabilityResult = await GuardEntityAvailabilityAsync(obj.EntityCode);
+        if (availabilityResult != null) return availabilityResult;
+
+        var dedicatedRedirect = RedirectToDedicatedCrmProcessController(obj.EntityCode, nameof(Edit), id);
+        if (dedicatedRedirect != null) return dedicatedRedirect;
+
         await LoadDefinitionWithFields(obj.EntityCode, FormType.Edit);
         ViewBag.EntityCode = obj.EntityCode;
         return View(GenericObjectMapper.ToDto(obj));
@@ -354,6 +456,9 @@ public class GenericObjectsController(
         if (id != dto.Id) return NotFound();
         var dbObj = await _context.GenericObjects.FindAsync(id);
         if (dbObj == null) return NotFound();
+
+        var availabilityResult = await GuardEntityAvailabilityAsync(dbObj.EntityCode);
+        if (availabilityResult != null) return availabilityResult;
 
         var beforeName = dbObj.Name;
         var beforeProps = TimelineChangeFormatter.ParseDynamicProperties(dbObj.Properties);
@@ -401,14 +506,21 @@ public class GenericObjectsController(
     }
 
     [HttpGet("Details/{id}")]
-    public async Task<IActionResult> Details(Guid id)
+    public async Task<IActionResult> Details(Guid id, bool modal = false)
     {
         var obj = await _context.GenericObjects.FindAsync(id);
         if (obj == null) return NotFound();
 
+        var availabilityResult = await GuardEntityAvailabilityAsync(obj.EntityCode);
+        if (availabilityResult != null) return availabilityResult;
+
+        var dedicatedRedirect = RedirectToDedicatedCrmProcessController(obj.EntityCode, nameof(Details), id);
+        if (dedicatedRedirect != null) return dedicatedRedirect;
+
         await LoadDefinitionWithFields(obj.EntityCode, FormType.View);
         ViewBag.TimelineEvents = await _timelineService.GetEventsAsync(obj.Id, obj.EntityCode);
         ViewBag.EntityCode = obj.EntityCode;
+        ViewBag.IsModal = modal;
         return View(GenericObjectMapper.ToDto(obj));
     }
 
@@ -419,6 +531,10 @@ public class GenericObjectsController(
     {
         var obj = await _context.GenericObjects.FindAsync(id);
         if (obj == null) return NotFound();
+
+        var availabilityResult = await GuardEntityAvailabilityAsync(obj.EntityCode);
+        if (availabilityResult != null) return availabilityResult;
+
         var entityCode = obj.EntityCode;
         var objectName = obj.Name;
         _context.GenericObjects.Remove(obj);

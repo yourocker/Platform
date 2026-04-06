@@ -6,6 +6,12 @@
 @model GenericObjectDto
 @{
     ViewData["Title"] = "Просмотр: " + Model.Name;
+    var isModal = ViewBag.IsModal as bool? ?? false;
+    if (isModal)
+    {
+        Layout = "_LayoutModal";
+        ViewData["ModalSize"] = "xl";
+    }
 
     var tabsModel = new EntityDetailsTabsViewModel
     {
@@ -40,8 +46,21 @@
             </div>
 
             <div class="mt-4 pb-5 d-flex gap-2">
-                <a href="/Data/Edit/@Model.Id" crm-button variant="primary" icon="pencil-square" class="px-5 shadow">Редактировать</a>
-                <a href="/Data/@Model.EntityCode" crm-button variant="outline-secondary">Назад к списку</a>
+                <a href="/Data/Edit/@Model.Id@(isModal ? "?modal=true" : string.Empty)" crm-button variant="primary" icon="pencil-square" class="px-5 shadow">Редактировать</a>
+                @if (isModal)
+                {
+                    <button type="button"
+                            crm-button
+                            variant="outline-secondary"
+                            icon="x-lg"
+                            onclick="window.parent.postMessage({ type: 'crm-modal-close' }, window.location.origin)">
+                        Закрыть
+                    </button>
+                }
+                else
+                {
+                    <a href="/Data/@Model.EntityCode" crm-button variant="outline-secondary">Назад к списку</a>
+                }
             </div>
         </div>
     </div>

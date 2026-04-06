@@ -2,6 +2,7 @@
 using Core.Entities.CRM;
 using Core.Interfaces.CRM;
 using Microsoft.EntityFrameworkCore;
+using System.Globalization;
 using System.Text.Json;
 using Core.Entities.Platform;
 using Core.Entities.System;
@@ -20,6 +21,16 @@ namespace Core.Services.CRM
 
         public async Task<Lead> CreateLeadAsync(Lead lead)
         {
+            if (lead.Id == Guid.Empty)
+            {
+                lead.Id = Guid.NewGuid();
+            }
+
+            if (string.IsNullOrWhiteSpace(lead.EntityCode))
+            {
+                lead.EntityCode = "Lead";
+            }
+
             if (lead.StageId == Guid.Empty)
             {
                 var firstStage = await _context.CrmStages
@@ -32,6 +43,7 @@ namespace Core.Services.CRM
 
             lead.CreatedAt = DateTime.UtcNow;
             lead.StageChangedAt = DateTime.UtcNow;
+            EnsureLeadContactLinks(lead);
 
             _context.Leads.Add(lead);
             await LogEventInternalAsync(lead.Id, "Lead", CrmEventType.System, "Лид создан", null, lead.ResponsibleId);
@@ -41,6 +53,16 @@ namespace Core.Services.CRM
 
         public async Task<Deal> CreateDealAsync(Deal deal)
         {
+            if (deal.Id == Guid.Empty)
+            {
+                deal.Id = Guid.NewGuid();
+            }
+
+            if (string.IsNullOrWhiteSpace(deal.EntityCode))
+            {
+                deal.EntityCode = "Deal";
+            }
+
             if (deal.StageId == Guid.Empty)
             {
                 var firstStage = await _context.CrmStages
@@ -53,6 +75,7 @@ namespace Core.Services.CRM
 
             deal.CreatedAt = DateTime.UtcNow;
             deal.StageChangedAt = DateTime.UtcNow;
+            EnsureDealContactLinks(deal);
 
             _context.Deals.Add(deal);
             await LogEventInternalAsync(deal.Id, "Deal", CrmEventType.System, "Сделка создана", null, deal.ResponsibleId);
@@ -68,6 +91,7 @@ namespace Core.Services.CRM
             string oldStageName = "";
             var newStage = await _context.CrmStages.FindAsync(newStageId);
             string newStageName = newStage?.Name ?? "Неизвестный этап";
+            var shouldConvertLead = false;
 
             if (entityCode == "Lead")
             {
@@ -76,6 +100,7 @@ namespace Core.Services.CRM
                 oldStageName = entity.CurrentStage?.Name ?? "Начало";
                 entity.StageId = newStageId;
                 entity.StageChangedAt = DateTime.UtcNow;
+                shouldConvertLead = newStage?.StageType == 1 && !entity.IsConverted;
                 await LogEventInternalAsync(entityId, "Lead", CrmEventType.System, "Смена этапа", $"Этап изменен с \"{oldStageName}\" на \"{newStageName}\"", null);
             }
             else
@@ -89,6 +114,22 @@ namespace Core.Services.CRM
             }
 
             await _context.SaveChangesAsync();
+
+            if (shouldConvertLead)
+            {
+                var targetPipelineId = await _context.CrmPipelines
+                    .AsNoTracking()
+                    .Where(x => x.TargetEntityCode == "Deal" && x.IsActive)
+                    .OrderBy(x => x.SortOrder)
+                    .Select(x => (Guid?)x.Id)
+                    .FirstOrDefaultAsync();
+
+                if (targetPipelineId.HasValue)
+                {
+                    await ConvertLeadToDealAsync(entityId, targetPipelineId.Value);
+                }
+            }
+
             return true;
         }
 
@@ -128,7 +169,10 @@ namespace Core.Services.CRM
 
         public async Task<Deal> ConvertLeadToDealAsync(Guid leadId, Guid targetPipelineId)
         {
-            var lead = await _context.Leads.AsNoTracking().FirstOrDefaultAsync(l => l.Id == leadId);
+            var lead = await _context.Leads
+                .AsNoTracking()
+                .Include(l => l.ContactLinks)
+                .FirstOrDefaultAsync(l => l.Id == leadId);
             if (lead == null) throw new Exception("Лид не найден");
 
             var deal = new Deal
@@ -138,21 +182,50 @@ namespace Core.Services.CRM
                 EntityCode = "Deal",
                 PipelineId = targetPipelineId,
                 ContactId = lead.ContactId,
+                CompanyId = lead.CompanyId,
                 ResponsibleId = lead.ResponsibleId,
                 Amount = lead.Amount,
+                Currency = lead.Currency,
                 Properties = lead.Properties,
                 SourceLeadId = lead.Id,
-                CreatedAt = DateTime.UtcNow
+                CreatedAt = DateTime.UtcNow,
+                ContactLinks = lead.ContactLinks
+                    .Where(link => link.ContactId != Guid.Empty)
+                    .Select(link => new CrmDealContact
+                    {
+                        ContactId = link.ContactId,
+                        IsPrimary = link.IsPrimary
+                    })
+                    .ToList()
             };
 
             var leadToUpdate = await _context.Leads.FindAsync(leadId);
             if (leadToUpdate != null)
             {
                 leadToUpdate.IsConverted = true;
-                leadToUpdate.ConvertedDealId = deal.Id;
+                leadToUpdate.ConvertedAt ??= DateTime.UtcNow;
+
+                var convertedStageId = await _context.CrmStages
+                    .AsNoTracking()
+                    .Where(s => s.PipelineId == leadToUpdate.PipelineId && s.StageType == 1)
+                    .OrderBy(s => s.SortOrder)
+                    .Select(s => (Guid?)s.Id)
+                    .FirstOrDefaultAsync();
+
+                if (convertedStageId.HasValue)
+                {
+                    leadToUpdate.StageId = convertedStageId.Value;
+                    leadToUpdate.StageChangedAt = DateTime.UtcNow;
+                }
             }
 
-            await LogEventInternalAsync(leadId, "Lead", CrmEventType.System, "Лид сконвертирован", "Создана сделка на базе лида", null);
+            await LogEventInternalAsync(
+                leadId,
+                "Lead",
+                CrmEventType.System,
+                "Лид сконвертирован",
+                "Создана сделка на базе лида. Лид сохранён и может быть сконвертирован повторно.",
+                null);
             return await CreateDealAsync(deal);
         }
 
@@ -217,6 +290,8 @@ namespace Core.Services.CRM
 
             string oldValue = "";
             bool isSystemField = true;
+            var dealEntity = entity as Deal;
+            var leadEntity = entity as Lead;
 
             // 1. Проверяем системные поля
             switch (propertyName)
@@ -232,10 +307,30 @@ namespace Core.Services.CRM
                 case "ContactId":
                     oldValue = entity.ContactId?.ToString() ?? "Нет связи";
                     entity.ContactId = Guid.TryParse(newValue, out var cId) ? cId : null;
+                    if (dealEntity != null)
+                    {
+                        await SyncDealPrimaryContactAsync(dealEntity);
+                    }
+                    else if (leadEntity != null)
+                    {
+                        await SyncLeadPrimaryContactAsync(leadEntity);
+                    }
+                    break;
+                case "CompanyId" when dealEntity != null || leadEntity != null:
+                    oldValue = dealEntity?.CompanyId?.ToString() ?? leadEntity?.CompanyId?.ToString() ?? "Нет связи";
+                    var parsedCompanyId = Guid.TryParse(newValue, out var companyId) ? companyId : (Guid?)null;
+                    if (dealEntity != null)
+                    {
+                        dealEntity.CompanyId = parsedCompanyId;
+                    }
+                    else if (leadEntity != null)
+                    {
+                        leadEntity.CompanyId = parsedCompanyId;
+                    }
                     break;
                 case "Amount":
                     oldValue = entity.Amount.ToString();
-                    entity.Amount = decimal.TryParse(newValue, out var amt) ? amt : 0;
+                    entity.Amount = TryParseAmount(newValue, out var amt) ? amt : 0;
                     break;
                 default:
                     isSystemField = false;
@@ -259,6 +354,205 @@ namespace Core.Services.CRM
             
             await _context.SaveChangesAsync();
             return true;
+        }
+
+        private static bool TryParseAmount(string? rawValue, out decimal amount)
+        {
+            amount = 0m;
+            var raw = rawValue?.Trim();
+            if (string.IsNullOrWhiteSpace(raw))
+            {
+                return true;
+            }
+
+            if (decimal.TryParse(raw, NumberStyles.Number, CultureInfo.CurrentCulture, out amount) ||
+                decimal.TryParse(raw, NumberStyles.Number, CultureInfo.InvariantCulture, out amount))
+            {
+                return true;
+            }
+
+            var normalized = raw.Replace(" ", string.Empty).Replace(',', '.');
+            return decimal.TryParse(normalized, NumberStyles.Number, CultureInfo.InvariantCulture, out amount);
+        }
+
+        private void EnsureDealContactLinks(Deal deal)
+        {
+            deal.ContactLinks ??= new List<CrmDealContact>();
+
+            var normalizedLinks = deal.ContactLinks
+                .Where(link => link.ContactId != Guid.Empty)
+                .GroupBy(link => link.ContactId)
+                .Select(group =>
+                {
+                    var first = group.First();
+                    first.IsPrimary = group.Any(x => x.IsPrimary);
+                    return first;
+                })
+                .ToList();
+
+            if (deal.ContactId.HasValue && deal.ContactId.Value != Guid.Empty)
+            {
+                var primaryLink = normalizedLinks.FirstOrDefault(link => link.ContactId == deal.ContactId.Value);
+                if (primaryLink == null)
+                {
+                    normalizedLinks.Add(new CrmDealContact
+                    {
+                        DealId = deal.Id,
+                        ContactId = deal.ContactId.Value,
+                        IsPrimary = true
+                    });
+                }
+                else
+                {
+                    primaryLink.IsPrimary = true;
+                }
+            }
+            else
+            {
+                var primaryLink = normalizedLinks.FirstOrDefault(link => link.IsPrimary) ?? normalizedLinks.FirstOrDefault();
+                if (primaryLink != null)
+                {
+                    primaryLink.IsPrimary = true;
+                    deal.ContactId = primaryLink.ContactId;
+                }
+            }
+
+            foreach (var link in normalizedLinks)
+            {
+                link.DealId = deal.Id;
+                if (deal.ContactId.HasValue && deal.ContactId.Value != Guid.Empty)
+                {
+                    link.IsPrimary = link.ContactId == deal.ContactId.Value;
+                }
+            }
+
+            deal.ContactLinks = normalizedLinks;
+        }
+
+        private void EnsureLeadContactLinks(Lead lead)
+        {
+            lead.ContactLinks ??= new List<CrmLeadContact>();
+
+            var normalizedLinks = lead.ContactLinks
+                .Where(link => link.ContactId != Guid.Empty)
+                .GroupBy(link => link.ContactId)
+                .Select(group =>
+                {
+                    var first = group.First();
+                    first.IsPrimary = group.Any(x => x.IsPrimary);
+                    return first;
+                })
+                .ToList();
+
+            if (lead.ContactId.HasValue && lead.ContactId.Value != Guid.Empty)
+            {
+                var primaryLink = normalizedLinks.FirstOrDefault(link => link.ContactId == lead.ContactId.Value);
+                if (primaryLink == null)
+                {
+                    normalizedLinks.Add(new CrmLeadContact
+                    {
+                        LeadId = lead.Id,
+                        ContactId = lead.ContactId.Value,
+                        IsPrimary = true
+                    });
+                }
+                else
+                {
+                    primaryLink.IsPrimary = true;
+                }
+            }
+            else
+            {
+                var primaryLink = normalizedLinks.FirstOrDefault(link => link.IsPrimary) ?? normalizedLinks.FirstOrDefault();
+                if (primaryLink != null)
+                {
+                    primaryLink.IsPrimary = true;
+                    lead.ContactId = primaryLink.ContactId;
+                }
+            }
+
+            foreach (var link in normalizedLinks)
+            {
+                link.LeadId = lead.Id;
+                if (lead.ContactId.HasValue && lead.ContactId.Value != Guid.Empty)
+                {
+                    link.IsPrimary = link.ContactId == lead.ContactId.Value;
+                }
+            }
+
+            lead.ContactLinks = normalizedLinks;
+        }
+
+        private async Task SyncDealPrimaryContactAsync(Deal deal)
+        {
+            var existingLinks = await _context.CrmDealContacts
+                .Where(link => link.DealId == deal.Id)
+                .ToListAsync();
+
+            if (!deal.ContactId.HasValue || deal.ContactId.Value == Guid.Empty)
+            {
+                foreach (var link in existingLinks)
+                {
+                    link.IsPrimary = false;
+                }
+
+                return;
+            }
+
+            var primaryContactId = deal.ContactId.Value;
+            var primaryLink = existingLinks.FirstOrDefault(link => link.ContactId == primaryContactId);
+            if (primaryLink == null)
+            {
+                primaryLink = new CrmDealContact
+                {
+                    DealId = deal.Id,
+                    ContactId = primaryContactId,
+                    IsPrimary = true
+                };
+                _context.CrmDealContacts.Add(primaryLink);
+                existingLinks.Add(primaryLink);
+            }
+
+            foreach (var link in existingLinks)
+            {
+                link.IsPrimary = link.ContactId == primaryContactId;
+            }
+        }
+
+        private async Task SyncLeadPrimaryContactAsync(Lead lead)
+        {
+            var existingLinks = await _context.CrmLeadContacts
+                .Where(link => link.LeadId == lead.Id)
+                .ToListAsync();
+
+            if (!lead.ContactId.HasValue || lead.ContactId.Value == Guid.Empty)
+            {
+                foreach (var link in existingLinks)
+                {
+                    link.IsPrimary = false;
+                }
+
+                return;
+            }
+
+            var primaryContactId = lead.ContactId.Value;
+            var primaryLink = existingLinks.FirstOrDefault(link => link.ContactId == primaryContactId);
+            if (primaryLink == null)
+            {
+                primaryLink = new CrmLeadContact
+                {
+                    LeadId = lead.Id,
+                    ContactId = primaryContactId,
+                    IsPrimary = true
+                };
+                _context.CrmLeadContacts.Add(primaryLink);
+                existingLinks.Add(primaryLink);
+            }
+
+            foreach (var link in existingLinks)
+            {
+                link.IsPrimary = link.ContactId == primaryContactId;
+            }
         }
     }
 }

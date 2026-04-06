@@ -13,6 +13,7 @@
     var lookupData = ViewBag.LookupData as Dictionary<string, List<SelectListItem>> ?? new Dictionary<string, List<SelectListItem>>();
     var formLayout = ViewBag.FormLayout as FormLayoutSchema;
     var hasNameInLayout = ViewBag.HasNameInLayout as bool? ?? false;
+    var dynamicFieldCreateUrls = ViewBag.DynamicFieldCreateUrls as Dictionary<string, string> ?? new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
     var values = new Dictionary<string, object>();
     if (Model is IDynamicValues dynValues && dynValues.DynamicValues != null)
@@ -32,7 +33,8 @@
     }
 
     var action = ViewContext.RouteData.Values["action"]?.ToString();
-    bool isEditMode = action == "Create" || action == "Edit";
+    var forceEditMode = ViewBag.DynamicFieldsEditable as bool? ?? false;
+    bool isEditMode = forceEditMode || action == "Create" || action == "Edit";
     var recordId = Model?.GetType().GetProperty("Id")?.GetValue(Model)?.ToString() ?? "";
 
     var hasValidLayout = formLayout?.Nodes != null && formLayout.Nodes.Any();
@@ -184,11 +186,20 @@
                                 {
                                     @renderField(field, val, hasError, lookupData, isRequired)
 
-                                    @if (field.DataType == FieldDataType.EntityLink && canCreate && !string.IsNullOrEmpty(field.TargetEntityCode))
+                                    @if (field.DataType == FieldDataType.EntityLink &&
+                                         canCreate &&
+                                         !string.IsNullOrEmpty(field.TargetEntityCode) &&
+                                         dynamicFieldCreateUrls.TryGetValue(field.SystemName, out var createUrlTop))
                                     {
-                                        <a href="/Data/@field.TargetEntityCode/Create" class="btn btn-outline-secondary ms-2" title="Создать связанный объект">
+                                        <button type="button"
+                                                class="btn btn-outline-secondary ms-2"
+                                                title="Создать связанный объект"
+                                                data-crm-dynamic-create="true"
+                                                data-create-url="@createUrlTop"
+                                                data-target-entity-code="@field.TargetEntityCode"
+                                                data-title="@field.Label">
                                             <i class="bi bi-plus-lg"></i>
-                                        </a>
+                                        </button>
                                     }
 
                                     @if (field.IsArray)
@@ -315,11 +326,20 @@
                                     {
                                         @renderField(field, val, hasError, lookupData, isRequired)
 
-                                        @if (field.DataType == FieldDataType.EntityLink && canCreate && !string.IsNullOrEmpty(field.TargetEntityCode))
+                                        @if (field.DataType == FieldDataType.EntityLink &&
+                                             canCreate &&
+                                             !string.IsNullOrEmpty(field.TargetEntityCode) &&
+                                             dynamicFieldCreateUrls.TryGetValue(field.SystemName, out var createUrlRow))
                                         {
-                                            <a href="/Data/@field.TargetEntityCode/Create" class="btn btn-outline-secondary ms-2" title="Создать связанный объект">
+                                            <button type="button"
+                                                    class="btn btn-outline-secondary ms-2"
+                                                    title="Создать связанный объект"
+                                                    data-crm-dynamic-create="true"
+                                                    data-create-url="@createUrlRow"
+                                                    data-target-entity-code="@field.TargetEntityCode"
+                                                    data-title="@field.Label">
                                                 <i class="bi bi-plus-lg"></i>
-                                            </a>
+                                            </button>
                                         }
 
                                         @if (field.IsArray)

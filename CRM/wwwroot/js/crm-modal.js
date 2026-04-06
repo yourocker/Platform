@@ -4,7 +4,8 @@
         sm: { width: 560, height: 360 },
         md: { width: 760, height: 440 },
         lg: { width: 960, height: 620 },
-        xl: { width: 1160, height: 760 }
+        xl: { width: 1160, height: 760 },
+        workspace: { width: 1880, height: '100vh' }
     };
     const MANAGED_PATH_PATTERNS = [
         /\/Create$/i,
@@ -14,6 +15,24 @@
     ];
     const SAVE_SUCCESS_MESSAGE = 'Изменения сохранены';
     const SAVE_SUCCESS_DURATION_MS = 1000;
+
+    function getCrmProcessDetailsUrl(entityCode, id) {
+        const normalizedEntityCode = String(entityCode || '').trim().toLowerCase();
+        const normalizedId = String(id || '').trim();
+        if (!normalizedId) {
+            return '';
+        }
+
+        if (normalizedEntityCode === 'lead') {
+            return `/Leads/Details/${encodeURIComponent(normalizedId)}`;
+        }
+
+        if (normalizedEntityCode === 'deal') {
+            return `/Deals/Details/${encodeURIComponent(normalizedId)}`;
+        }
+
+        return '';
+    }
 
     function toUrl(input) {
         try {
@@ -141,6 +160,10 @@
         const url = toUrl(input);
         const pathname = url?.pathname.replace(/\/+$/, '') ?? '';
 
+        if (/^\/(Leads|Deals)\/(?:Create|Edit\/[^/]+|Details\/[^/]+)$/i.test(pathname)) {
+            return 'workspace';
+        }
+
         if (/\/Delete\/[^/]+$/i.test(pathname)) {
             return 'md';
         }
@@ -158,14 +181,68 @@
         const modalTitle = document.getElementById('globalCreateModalTitle');
         const modalFrame = document.getElementById('globalCreateModalFrame');
 
-        if (!modalEl || !modalDialog || !modalTitle || !modalFrame || window.self !== window.top || !window.bootstrap?.Modal) {
+        if (!modalEl || !modalDialog || !modalTitle || !modalFrame || !window.bootstrap?.Modal) {
             return;
         }
 
         const modal = new window.bootstrap.Modal(modalEl);
         const state = {
-            options: null
+            options: null,
+            isDirty: false,
+            pendingReload: false,
+            lastBridgePayloadKey: null
         };
+
+        function buildBridgePayloadKey(data) {
+            if (!data || typeof data !== 'object') {
+                return null;
+            }
+
+            return JSON.stringify({
+                type: data.type || '',
+                entityCode: data.entityCode || '',
+                id: data.id || '',
+                name: data.name || '',
+                url: data.url || '',
+                reloadOnClose: Boolean(data.reloadOnClose)
+            });
+        }
+
+        function markBridgePayloadHandled(data) {
+            state.lastBridgePayloadKey = buildBridgePayloadKey(data);
+        }
+
+        function wasBridgePayloadHandled(data) {
+            const key = buildBridgePayloadKey(data);
+            return Boolean(key) && key === state.lastBridgePayloadKey;
+        }
+
+        function tryExtractBridgePayloadFromFrame() {
+            try {
+                const frameWindow = modalFrame.contentWindow;
+                const frameDocument = frameWindow?.document;
+                if (!frameDocument) {
+                    return null;
+                }
+
+                const scriptContent = Array.from(frameDocument.scripts || [])
+                    .map(script => script.textContent || '')
+                    .find(text => text.includes('window.parent.postMessage('));
+
+                if (!scriptContent) {
+                    return null;
+                }
+
+                const match = scriptContent.match(/window\.parent\.postMessage\((\{[\s\S]*?\})\s*,\s*window\.location\.origin\)/i);
+                if (!match || !match[1]) {
+                    return null;
+                }
+
+                return JSON.parse(match[1]);
+            } catch {
+                return null;
+            }
+        }
 
         function setTitle(title, iconClass) {
             const safeTitle = String(title || '').trim() || 'Форма';
@@ -184,7 +261,9 @@
 
             modalDialog.dataset.crmModalSize = normalizedSize;
             modalDialog.style.setProperty('--crm-modal-dialog-width', `${preset.width}px`);
-            modalFrame.style.height = `${preset.height}px`;
+            modalFrame.style.height = typeof preset.height === 'number'
+                ? `${preset.height}px`
+                : preset.height;
         }
 
         function resetSizing() {
@@ -202,6 +281,8 @@
             const size = normalizeModalSize(openOptions.size) || inferActionSize(url);
 
             state.options = openOptions;
+            state.isDirty = false;
+            state.pendingReload = false;
             applySizing(size);
             setTitle(actionMeta.title, actionMeta.iconClass);
             modalFrame.src = ensureModalFlag(url);
@@ -216,7 +297,8 @@
 
             return open(link.href, {
                 title: readLinkTitle(link),
-                iconClass: link.dataset.crmModalIcon
+                iconClass: link.dataset.crmModalIcon,
+                size: link.dataset.crmModalSize
             });
         }
 
@@ -233,12 +315,22 @@
         }
 
         function handleEntityCreated(data) {
+            const detailsUrl = getCrmProcessDetailsUrl(data?.entityCode, data?.id);
+            if (detailsUrl) {
+                state.isDirty = false;
+                state.pendingReload = true;
+                showSaveSuccessToast();
+                modalFrame.src = ensureModalFlag(detailsUrl);
+                return;
+            }
+
             let handled = false;
 
             if (typeof state.options?.onEntityCreated === 'function') {
                 handled = state.options.onEntityCreated(data) === true;
             }
 
+            state.isDirty = false;
             close();
 
             if (!handled) {
@@ -283,16 +375,40 @@
         }
 
         function handleEntityUpdated(data) {
+            const detailsUrl = getCrmProcessDetailsUrl(data?.entityCode, data?.id);
+            if (detailsUrl) {
+                if (typeof state.options?.onEntityUpdated === 'function') {
+                    state.options.onEntityUpdated(data);
+                }
+
+                state.isDirty = false;
+                state.pendingReload = true;
+                showSaveSuccessToast();
+                modalFrame.src = ensureModalFlag(detailsUrl);
+                return;
+            }
+
             if (typeof state.options?.onEntityUpdated === 'function') {
                 state.options.onEntityUpdated(data);
             }
 
+            state.isDirty = false;
             close();
             showSaveSuccessToast();
 
             window.setTimeout(() => {
                 reloadParent();
             }, SAVE_SUCCESS_DURATION_MS);
+        }
+
+        function handleInlineSaveSuccess(data) {
+            if (typeof state.options?.onEntityUpdated === 'function') {
+                state.options.onEntityUpdated(data);
+            }
+
+            state.isDirty = false;
+            state.pendingReload = true;
+            showSaveSuccessToast();
         }
 
         function handleNavigation(data) {
@@ -304,6 +420,11 @@
             }
 
             if (isManagedUrl(url)) {
+                if (Boolean(data?.reloadOnClose)) {
+                    state.pendingReload = true;
+                }
+
+                state.isDirty = false;
                 modalFrame.src = ensureModalFlag(url);
                 return;
             }
@@ -349,18 +470,18 @@
             openLink(link);
         });
 
-        window.addEventListener('message', event => {
-            if (event.origin !== window.location.origin || !modalEl.classList.contains('show')) {
+        function processModalMessage(data) {
+            if (!data || typeof data !== 'object') {
                 return;
             }
 
-            const data = event.data;
-            if (!data || typeof data !== 'object') {
+            if (wasBridgePayloadHandled(data)) {
                 return;
             }
 
             switch (data.type) {
                 case 'crm-modal-close':
+                    markBridgePayloadHandled(data);
                     close();
                     return;
                 case 'crm-modal-config':
@@ -370,21 +491,65 @@
                     setTitle(data.title, data.iconClass);
                     return;
                 case 'crm-entity-created':
+                    markBridgePayloadHandled(data);
                     handleEntityCreated(data);
                     return;
                 case 'crm-entity-updated':
+                    markBridgePayloadHandled(data);
                     handleEntityUpdated(data);
                     return;
+                case 'crm-modal-dirty-state':
+                    state.isDirty = Boolean(data.dirty);
+                    return;
+                case 'crm-modal-save-success':
+                    markBridgePayloadHandled(data);
+                    handleInlineSaveSuccess(data);
+                    return;
                 case 'crm-modal-navigate':
+                    markBridgePayloadHandled(data);
                     handleNavigation(data);
                     return;
                 case 'crm-modal-refresh':
+                    markBridgePayloadHandled(data);
+                    state.isDirty = false;
                     close();
                     reloadParent();
                     return;
                 default:
                     return;
             }
+        }
+
+        window.addEventListener('message', event => {
+            if (event.origin !== window.location.origin) {
+                return;
+            }
+
+            processModalMessage(event.data);
+        });
+
+        modalFrame.addEventListener('load', () => {
+            const bridgePayload = tryExtractBridgePayloadFromFrame();
+            if (!bridgePayload) {
+                state.lastBridgePayloadKey = null;
+                return;
+            }
+
+            processModalMessage(bridgePayload);
+        });
+
+        modalEl.addEventListener('hide.bs.modal', event => {
+            if (!state.isDirty) {
+                return;
+            }
+
+            const shouldClose = window.confirm('Закрыть окно? Изменения не сохранены.');
+            if (!shouldClose) {
+                event.preventDefault();
+                return;
+            }
+
+            state.isDirty = false;
         });
 
         modalEl.addEventListener('hidden.bs.modal', () => {
@@ -392,9 +557,18 @@
                 state.options.onClose();
             }
 
+            const shouldReloadAfterClose = state.pendingReload && state.options?.reloadOnComplete !== false;
+
             modalFrame.removeAttribute('src');
             resetSizing();
             state.options = null;
+            state.isDirty = false;
+            state.pendingReload = false;
+            state.lastBridgePayloadKey = null;
+
+            if (shouldReloadAfterClose) {
+                reloadParent();
+            }
 
             if (document.querySelector('.modal.show')) {
                 setTimeout(() => document.body.classList.add('modal-open'), 0);
@@ -509,7 +683,7 @@
 
         document.addEventListener('click', event => {
             const link = event.target.closest('a[href]');
-            if (!link) {
+            if (event.defaultPrevented || !link) {
                 return;
             }
 
@@ -534,6 +708,11 @@
 
             if (isManagedUrl(url) || isTruthy(url.searchParams.get(MODAL_QUERY_KEY))) {
                 event.preventDefault();
+                if (window.crmModalHost && typeof window.crmModalHost.openLink === 'function') {
+                    window.crmModalHost.openLink(link);
+                    return;
+                }
+
                 window.location.href = ensureModalFlag(url);
             }
         });

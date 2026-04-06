@@ -1,0 +1,337 @@
+@using System.Linq
+@using Core.Entities.CRM
+@using CrmTaskStatus = Core.Entities.Tasks.TaskStatus
+@model CRM.ViewModels.CRM.CrmActivityFeedViewModel
+
+@{
+    var timeline = Model ?? new CRM.ViewModels.CRM.CrmActivityFeedViewModel();
+    var scopeId = $"crm-activity-{timeline.EntityId:N}";
+    var commentPaneId = $"{scopeId}-comment";
+    var taskPaneId = $"{scopeId}-task";
+    var activities = timeline.Activities
+        .OrderByDescending(x => x.IsPinned)
+        .ThenByDescending(x => x.CreatedAt)
+        .ToList();
+    var activeComposer = string.Equals(timeline.ActiveComposer, "task", StringComparison.OrdinalIgnoreCase)
+        ? "task"
+        : "comment";
+
+    (string Icon, string AccentClass, string BackgroundClass) ResolveVisual(CrmActivityType type) => type switch
+    {
+        CrmActivityType.Comment => ("bi-chat-left-text", "text-info", "bg-info-subtle"),
+        CrmActivityType.Task => ("bi-check2-square", "text-success", "bg-success-subtle"),
+        CrmActivityType.Call => ("bi-telephone", "text-primary", "bg-primary-subtle"),
+        CrmActivityType.Email => ("bi-envelope", "text-secondary", "bg-secondary-subtle"),
+        CrmActivityType.Meeting => ("bi-calendar-event", "text-warning", "bg-warning-subtle"),
+        CrmActivityType.Message => ("bi-chat-dots", "text-primary", "bg-primary-subtle"),
+        CrmActivityType.Note => ("bi-journal-text", "text-dark", "bg-light"),
+        CrmActivityType.StatusChange => ("bi-arrow-left-right", "text-warning", "bg-warning-subtle"),
+        _ => ("bi-clock-history", "text-muted", "bg-light")
+    };
+
+    string ResolveTaskStatusLabel(CrmTaskStatus status) => status switch
+    {
+        CrmTaskStatus.Created => "Новая",
+        CrmTaskStatus.InProgress => "В работе",
+        CrmTaskStatus.InReview => "На проверке",
+        CrmTaskStatus.Completed => "Готова",
+        _ => "Неизвестно"
+    };
+
+    string ResolveTaskStatusClass(CrmTaskStatus status) => status switch
+    {
+        CrmTaskStatus.Created => "bg-primary-subtle text-primary",
+        CrmTaskStatus.InProgress => "bg-warning-subtle text-warning-emphasis",
+        CrmTaskStatus.InReview => "bg-info-subtle text-info-emphasis",
+        CrmTaskStatus.Completed => "bg-success-subtle text-success-emphasis",
+        _ => "bg-light text-muted"
+    };
+}
+
+<div class="crm-process-timeline d-flex flex-column gap-3">
+    @if (timeline.AllowCommentCreate || timeline.AllowTaskCreate)
+    {
+        <div class="card border-0 shadow-sm crm-activity-composer">
+            <div class="card-body p-0">
+                <div class="crm-activity-composer__header px-3 px-lg-4 pt-3 pt-lg-4">
+                    <ul class="nav nav-tabs border-0 gap-2" role="tablist">
+                        @if (timeline.AllowCommentCreate)
+                        {
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link crm-activity-composer__tab @(activeComposer == "comment" ? "active" : "")"
+                                        id="@($"{commentPaneId}-tab")"
+                                        data-bs-toggle="tab"
+                                        data-bs-target="#@commentPaneId"
+                                        type="button"
+                                        role="tab"
+                                        aria-controls="@commentPaneId"
+                                        aria-selected="@(activeComposer == "comment")">
+                                    <i class="bi bi-chat-left-text me-2"></i>@timeline.CommentComposerTitle
+                                </button>
+                            </li>
+                        }
+                        @if (timeline.AllowTaskCreate)
+                        {
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link crm-activity-composer__tab @(activeComposer == "task" ? "active" : "")"
+                                        id="@($"{taskPaneId}-tab")"
+                                        data-bs-toggle="tab"
+                                        data-bs-target="#@taskPaneId"
+                                        type="button"
+                                        role="tab"
+                                        aria-controls="@taskPaneId"
+                                        aria-selected="@(activeComposer == "task")">
+                                    <i class="bi bi-check2-square me-2"></i>@timeline.TaskComposerTitle
+                                </button>
+                            </li>
+                        }
+                    </ul>
+                </div>
+
+                <div class="tab-content border-top">
+                    @if (!string.IsNullOrWhiteSpace(timeline.FeedbackMessage))
+                    {
+                        <div class="px-3 px-lg-4 pt-3">
+                            <div class="alert alert-@timeline.FeedbackTone mb-0" role="alert">
+                                @timeline.FeedbackMessage
+                            </div>
+                        </div>
+                    }
+
+                    @if (timeline.AllowCommentCreate)
+                    {
+                        <div class="tab-pane fade @(activeComposer == "comment" ? "show active" : "")"
+                             id="@commentPaneId"
+                             role="tabpanel"
+                             aria-labelledby="@($"{commentPaneId}-tab")">
+                            <form asp-controller="@timeline.ControllerName" asp-action="AddComment" method="post" class="d-flex flex-column gap-3 p-3 p-lg-4">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="id" value="@timeline.EntityId" />
+                                <textarea name="text"
+                                          class="form-control crm-activity-composer__textarea"
+                                          rows="4"
+                                          maxlength="4000"
+                                          required
+                                          placeholder="@timeline.CommentComposerPlaceholder"></textarea>
+                                <div class="d-flex justify-content-end">
+                                    <button type="submit" crm-button variant="primary" icon="chat-left-text" class="px-4">
+                                        Добавить комментарий
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    }
+
+                    @if (timeline.AllowTaskCreate)
+                    {
+                        <div class="tab-pane fade @(activeComposer == "task" ? "show active" : "")"
+                             id="@taskPaneId"
+                             role="tabpanel"
+                             aria-labelledby="@($"{taskPaneId}-tab")">
+                            <form asp-controller="@timeline.ControllerName" asp-action="AddTask" method="post" class="d-flex flex-column gap-3 p-3 p-lg-4">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="id" value="@timeline.EntityId" />
+
+                                <div>
+                                    <label class="form-label fw-semibold">Название задачи</label>
+                                    <input type="text"
+                                           name="title"
+                                           class="form-control"
+                                           maxlength="255"
+                                           required
+                                           placeholder="@timeline.TaskTitlePlaceholder" />
+                                </div>
+
+                                <div>
+                                    <label class="form-label fw-semibold">Описание</label>
+                                    <textarea name="description"
+                                              class="form-control crm-activity-composer__textarea"
+                                              rows="3"
+                                              maxlength="4000"
+                                              placeholder="@timeline.TaskDescriptionPlaceholder"></textarea>
+                                </div>
+
+                                <div class="row g-3">
+                                    <div class="col-lg-6">
+                                        <label class="form-label fw-semibold">Исполнитель</label>
+                                        <select name="assigneeId" class="form-select">
+                                            <option value="">Не выбран</option>
+                                            @foreach (var option in timeline.TaskAssigneeOptions)
+                                            {
+                                                var isSelected = timeline.DefaultTaskAssigneeId.HasValue &&
+                                                                 string.Equals(option.Value, timeline.DefaultTaskAssigneeId.Value.ToString(), StringComparison.OrdinalIgnoreCase);
+                                                <option value="@option.Value" selected="@(isSelected ? "selected" : null)">@option.Text</option>
+                                            }
+                                        </select>
+                                    </div>
+                                    <div class="col-lg-6">
+                                        <label class="form-label fw-semibold">Срок</label>
+                                        <input type="datetime-local" name="deadline" class="form-control" />
+                                    </div>
+                                </div>
+
+                                <div class="d-flex justify-content-end">
+                                    <button type="submit" crm-button variant="success" icon="check2-square" class="px-4">
+                                        Поставить задачу
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    }
+
+    @if (!activities.Any())
+    {
+        <div class="text-center text-muted py-5">
+            <div class="mb-3">
+                <i class="bi bi-chat-left-text fs-1 opacity-50"></i>
+            </div>
+            <div class="fw-semibold">@timeline.EmptyTitle</div>
+            <div class="small">@timeline.EmptyDescription</div>
+        </div>
+    }
+    else
+    {
+        <div class="d-flex flex-column gap-3">
+            @foreach (var activity in activities)
+            {
+                var visual = ResolveVisual(activity.Type);
+                var actorName = activity.Author?.FullName ?? "Система";
+
+                <article class="crm-process-timeline__item card border-0 shadow-sm">
+                    <div class="card-body p-3 p-lg-4">
+                        <div class="d-flex gap-3 align-items-start">
+                            <div class="crm-process-timeline__icon @visual.BackgroundClass @visual.AccentClass">
+                                <i class="bi @visual.Icon"></i>
+                            </div>
+
+                            <div class="flex-grow-1">
+                                <div class="d-flex flex-wrap align-items-center gap-2 mb-1">
+                                    <div class="fw-semibold">@activity.Subject</div>
+                                    @if (activity.IsPinned)
+                                    {
+                                        <span class="badge bg-warning text-dark">Закреплено</span>
+                                    }
+                                    @if (activity.Type == CrmActivityType.Task && activity.LinkedTask != null)
+                                    {
+                                        <span class="badge rounded-pill @ResolveTaskStatusClass(activity.LinkedTask.Status)">
+                                            @ResolveTaskStatusLabel(activity.LinkedTask.Status)
+                                        </span>
+                                    }
+                                </div>
+
+                                <div class="small text-muted mb-2">
+                                    @actorName
+                                    <span class="mx-1">•</span>
+                                    @activity.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")
+                                </div>
+
+                                @if (!string.IsNullOrWhiteSpace(activity.Content))
+                                {
+                                    <div class="crm-process-timeline__content mb-3">@activity.Content</div>
+                                }
+
+                                @if (activity.Type == CrmActivityType.Task && activity.LinkedTask != null)
+                                {
+                                    <div class="crm-process-timeline__task-meta d-flex flex-wrap gap-2">
+                                        <span class="crm-process-timeline__meta-pill">
+                                            <i class="bi bi-person me-1"></i>@(activity.LinkedTask.Assignee?.FullName ?? "Исполнитель не выбран")
+                                        </span>
+                                        @if (activity.LinkedTask.Deadline.HasValue)
+                                        {
+                                            <span class="crm-process-timeline__meta-pill">
+                                                <i class="bi bi-calendar-event me-1"></i>@activity.LinkedTask.Deadline.Value.ToLocalTime().ToString("dd.MM.yyyy HH:mm")
+                                            </span>
+                                        }
+                                        <a href="@Url.Action("Details", "Tasks", new { id = activity.LinkedTaskId })"
+                                           data-crm-modal="true"
+                                           data-crm-modal-size="xl"
+                                           data-crm-modal-title="Задача"
+                                           class="crm-process-timeline__meta-pill crm-process-timeline__meta-pill--link text-decoration-none">
+                                            <i class="bi bi-box-arrow-up-right me-1"></i>Открыть задачу
+                                        </a>
+                                    </div>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                </article>
+            }
+        </div>
+    }
+</div>
+
+<style>
+    .crm-activity-composer {
+        overflow: hidden;
+    }
+
+    .crm-activity-composer__header {
+        background: linear-gradient(180deg, rgba(248,250,252,0.96) 0%, rgba(255,255,255,0.96) 100%);
+    }
+
+    .crm-activity-composer__tab {
+        border: none;
+        border-radius: 999px;
+        color: #475569;
+        background: #f8fafc;
+        font-weight: 600;
+        padding: 0.7rem 1rem;
+    }
+
+    .crm-activity-composer__tab.active,
+    .crm-activity-composer__tab:hover {
+        background: #e0f2fe;
+        color: #0f172a;
+    }
+
+    .crm-activity-composer__textarea {
+        min-height: 120px;
+        resize: vertical;
+    }
+
+    .crm-process-timeline__item {
+        overflow: hidden;
+    }
+
+    .crm-process-timeline__icon {
+        width: 42px;
+        height: 42px;
+        border-radius: 12px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1rem;
+        flex-shrink: 0;
+    }
+
+    .crm-process-timeline__content {
+        white-space: pre-line;
+        color: #475569;
+        line-height: 1.55;
+    }
+
+    .crm-process-timeline__task-meta {
+        margin-top: 0.5rem;
+    }
+
+    .crm-process-timeline__meta-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+        padding: 0.45rem 0.8rem;
+        border-radius: 999px;
+        background: #f8fafc;
+        color: #334155;
+        font-size: 0.875rem;
+        font-weight: 500;
+    }
+
+    .crm-process-timeline__meta-pill--link {
+        background: #eff6ff;
+        color: #1d4ed8;
+    }
+</style>

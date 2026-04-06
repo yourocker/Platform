@@ -4,6 +4,11 @@
 @{
     ViewData["Title"] = Model.Title;
     var currentUserId = (Guid)ViewBag.CurrentUserId;
+    var isModal = ViewBag.IsModal as bool? ?? CRM.Infrastructure.ModalRequestHelper.IsModalRequest(Context.Request);
+    if (isModal)
+    {
+        ViewData["ModalSize"] = "xl";
+    }
     bool isAuthor = Model.AuthorId == currentUserId;
     bool isAssignee = Model.AssigneeId == currentUserId;
 
@@ -28,7 +33,16 @@
 
 <div class="container-fluid">
     <div class="mb-3">
-        <a asp-action="Index" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i> Назад к списку</a>
+        @if (isModal)
+        {
+            <a href="#"
+               data-crm-modal-close="true"
+               class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i> Назад</a>
+        }
+        else
+        {
+            <a asp-action="Index" class="btn btn-outline-secondary btn-sm"><i class="bi bi-arrow-left"></i> Назад к списку</a>
+        }
     </div>
 
     <div class="row">

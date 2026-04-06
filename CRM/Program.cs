@@ -100,6 +100,8 @@ builder.Services.AddScoped<ITenantMembershipAdministrationService, TenantMembers
 
 builder.Services.AddScoped<IContactService, ContactService>();
 builder.Services.AddScoped<ICrmService, CrmService>();
+builder.Services.AddScoped<ICrmActivityService, CrmActivityService>();
+builder.Services.AddScoped<ICrmSettingsService, CrmSettingsService>();
 builder.Services.AddScoped<ICrmResourceManager, CrmResourceManager>();
 builder.Services.AddScoped<IBookingPolicyService, BookingPolicyService>();
 builder.Services.AddScoped<IBookingCalendarDecorationService, BookingCalendarDecorationService>();
@@ -120,7 +122,10 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
-app.UseHttpsRedirection();
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
 app.UseStaticFiles();
 
 app.UseRouting();
@@ -167,6 +172,7 @@ if (!skipBootstrap)
     {
         var logger = services.GetRequiredService<ILogger<Program>>();
         logger.LogError(ex, "Ошибка при инициализации БД CRM");
+        throw;
     }
 }
 

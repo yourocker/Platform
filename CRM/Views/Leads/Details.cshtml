@@ -1,0 +1,190 @@
+@using System.Collections.Generic
+@using System.Linq
+@using Core.Entities.CRM
+@using CRM.ViewModels.CRM
+@using CRM.ViewModels.Shared
+@model CRM.ViewModels.CRM.CrmProcessDetailsViewModel
+@{
+    ViewData["Title"] = Model.Name;
+    ViewData["ModalSize"] = "workspace";
+    var inlineForm = ViewBag.InlineFormModel as CrmProcessFormViewModel ?? new CrmProcessFormViewModel();
+
+    var tabsModel = new EntityDetailsTabsViewModel
+    {
+        MainPartialViewName = "~/Views/Shared/_CrmProcessDetailsMain.cshtml",
+        MainModel = Model,
+        AdditionalTabs = new List<EntityDetailsTabDefinition>
+        {
+            new()
+            {
+                Key = "history",
+                Title = "История",
+                PartialViewName = "~/Views/Shared/_EntityTimeline.cshtml",
+                Model = ViewBag.HistoryEvents as IEnumerable<CrmEvent> ?? Enumerable.Empty<CrmEvent>()
+            }
+        }
+    };
+}
+
+<div class="container-fluid px-0 crm-process-modal-page">
+    <div class="crm-process-modal-page__header">
+        <div class="crm-process-modal-page__title-block">
+            <div class="crm-process-modal-page__eyebrow">Лид</div>
+            <input type="text"
+                   name="Name"
+                   value="@inlineForm.Name"
+                   form="crm-process-inline-form"
+                   class="crm-process-modal-page__title-input"
+                   maxlength="255"
+                   autocomplete="off" />
+        </div>
+    </div>
+
+    <div class="crm-process-modal-page__body">
+        <partial name="_EntityDetailsTabs" model="tabsModel" />
+    </div>
+
+    <div class="crm-process-modal-page__footer">
+        <div class="text-muted small">ID записи: @Model.Id</div>
+        <form asp-action="Delete" asp-route-id="@Model.Id" method="post" onsubmit="return confirm('Переместить лид в корзину?');">
+            @Html.AntiForgeryToken()
+            <button type="submit" class="btn btn-link text-danger small text-decoration-none opacity-75 p-0">
+                <i class="bi bi-trash me-1"></i> Удалить запись
+            </button>
+        </form>
+    </div>
+
+    <div class="crm-process-modal-page__sticky-actions d-none" data-crm-inline-action-bar="true">
+        <div class="crm-process-modal-page__sticky-actions-inner">
+            <button type="button"
+                    crm-button
+                    variant="outline-secondary"
+                    class="px-4"
+                    data-crm-inline-cancel="true">
+                Отмена
+            </button>
+            <button type="submit"
+                    form="crm-process-inline-form"
+                    formnovalidate
+                    crm-button
+                    variant="primary"
+                    icon="check2"
+                    class="px-4"
+                    data-crm-inline-save="true">
+                Сохранить
+            </button>
+        </div>
+    </div>
+</div>
+
+<style>
+    .crm-process-modal-page {
+        padding: 18px 24px 120px 30px;
+    }
+
+    .crm-process-modal-page__header {
+        display: block;
+        margin-bottom: 12px;
+        padding: 6px 0 0 6px;
+    }
+
+    .crm-process-modal-page__title-block {
+        min-width: 0;
+    }
+
+    .crm-process-modal-page__eyebrow {
+        font-size: 0.78rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: #64748b;
+        margin-bottom: 6px;
+    }
+
+    .crm-process-modal-page__title {
+        margin: 0;
+        font-size: clamp(1.4rem, 1.18rem + 0.8vw, 1.85rem);
+        line-height: 1.05;
+        color: #0f172a;
+        font-weight: 700;
+    }
+
+    .crm-process-modal-page__title-input {
+        width: min(100%, 780px);
+        margin: 0;
+        padding: 0;
+        border: 0;
+        background: transparent;
+        font-size: clamp(1.45rem, 1.2rem + 0.9vw, 1.95rem);
+        line-height: 1.08;
+        color: #0f172a;
+        font-weight: 700;
+        outline: none;
+        box-shadow: none;
+        border-radius: 0;
+    }
+
+    .crm-process-modal-page__title-input:focus {
+        border-bottom: 2px solid rgba(59, 130, 246, 0.9);
+    }
+
+    .crm-process-modal-page__footer {
+        margin-top: 18px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 16px;
+    }
+
+    .crm-process-modal-page__sticky-actions {
+        position: fixed;
+        left: 24px;
+        right: 24px;
+        bottom: 20px;
+        z-index: 80;
+        display: flex;
+        justify-content: center;
+        pointer-events: none;
+    }
+
+    .crm-process-modal-page__sticky-actions.d-none {
+        display: none !important;
+    }
+
+    .crm-process-modal-page__sticky-actions-inner {
+        display: inline-flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 14px;
+        border-radius: 18px;
+        border: 1px solid rgba(148, 163, 184, 0.26);
+        background: rgba(255, 255, 255, 0.96);
+        box-shadow: 0 18px 38px rgba(15, 23, 42, 0.14);
+        backdrop-filter: blur(16px);
+        pointer-events: auto;
+    }
+
+    @@media (max-width: 991.98px) {
+        .crm-process-modal-page {
+            padding: 18px 18px 112px;
+        }
+
+        .crm-process-modal-page__header,
+        .crm-process-modal-page__footer {
+            align-items: stretch;
+        }
+
+        .crm-process-modal-page__sticky-actions {
+            left: 16px;
+            right: 16px;
+            bottom: 16px;
+            justify-content: stretch;
+        }
+
+        .crm-process-modal-page__sticky-actions-inner {
+            width: 100%;
+            justify-content: stretch;
+            flex-wrap: wrap;
+        }
+    }
+</style>

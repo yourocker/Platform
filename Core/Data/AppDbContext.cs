@@ -84,15 +84,24 @@ namespace Core.Data
         
         // --- CRM ---
         public DbSet<CrmPipeline> CrmPipelines { get; set; }
+        public DbSet<CrmPipelineCardLayout> CrmPipelineCardLayouts { get; set; }
         public DbSet<CrmStage> CrmStages { get; set; }
         public DbSet<Lead> Leads { get; set; }
         public DbSet<Deal> Deals { get; set; }
+        public DbSet<CrmCompany> CrmCompanies { get; set; }
+        public DbSet<CrmLeadContact> CrmLeadContacts { get; set; }
+        public DbSet<CrmDealContact> CrmDealContacts { get; set; }
+        public DbSet<CrmCompanyContact> CrmCompanyContacts { get; set; }
+        public DbSet<CrmEntityRelation> CrmEntityRelations { get; set; }
+        public DbSet<CrmSettings> CrmSettings { get; set; }
         public DbSet<CrmResource> CrmResources { get; set; }
         public DbSet<CrmResourceBooking> CrmResourceBookings { get; set; }
         public DbSet<CrmResourceBookingItem> CrmResourceBookingItems { get; set; }
         public DbSet<CrmResourceBookingContact> CrmResourceBookingContacts { get; set; }
         public DbSet<CrmDealItem> CrmDealItems { get; set; }
         public DbSet<CrmEvent> CrmEvents { get; set; }
+        public DbSet<CrmActivity> CrmActivities { get; set; }
+        public DbSet<CrmActivityBinding> CrmActivityBindings { get; set; }
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
@@ -374,6 +383,13 @@ namespace Core.Data
                 
                 entity.HasIndex(e => e.StageId);
                 entity.HasIndex(e => e.ResponsibleId);
+                entity.HasIndex(e => e.ContactId);
+                entity.HasIndex(e => e.CompanyId);
+
+                entity.HasOne(e => e.Company)
+                    .WithMany(c => c.Leads)
+                    .HasForeignKey(e => e.CompanyId)
+                    .OnDelete(DeleteBehavior.SetNull);
             });
 
             // 14. Настройка CRM: Сделки
@@ -386,6 +402,114 @@ namespace Core.Data
                 entity.HasIndex(e => e.StageId);
                 entity.HasIndex(e => e.ResponsibleId);
                 entity.HasIndex(e => e.ContactId);
+                entity.HasIndex(e => e.CompanyId);
+                entity.HasIndex(e => e.SourceLeadId);
+
+                entity.HasOne(e => e.Company)
+                    .WithMany(c => c.Deals)
+                    .HasForeignKey(e => e.CompanyId)
+                    .OnDelete(DeleteBehavior.SetNull);
+
+                entity.HasOne(e => e.SourceLead)
+                    .WithMany(l => l.ConvertedDeals)
+                    .HasForeignKey(e => e.SourceLeadId)
+                    .OnDelete(DeleteBehavior.SetNull);
+            });
+
+            modelBuilder.Entity<CrmCompany>(entity =>
+            {
+                entity.ToTable("CrmCompanies");
+                entity.Property(e => e.Properties).HasColumnType("jsonb");
+                entity.HasIndex(e => e.Name);
+            });
+
+            modelBuilder.Entity<CrmDealContact>(entity =>
+            {
+                entity.ToTable("CrmDealContacts");
+                entity.HasKey(e => new { e.DealId, e.ContactId });
+                entity.HasIndex(e => e.ContactId);
+                entity.HasIndex(e => new { e.TenantId, e.ContactId });
+
+                entity.HasOne(e => e.Deal)
+                    .WithMany(d => d.ContactLinks)
+                    .HasForeignKey(e => e.DealId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(e => e.Contact)
+                    .WithMany(c => c.DealLinks)
+                    .HasForeignKey(e => e.ContactId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<CrmLeadContact>(entity =>
+            {
+                entity.ToTable("CrmLeadContacts");
+                entity.HasKey(e => new { e.LeadId, e.ContactId });
+                entity.HasIndex(e => e.ContactId);
+                entity.HasIndex(e => new { e.TenantId, e.ContactId });
+
+                entity.HasOne(e => e.Lead)
+                    .WithMany(l => l.ContactLinks)
+                    .HasForeignKey(e => e.LeadId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(e => e.Contact)
+                    .WithMany(c => c.LeadLinks)
+                    .HasForeignKey(e => e.ContactId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<CrmCompanyContact>(entity =>
+            {
+                entity.ToTable("CrmCompanyContacts");
+                entity.HasKey(e => new { e.CompanyId, e.ContactId });
+                entity.HasIndex(e => e.ContactId);
+                entity.HasIndex(e => new { e.TenantId, e.ContactId });
+
+                entity.HasOne(e => e.Company)
+                    .WithMany(c => c.ContactLinks)
+                    .HasForeignKey(e => e.CompanyId)
+                    .OnDelete(DeleteBehavior.Cascade);
+
+                entity.HasOne(e => e.Contact)
+                    .WithMany(c => c.CompanyLinks)
+                    .HasForeignKey(e => e.ContactId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<CrmEntityRelation>(entity =>
+            {
+                entity.ToTable("CrmEntityRelations");
+                entity.Property(e => e.SourceEntityCode).HasMaxLength(64).IsRequired();
+                entity.Property(e => e.TargetEntityCode).HasMaxLength(64).IsRequired();
+                entity.Property(e => e.RelationType).HasMaxLength(64).IsRequired();
+
+                entity.HasIndex(e => new
+                {
+                    e.TenantId,
+                    e.SourceEntityCode,
+                    e.SourceEntityId,
+                    e.RelationType
+                });
+
+                entity.HasIndex(e => new
+                {
+                    e.TenantId,
+                    e.TargetEntityCode,
+                    e.TargetEntityId,
+                    e.RelationType
+                });
+
+                entity.HasOne(e => e.CreatedByEmployee)
+                    .WithMany()
+                    .HasForeignKey(e => e.CreatedByEmployeeId)
+                    .OnDelete(DeleteBehavior.SetNull);
+            });
+
+            modelBuilder.Entity<CrmSettings>(entity =>
+            {
+                entity.ToTable("CrmSettings");
+                entity.HasIndex(e => e.TenantId).IsUnique();
             });
             
             // 15. Настройка CRM: ресурсы и бронирования
@@ -494,6 +618,51 @@ namespace Core.Data
                 entity.ToTable("CrmEvents");
                 entity.HasIndex(e => new { e.TargetId, e.TargetEntityCode }); // Для быстрого поиска истории карточки
                 entity.HasIndex(e => e.CreatedAt);
+            });
+
+            modelBuilder.Entity<CrmActivity>(entity =>
+            {
+                entity.ToTable("CrmActivities");
+                entity.Property(e => e.Subject).HasMaxLength(255).IsRequired();
+                entity.Property(e => e.Content).HasColumnType("text");
+                entity.HasIndex(e => new { e.TenantId, e.CreatedAt });
+                entity.HasIndex(e => new { e.TenantId, e.Type, e.CreatedAt });
+
+                entity.HasOne(e => e.Author)
+                    .WithMany()
+                    .HasForeignKey(e => e.AuthorId)
+                    .OnDelete(DeleteBehavior.SetNull);
+
+                entity.HasOne(e => e.LinkedTask)
+                    .WithMany()
+                    .HasForeignKey(e => e.LinkedTaskId)
+                    .OnDelete(DeleteBehavior.SetNull);
+            });
+
+            modelBuilder.Entity<CrmActivityBinding>(entity =>
+            {
+                entity.ToTable("CrmActivityBindings");
+                entity.HasKey(e => new { e.ActivityId, e.EntityCode, e.EntityId });
+                entity.Property(e => e.EntityCode).HasMaxLength(64).IsRequired();
+                entity.HasIndex(e => new { e.TenantId, e.EntityCode, e.EntityId });
+
+                entity.HasOne(e => e.Activity)
+                    .WithMany(a => a.Bindings)
+                    .HasForeignKey(e => e.ActivityId)
+                    .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<CrmPipelineCardLayout>(entity =>
+            {
+                entity.ToTable("CrmPipelineCardLayouts");
+                entity.HasIndex(e => new { e.TenantId, e.PipelineId }).IsUnique();
+                entity.Property(e => e.Layout).HasColumnType("jsonb");
+                entity.Property(e => e.UpdatedAt).HasDefaultValueSql("NOW()");
+
+                entity.HasOne(e => e.Pipeline)
+                    .WithMany()
+                    .HasForeignKey(e => e.PipelineId)
+                    .OnDelete(DeleteBehavior.Cascade);
             });
             
             // 17. Настройка форм

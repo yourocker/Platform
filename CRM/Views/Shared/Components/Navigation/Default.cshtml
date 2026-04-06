@@ -13,7 +13,10 @@
     var canManageServiceCatalog = TenantPermissionService.HasPermission(User, TenantPermissions.ManageServiceCatalog);
     
     // Находим категории для вывода их динамических приложений в системные блоки
-    var companyCat = Model.CustomCategories.FirstOrDefault(c => c.Name == "Компания");
+    var homeCat = Model.HomeCategory;
+    var companyCat = Model.CompanyCategory;
+    var scheduleCat = Model.ScheduleCategory;
+    var tasksCat = Model.TasksCategory;
     var settingsCat = Model.CustomCategories.FirstOrDefault(c => c.Name == "Конструктор");
 
     // Определяем активную кастомную категорию (для тех, что созданы полностью вручную)
@@ -35,30 +38,30 @@
     </button>
 
     <div id="sortable-menu" style="width: 100%; display: flex; flex-direction: column; align-items: center;">
-        <a href="/" class="main-btn @(Model.Controller == "Home" ? "active" : "")" data-id="home" title="Дашборд">
-            <i class="bi bi-speedometer2"></i>
+        <a href="/" class="main-btn @(Model.IsHomeActive ? "active" : "")" data-id="@(homeCat?.Id.ToString() ?? "home")" title="@(homeCat?.Name ?? "Рабочий стол")">
+            <i class="bi bi-@(homeCat?.Icon ?? "speedometer2")"></i>
         </a>
 
         @if (Model.CrmCategory != null && Model.IsCrmModuleEnabled)
         {
-            <a href="/Contacts" class="main-btn @(Model.IsCRMActive ? "active" : "")" data-id="@Model.CrmCategory.Id" title="@Model.CrmCategory.Name">
+            <a href="@Model.CrmDefaultUrl" class="main-btn @(Model.IsCRMActive ? "active" : "")" data-id="@Model.CrmCategory.Id" title="@Model.CrmCategory.Name">
                 <i class="bi bi-@Model.CrmCategory.Icon"></i>
             </a>
         }
 
-        <a href="/Employees" class="main-btn @(Model.IsCompanyActive ? "active" : "")" data-id="company" title="Компания">
-            <i class="bi bi-building"></i>
+        <a href="/Employees" class="main-btn @(Model.IsCompanyActive ? "active" : "")" data-id="@(companyCat?.Id.ToString() ?? "company")" title="@(companyCat?.Name ?? "Компания")">
+            <i class="bi bi-@(companyCat?.Icon ?? "building")"></i>
         </a>
 
         @if (Model.IsBookingModuleEnabled)
         {
-            <a href="/Schedule" class="main-btn @(Model.IsScheduleActive ? "active" : "")" data-id="schedule" title="Расписание">
-                <i class="bi bi-calendar2-week"></i>
+            <a href="/Schedule" class="main-btn @(Model.IsScheduleActive ? "active" : "")" data-id="@(scheduleCat?.Id.ToString() ?? "schedule")" title="@(scheduleCat?.Name ?? "Расписание")">
+                <i class="bi bi-@(scheduleCat?.Icon ?? "calendar2-week")"></i>
             </a>
         }
         
-        <a href="/Tasks" class="main-btn @(Model.IsTasksActive ? "active" : "")" data-id="tasks" title="Задачи">
-            <i class="bi bi-list-check"></i>
+        <a href="/Tasks" class="main-btn @(Model.IsTasksActive ? "active" : "")" data-id="@(tasksCat?.Id.ToString() ?? "tasks")" title="@(tasksCat?.Name ?? "Задачи")">
+            <i class="bi bi-@(tasksCat?.Icon ?? "list-check")"></i>
         </a>
 
         @* Вывод полностью кастомных разделов (Склады, Оборудование и т.д.) *@
@@ -84,11 +87,20 @@
     @if (Model.IsCrmModuleEnabled && Model.IsCRMActive && Model.CrmCategory != null)
     {
         <div class="sub-header"><span>@Model.CrmCategory.Name</span><button type="button" class="sub-header-toggle" title="Свернуть" aria-label="Свернуть меню"><i class="bi bi-chevron-left"></i></button></div>
-        @foreach (var app in Model.CrmCategory.Apps.OrderBy(a => a.IsSystem ? 0 : 1).ThenBy(a => a.Name))
+        @foreach (var app in Model.CrmApps.OrderBy(a => a.IsSystem ? 0 : 1).ThenBy(a => a.Name))
         {
-            @* Для Контактов (системных) оставляем старый роут, для остальных — /Data/ *@
-            var url = app.EntityCode == "Contact" ? "/Contacts" : $"/Data/{app.EntityCode}";
-            <a href="@url" class="sub-link @(Model.EntityCode == app.EntityCode || (app.EntityCode == "Contact" && Model.Controller == "Contacts") ? "active" : "")">
+            var url = app.EntityCode switch
+            {
+                "Contact" => "/Contacts",
+                "Lead" => "/Leads",
+                "Deal" => "/Deals",
+                _ => $"/Data/{app.EntityCode}"
+            };
+            var isActive = Model.EntityCode == app.EntityCode ||
+                           (app.EntityCode == "Contact" && Model.Controller == "Contacts") ||
+                           (app.EntityCode == "Lead" && Model.Controller == "Leads") ||
+                           (app.EntityCode == "Deal" && Model.Controller == "Deals");
+            <a href="@url" class="sub-link @(isActive ? "active" : "")">
                 <i class="bi bi-@app.Icon"></i> @app.Name
             </a>
         }
@@ -139,18 +151,37 @@
     }
     else if (Model.IsTasksActive)
     {
-        <div class="sub-header"><span>Задачи</span><button type="button" class="sub-header-toggle" title="Свернуть" aria-label="Свернуть меню"><i class="bi bi-chevron-left"></i></button></div>
+        <div class="sub-header"><span>@(tasksCat?.Name ?? "Задачи")</span><button type="button" class="sub-header-toggle" title="Свернуть" aria-label="Свернуть меню"><i class="bi bi-chevron-left"></i></button></div>
         <a href="/Tasks/CreatedByMe" class="sub-link @(Model.Action == "CreatedByMe" ? "active" : "")"><i class="bi bi-person-up"></i> Поставленные мной</a>
         <a href="/Tasks/AssignedToMe" class="sub-link @(Model.Action == "AssignedToMe" ? "active" : "")"><i class="bi bi-person-check"></i> Назначенные мне</a>
         <a href="/Tasks/CompletedTasks" class="sub-link @(Model.Action == "CompletedTasks" ? "active" : "")"><i class="bi bi-check2-all"></i> Выполненные</a>
+        @if (tasksCat != null && tasksCat.Apps.Any(a => !a.IsSystem))
+        {
+            <hr />
+            @foreach (var app in tasksCat.Apps.Where(a => !a.IsSystem).OrderBy(a => a.Name))
+            {
+                <a href="/Data/@app.EntityCode" class="sub-link @(Model.EntityCode == app.EntityCode ? "active" : "")">
+                    <i class="bi bi-@app.Icon"></i> @app.Name
+                </a>
+            }
+        }
         <hr />
         <a href="/Tasks" class="sub-link @(Model.Action == "Index" ? "active" : "")"><i class="bi bi-list-ul"></i> Все задачи</a>
     }
     else if (Model.IsScheduleActive)
     {
-        <div class="sub-header"><span>Расписание</span><button type="button" class="sub-header-toggle" title="Свернуть" aria-label="Свернуть меню"><i class="bi bi-chevron-left"></i></button></div>
+        <div class="sub-header"><span>@(scheduleCat?.Name ?? "Расписание")</span><button type="button" class="sub-header-toggle" title="Свернуть" aria-label="Свернуть меню"><i class="bi bi-chevron-left"></i></button></div>
         <a href="/Schedule" class="sub-link @(Model.Controller == "Schedule" ? "active" : "")"><i class="bi bi-calendar-week"></i> Календарь</a>
         <a href="/CompanySettings/WorkMode#booking-resources-settings" class="sub-link @(Model.Controller == "CompanySettings" && Model.Action == "WorkMode" ? "active" : "")"><i class="bi bi-sliders"></i> Настройки бронирования</a>
+        @if (scheduleCat != null)
+        {
+            @foreach (var app in scheduleCat.Apps.Where(a => !a.IsSystem).OrderBy(a => a.Name))
+            {
+                <a href="/Data/@app.EntityCode" class="sub-link @(Model.EntityCode == app.EntityCode ? "active" : "")">
+                    <i class="bi bi-@app.Icon"></i> @app.Name
+                </a>
+            }
+        }
     }
     else if (Model.IsSettingsActive)
     {
@@ -183,6 +214,20 @@
             <a href="/Data/@app.EntityCode" class="sub-link @(Model.EntityCode == app.EntityCode ? "active" : "")">
                 <i class="bi bi-@app.Icon"></i> @app.Name
             </a>
+        }
+    }
+    else if (Model.IsHomeActive)
+    {
+        <div class="sub-header"><span>@(homeCat?.Name ?? "Рабочий стол")</span><button type="button" class="sub-header-toggle" title="Свернуть" aria-label="Свернуть меню"><i class="bi bi-chevron-left"></i></button></div>
+        <a href="/" class="sub-link @(Model.Controller == "Home" ? "active" : "")"><i class="bi bi-house"></i> Рабочий стол</a>
+        @if (homeCat != null)
+        {
+            @foreach (var app in homeCat.Apps.Where(a => !a.IsSystem).OrderBy(a => a.Name))
+            {
+                <a href="/Data/@app.EntityCode" class="sub-link @(Model.EntityCode == app.EntityCode ? "active" : "")">
+                    <i class="bi bi-@app.Icon"></i> @app.Name
+                </a>
+            }
         }
     }
     else

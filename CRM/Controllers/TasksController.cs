@@ -11,6 +11,7 @@ using System.Threading.Tasks;
 using Microsoft.AspNetCore.Authorization;
 using System.Collections.Generic;
 using CRM.ViewModels.Filters;
+using CRM.Infrastructure;
 
 namespace CRM.Controllers
 {
@@ -192,7 +193,7 @@ namespace CRM.Controllers
         
         // --- ПРОСМОТР И ДЕЙСТВИЯ ---
 
-        public async Task<IActionResult> Details(Guid id)
+        public async Task<IActionResult> Details(Guid id, bool modal = false)
         {
             var user = await GetCurrentUser();
             var task = await _context.EmployeeTasks
@@ -205,14 +206,20 @@ namespace CRM.Controllers
             if (task == null) return NotFound();
 
             ViewBag.CurrentUserId = user.Id;
+            ViewBag.IsModal = modal;
             return View(task);
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> AddComment(Guid taskId, string text)
+        public async Task<IActionResult> AddComment(Guid taskId, string text, bool modal = false)
         {
-            if (string.IsNullOrWhiteSpace(text)) return RedirectToAction("Details", new { id = taskId });
+            if (string.IsNullOrWhiteSpace(text))
+            {
+                return modal
+                    ? ModalRequestHelper.BuildRedirectContent(Url.Action(nameof(Details), new { id = taskId, modal = true }))
+                    : RedirectToAction(nameof(Details), new { id = taskId });
+            }
 
             var user = await GetCurrentUser();
             
@@ -227,12 +234,14 @@ namespace CRM.Controllers
             _context.Add(comment);
             await _context.SaveChangesAsync();
 
-            return RedirectToAction("Details", new { id = taskId });
+            return modal
+                ? ModalRequestHelper.BuildRedirectContent(Url.Action(nameof(Details), new { id = taskId, modal = true }))
+                : RedirectToAction(nameof(Details), new { id = taskId });
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> ChangeStatus(Guid id, Core.Entities.Tasks.TaskStatus status)
+        public async Task<IActionResult> ChangeStatus(Guid id, Core.Entities.Tasks.TaskStatus status, bool modal = false)
         {
             var task = await _context.EmployeeTasks.FindAsync(id);
             if (task == null) return NotFound();
@@ -247,12 +256,14 @@ namespace CRM.Controllers
             task.Status = status;
             _context.Update(task);
             await _context.SaveChangesAsync();
-            return RedirectToAction("Details", new { id });
+            return modal
+                ? ModalRequestHelper.BuildRedirectContent(Url.Action(nameof(Details), new { id, modal = true }))
+                : RedirectToAction(nameof(Details), new { id });
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> CancelTask(Guid id)
+        public async Task<IActionResult> CancelTask(Guid id, bool modal = false)
         {
             var task = await _context.EmployeeTasks.FindAsync(id);
             if (task == null) return NotFound();
@@ -265,8 +276,10 @@ namespace CRM.Controllers
             
             _context.Update(task);
             await _context.SaveChangesAsync();
-            
-            return RedirectToAction("Index");
+
+            return modal
+                ? ModalRequestHelper.BuildRefreshContent()
+                : RedirectToAction(nameof(Index));
         }
 
         // --- СОЗДАНИЕ ---
