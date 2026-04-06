@@ -43,6 +43,7 @@ public class CrmCardLayoutRenderViewModel
     public Guid AppDefinitionId { get; set; }
     public Guid PipelineId { get; set; }
     public CrmProcessFormViewModel FormModel { get; set; } = new();
+    public CrmProcessDetailsViewModel DetailsModel { get; set; } = new();
     public CrmCardLayoutSchema Layout { get; set; } = new();
     public List<AppFieldDefinition> DynamicFields { get; set; } = new();
     public Dictionary<string, List<Microsoft.AspNetCore.Mvc.Rendering.SelectListItem>> LookupData { get; set; } = new(StringComparer.OrdinalIgnoreCase);
@@ -65,6 +66,9 @@ public static class CrmCardLayoutCatalog
         {
             ["Lead"] = new()
             {
+                CreateBuiltIn("PipelineId", "Воронка"),
+                CreateBuiltIn("CreatedAt", "Создано"),
+                CreateBuiltIn("ConvertedAt", "Дата конверсии"),
                 CreateBuiltIn("Amount", "Сумма"),
                 CreateBuiltIn("Currency", "Валюта"),
                 CreateBuiltIn("ResponsibleId", "Ответственный"),
@@ -73,6 +77,9 @@ public static class CrmCardLayoutCatalog
             },
             ["Deal"] = new()
             {
+                CreateBuiltIn("PipelineId", "Воронка"),
+                CreateBuiltIn("CreatedAt", "Создано"),
+                CreateBuiltIn("SourceLeadId", "Источник"),
                 CreateBuiltIn("Amount", "Сумма"),
                 CreateBuiltIn("Currency", "Валюта"),
                 CreateBuiltIn("ResponsibleId", "Ответственный"),
@@ -103,6 +110,7 @@ public static class CrmCardLayoutCatalog
         }
 
         var normalized = Normalize(parsed, entityCode, dynamicFields);
+        normalized = EnsureOverviewSection(normalized, entityCode);
         return normalized.Sections.Count > 0
             ? normalized
             : BuildDefault(entityCode, dynamicFields);
@@ -199,6 +207,12 @@ public static class CrmCardLayoutCatalog
         {
             new()
             {
+                Id = "overview",
+                Title = entityCode.Equals("Deal", StringComparison.OrdinalIgnoreCase) ? "О сделке" : "О лиде",
+                Items = BuildOverviewItems(entityCode)
+            },
+            new()
+            {
                 Id = "main",
                 Title = "Основное",
                 Items = new List<CrmCardLayoutItemViewModel>
@@ -287,5 +301,59 @@ public static class CrmCardLayoutCatalog
         }
 
         return nextId;
+    }
+
+    private static CrmCardLayoutSchema EnsureOverviewSection(CrmCardLayoutSchema schema, string entityCode)
+    {
+        if (!entityCode.Equals("Lead", StringComparison.OrdinalIgnoreCase) &&
+            !entityCode.Equals("Deal", StringComparison.OrdinalIgnoreCase))
+        {
+            return schema;
+        }
+
+        var overviewItems = BuildOverviewItems(entityCode);
+        var overviewIdentities = overviewItems
+            .Select(item => item.Identity)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var hasOverviewItems = schema.Sections
+            .SelectMany(section => section.Items)
+            .Any(item => overviewIdentities.Contains(item.Identity));
+        var hasOverviewSection = schema.Sections.Any(section =>
+            string.Equals(section.Id, "overview", StringComparison.OrdinalIgnoreCase));
+
+        if (hasOverviewItems || hasOverviewSection)
+        {
+            return schema;
+        }
+
+        schema.Sections.Insert(0, new CrmCardLayoutSectionViewModel
+        {
+            Id = "overview",
+            Title = entityCode.Equals("Deal", StringComparison.OrdinalIgnoreCase) ? "О сделке" : "О лиде",
+            Items = overviewItems
+        });
+
+        return schema;
+    }
+
+    private static List<CrmCardLayoutItemViewModel> BuildOverviewItems(string entityCode)
+    {
+        var items = new List<CrmCardLayoutItemViewModel>
+        {
+            new() { Kind = "system", Key = "PipelineId" },
+            new() { Kind = "system", Key = "CreatedAt" }
+        };
+
+        if (entityCode.Equals("Deal", StringComparison.OrdinalIgnoreCase))
+        {
+            items.Add(new CrmCardLayoutItemViewModel { Kind = "system", Key = "SourceLeadId" });
+        }
+
+        if (entityCode.Equals("Lead", StringComparison.OrdinalIgnoreCase))
+        {
+            items.Add(new CrmCardLayoutItemViewModel { Kind = "system", Key = "ConvertedAt" });
+        }
+
+        return items;
     }
 }

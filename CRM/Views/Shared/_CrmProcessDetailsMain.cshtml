@@ -8,126 +8,81 @@
         ?? new CrmCardLayoutRenderViewModel
         {
             EntityCode = inlineModel.EntityCode,
-            FormModel = inlineModel
+            FormModel = inlineModel,
+            DetailsModel = Model
         };
+    cardLayoutModel.FormModel = inlineModel;
+    cardLayoutModel.DetailsModel = Model;
     var stageChangeUrl = Url.Action("ChangeStage", Model.IsDeal ? "Deals" : "Leads");
     var stageEntityParameter = Model.IsDeal ? "dealId" : "leadId";
     var formController = Model.IsDeal ? "Deals" : "Leads";
     const string inlineFormId = "crm-process-inline-form";
 }
 
-@if (Model.StageSteps.Any())
-{
-    <div class="crm-process-stage-strip mb-4"
-         data-crm-stage-strip="true"
-         data-change-stage-url="@stageChangeUrl"
-         data-entity-id="@Model.Id"
-         data-entity-param="@stageEntityParameter">
-        @foreach (var stage in Model.StageSteps)
-        {
-            var stageClass = stage.IsCurrent
-                ? "is-current"
-                : stage.IsReached
-                    ? "is-reached"
-                    : string.Empty;
+<div class="crm-process-content-shell">
+    @if (Model.StageSteps.Any())
+    {
+        <div class="crm-process-stage-strip mb-4"
+             data-crm-stage-strip="true"
+             data-change-stage-url="@stageChangeUrl"
+             data-entity-id="@Model.Id"
+             data-entity-param="@stageEntityParameter">
+            @foreach (var stage in Model.StageSteps)
+            {
+                var stageClass = stage.IsCurrent
+                    ? "is-current"
+                    : stage.IsReached
+                        ? "is-reached"
+                        : string.Empty;
 
-            <button type="button"
-                    class="crm-process-stage-strip__item @stageClass @(stage.IsCurrent ? "is-locked" : "is-actionable")"
-                    style="--stage-color:@stage.Color;"
-                    data-stage-id="@stage.StageId"
-                    disabled="@(stage.IsCurrent ? "disabled" : null)">
-                <span class="crm-process-stage-strip__name">@stage.Name</span>
-            </button>
-        }
-    </div>
-}
+                <button type="button"
+                        class="crm-process-stage-strip__item @stageClass @(stage.IsCurrent ? "is-locked" : "is-actionable")"
+                        style="--stage-color:@stage.Color;"
+                        data-stage-id="@stage.StageId"
+                        disabled="@(stage.IsCurrent ? "disabled" : null)">
+                    <span class="crm-process-stage-strip__name">@stage.Name</span>
+                </button>
+            }
+        </div>
+    }
 
 <div class="crm-process-workspace">
-    <form id="@inlineFormId"
-          asp-controller="@formController"
-          asp-action="Edit"
-          asp-route-id="@Model.Id"
-          asp-route-modal="true"
-          method="post"
-          novalidate
-          class="crm-process-workspace__main crm-process-inline-form"
-          data-crm-inline-form="true">
-        @Html.AntiForgeryToken()
-        <input type="hidden" name="Id" value="@inlineModel.Id" />
-        <input type="hidden" name="EntityCode" value="@inlineModel.EntityCode" />
-        <input type="hidden" name="PipelineId" value="@inlineModel.PipelineId" />
-        <input type="hidden" name="StageId" value="@inlineModel.StageId" />
-        <input type="hidden" name="IsConverted" value="@inlineModel.IsConverted.ToString().ToLowerInvariant()" />
-        <input type="hidden" name="ConvertedAt" value="@(inlineModel.ConvertedAt?.ToString("O") ?? string.Empty)" />
+    <div class="crm-process-workspace__main">
+        <div class="crm-process-workspace__main-inner">
+            <form id="@inlineFormId"
+                  asp-controller="@formController"
+                  asp-action="Edit"
+                  asp-route-id="@Model.Id"
+                  asp-route-modal="true"
+                  method="post"
+                  novalidate
+                  class="crm-process-inline-form"
+                  data-crm-inline-form="true">
+                @Html.AntiForgeryToken()
+                <input type="hidden" name="Id" value="@inlineModel.Id" />
+                <input type="hidden" name="EntityCode" value="@inlineModel.EntityCode" />
+                <input type="hidden" id="crm-process-pipeline-value" name="PipelineId" value="@inlineModel.PipelineId" />
+                <input type="hidden" name="StageId" value="@inlineModel.StageId" />
+                <input type="hidden" name="IsConverted" value="@inlineModel.IsConverted.ToString().ToLowerInvariant()" />
+                <input type="hidden" name="ConvertedAt" value="@(inlineModel.ConvertedAt?.ToString("O") ?? string.Empty)" />
 
-        <div class="card border-0 shadow-sm mb-3">
-            <div class="card-body p-4 p-xxl-5">
-                <div class="crm-process-overview__heading">@(Model.IsDeal ? "О сделке" : "О лиде")</div>
-
-                <div class="crm-process-overview__hero">
-                    <div class="crm-process-overview__hero-meta">
-                        <div class="crm-process-overview__hero-item">
-                            <span class="crm-process-overview__hero-label">Стадия</span>
-                            <span class="badge border text-dark" style="background-color:@(Model.StageColor + "20"); border-color:@Model.StageColor;">
-                                @(Model.StageName ?? "—")
-                            </span>
-                        </div>
-                        <div class="crm-process-overview__hero-item">
-                            <span class="crm-process-overview__hero-label">Создано</span>
-                            <span>@Model.CreatedAt.ToString("dd.MM.yyyy HH:mm")</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="crm-process-overview__grid">
-                    <div class="crm-process-overview__field">
-                        <div class="crm-process-overview__label">Воронка</div>
-                        <div class="crm-process-overview__value">@(Model.PipelineName ?? "—")</div>
-                    </div>
-                    @if (Model.IsDeal)
-                    {
-                        <div class="crm-process-overview__field">
-                            <div class="crm-process-overview__label">Источник</div>
-                            <div class="crm-process-overview__value">@(Model.SourceLeadName ?? "Без лида")</div>
-                        </div>
-                    }
-                    @if (Model.IsLead)
-                    {
-                        <div class="crm-process-overview__field">
-                            <div class="crm-process-overview__label">Статус конверсии</div>
-                            <div class="crm-process-overview__value">
-                                @if (Model.IsConverted)
-                                {
-                                    <span class="badge bg-success-subtle text-success-emphasis">Сконвертирован</span>
-                                }
-                                else
-                                {
-                                    <span class="badge bg-light text-muted border">Ожидает успешной стадии</span>
-                                }
-                            </div>
-                        </div>
-                        <div class="crm-process-overview__field">
-                            <div class="crm-process-overview__label">Дата конверсии</div>
-                            <div class="crm-process-overview__value">@(Model.ConvertedAt?.ToString("dd.MM.yyyy HH:mm") ?? "—")</div>
-                        </div>
-                    }
-                </div>
-            </div>
+                @{
+                    ViewBag.CrmCardLayoutPrefix = "crm-process";
+                }
+                <partial name="_CrmProcessCardLayout" model="cardLayoutModel" />
+            </form>
         </div>
+    </div>
 
-        @{
-            ViewBag.CrmCardLayoutPrefix = "crm-process";
-        }
-        <partial name="_CrmProcessCardLayout" model="cardLayoutModel" />
-    </form>
-
-    <aside class="crm-process-workspace__timeline">
-        <div class="crm-process-workspace__timeline-card card border-0 shadow-sm">
+    <aside class="crm-process-workspace__timeline" data-crm-process-side-panel="true">
+        <div class="crm-process-workspace__timeline-card card border-0 shadow-sm" data-crm-process-timeline-panel="true">
             <div class="card-body p-0">
                 <partial name="_CrmProcessTimeline" model="timelineFeed" />
             </div>
         </div>
+        <div class="crm-process-workspace__builder-host d-none" data-crm-card-layout-builder-host="true"></div>
     </aside>
+</div>
 </div>
 
 <style>
@@ -138,9 +93,19 @@
         align-items: start;
     }
 
+    .crm-process-content-shell {
+        padding-left: 10px;
+        padding-right: 10px;
+    }
+
     .crm-process-workspace__main,
     .crm-process-workspace__timeline {
         min-width: 0;
+    }
+
+    .crm-process-workspace__main-inner {
+        padding-left: 0;
+        padding-right: 0;
     }
 
     .crm-process-inline-form {
@@ -151,6 +116,12 @@
         position: sticky;
         top: 0;
         overflow: hidden;
+    }
+
+    .crm-process-workspace__builder-host {
+        position: sticky;
+        top: 0;
+        align-self: start;
     }
 
     .crm-process-stage-strip {
@@ -382,6 +353,15 @@
     @@media (max-width: 1199.98px) {
         .crm-process-workspace {
             grid-template-columns: 1fr;
+        }
+
+        .crm-process-content-shell {
+            padding-left: 0;
+            padding-right: 0;
+        }
+
+        .crm-process-workspace__builder-host {
+            position: static;
         }
 
         .crm-process-workspace__timeline-card {
@@ -732,6 +712,29 @@
         window.crmRelatedContacts?.init(visibleLayoutSections || document);
         bindRelatedSelect2DirtyState(contactsContainer);
         refreshOpenButtons();
+
+        document.querySelectorAll('[data-crm-card-layout-launcher="true"][data-prefix]').forEach(button => {
+            if (!(button instanceof HTMLButtonElement) || button.dataset.crmCardLayoutLauncherBound === 'true') {
+                return;
+            }
+
+            button.dataset.crmCardLayoutLauncherBound = 'true';
+            button.addEventListener('click', function (event) {
+                event.preventDefault();
+
+                const prefix = String(button.dataset.prefix || '').trim();
+                if (!prefix) {
+                    return;
+                }
+
+                const internalToggle = document.querySelector(
+                    `[data-crm-card-layout-root="true"][data-prefix="${prefix}"] [data-crm-card-layout-toggle="true"][data-prefix="${prefix}"]`);
+
+                if (internalToggle instanceof HTMLButtonElement) {
+                    internalToggle.click();
+                }
+            });
+        });
 
         if (!strip) {
             return;

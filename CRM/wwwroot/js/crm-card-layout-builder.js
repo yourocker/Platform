@@ -12,6 +12,7 @@
     const CARD_LAYOUT_STATE_URL = '/api/CrmCardLayouts/GetState';
     const CARD_LAYOUT_SAVE_URL = '/api/CrmCardLayouts/Save';
     const FORM_CONFIG_CREATE_FIELD_URL = '/api/FormConfig/CreateField';
+    const builderInstances = window.crmCardLayoutBuilderInstances || (window.crmCardLayoutBuilderInstances = {});
 
     function toLower(value) {
         return String(value || '').trim().toLowerCase();
@@ -608,7 +609,7 @@
         const builder = root.querySelector('[data-crm-card-layout-builder="true"]');
         const paletteContainer = root.querySelector('[data-crm-card-layout-palette="true"]');
         const selectedSectionLabel = root.querySelector('[data-crm-card-layout-selected-section-label="true"]');
-        const layoutToggleButton = root.querySelector('[data-crm-card-layout-toggle="true"]');
+        const layoutToggleButtons = Array.from(document.querySelectorAll(`[data-crm-card-layout-toggle="true"][data-prefix="${prefix}"]`));
         const createFieldForm = document.getElementById('crmCardCreateFieldForm');
         const createFieldModalElement = document.getElementById('crmCardCreateFieldModal');
         const dataTypeSelect = document.getElementById('crmCardFieldDataTypeSelect');
@@ -616,6 +617,9 @@
         const targetSelect = document.getElementById('crmCardTargetEntitySelect');
         const optionsWrapper = document.getElementById('crmCardSelectOptionsWrapper');
         const optionsContainer = document.getElementById('crmCardSelectOptionsContainer');
+        const workspace = root.closest('.crm-process-workspace');
+        const builderHost = workspace?.querySelector('[data-crm-card-layout-builder-host="true"]') || null;
+        const timelinePanel = workspace?.querySelector('[data-crm-process-timeline-panel="true"]') || null;
 
         if (!sectionsContainer || !stash || !builder || !paletteContainer) {
             return;
@@ -629,7 +633,7 @@
             builder,
             paletteContainer,
             selectedSectionLabel,
-            layoutToggleButton,
+            layoutToggleButtons,
             createFieldForm,
             createFieldModalElement,
             dataTypeSelect,
@@ -637,6 +641,9 @@
             targetSelect,
             optionsWrapper,
             optionsContainer,
+            workspace,
+            builderHost,
+            timelinePanel,
             appDefinitionId: payload.appDefinitionId,
             pipelineId: payload.pipelineId,
             entityCode: payload.entityCode,
@@ -665,10 +672,59 @@
         window.crmCardLayoutLookupRegistry = Object.assign(window.crmCardLayoutLookupRegistry || {}, state.lookupData);
         window.crmCardLayoutCreateUrlRegistry = Object.assign(window.crmCardLayoutCreateUrlRegistry || {}, state.dynamicFieldCreateUrls);
 
+        if (builderHost && builder.parentElement !== builderHost) {
+            builderHost.appendChild(builder);
+        }
+
         function getCurrentPipelineId() {
-            const pipelineInput = document.querySelector('select[name="PipelineId"], input[name="PipelineId"]');
+            const pipelineInput = document.querySelector('input[name="PipelineId"]');
             return String(pipelineInput?.value || state.pipelineId || '');
         }
+
+        function syncToggleButtons(isActive) {
+            state.layoutToggleButtons.forEach(button => {
+                button.classList.toggle('is-active', isActive);
+                button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+                button.setAttribute('title', isActive ? 'Закрыть конструктор карточки' : 'Открыть конструктор карточки');
+                button.setAttribute('aria-label', isActive ? 'Закрыть конструктор карточки' : 'Открыть конструктор карточки');
+            });
+
+            document.querySelectorAll(`[data-crm-card-layout-launcher="true"][data-prefix="${prefix}"]`).forEach(button => {
+                button.classList.toggle('is-active', isActive);
+                button.setAttribute('aria-pressed', isActive ? 'true' : 'false');
+                button.setAttribute('title', isActive ? 'Закрыть конструктор карточки' : 'Открыть конструктор карточки');
+                button.setAttribute('aria-label', isActive ? 'Закрыть конструктор карточки' : 'Открыть конструктор карточки');
+            });
+        }
+
+        function setBuilderMode(isActive) {
+            root.classList.toggle('is-builder-active', isActive);
+            state.workspace?.classList.toggle('is-builder-active', isActive);
+            state.builderHost?.classList.toggle('d-none', !isActive);
+            state.timelinePanel?.classList.toggle('d-none', isActive);
+            syncToggleButtons(isActive);
+
+            if (isActive) {
+                ensureSelectedSection();
+                initSortables();
+                refreshPalette();
+            }
+        }
+
+        builderInstances[prefix] = {
+            root,
+            toggle() {
+                setBuilderMode(!root.classList.contains('is-builder-active'));
+            },
+            open() {
+                setBuilderMode(true);
+            },
+            close() {
+                setBuilderMode(false);
+            }
+        };
+
+        const interactionScope = state.workspace || root;
 
         function getSectionElements() {
             return Array.from(sectionsContainer.querySelectorAll('[data-section-id]'));
@@ -992,7 +1048,7 @@
             }
 
             rememberSavedLayout(payload?.layout ? payload.layout : layout);
-            window.alert('Layout карточки сохранён.');
+            window.alert('Карточка сохранена.');
         }
 
         function resetCreateFieldOptions() {
@@ -1114,17 +1170,14 @@
             state.createFieldModal?.hide();
         }
 
-        root.addEventListener('click', async function (event) {
+        interactionScope.addEventListener('click', async function (event) {
             const button = event.target.closest('button');
-            if (!button || !root.contains(button)) {
+            if (!button || !interactionScope.contains(button)) {
                 return;
             }
 
             if (button.matches('[data-crm-card-layout-toggle="true"]')) {
-                root.classList.toggle('is-builder-active');
-                ensureSelectedSection();
-                initSortables();
-                refreshPalette();
+                setBuilderMode(!root.classList.contains('is-builder-active'));
                 return;
             }
 
@@ -1201,7 +1254,7 @@
                     button.disabled = true;
                     await saveLayout();
                 } catch (error) {
-                    window.alert(error instanceof Error ? error.message : 'Не удалось сохранить layout карточки.');
+                    window.alert(error instanceof Error ? error.message : 'Не удалось сохранить карточку.');
                 } finally {
                     button.disabled = false;
                 }
@@ -1212,6 +1265,7 @@
                 const savedLayout = JSON.parse(state.savedLayoutJson || '{"sections":[]}');
                 applyLayout(savedLayout);
                 rememberSavedLayout(savedLayout);
+                setBuilderMode(false);
                 return;
             }
 
@@ -1277,6 +1331,7 @@
         refreshPalette();
         initSortables();
         initGlobalDynamicFieldHelpers();
+        setBuilderMode(false);
         root.dataset.crmCardLayoutInitialized = 'true';
     }
 
@@ -1287,6 +1342,15 @@
     window.crmCardLayoutBuilder = {
         init(root) {
             initRoot(root || document.querySelector('[data-crm-card-layout-root="true"]'));
+        },
+        toggle(prefix) {
+            builderInstances[String(prefix || '').trim()]?.toggle();
+        },
+        open(prefix) {
+            builderInstances[String(prefix || '').trim()]?.open();
+        },
+        close(prefix) {
+            builderInstances[String(prefix || '').trim()]?.close();
         }
     };
 })();

@@ -270,6 +270,30 @@
     {
         switch (key)
         {
+            case "PipelineId":
+                <div class="crm-card-layout-field crm-card-layout-field--overview">
+                    <label class="form-label text-muted fw-bold">Воронка</label>
+                    <div class="crm-card-layout-field__readonly">@(Model.DetailsModel.PipelineName ?? "—")</div>
+                </div>
+                break;
+            case "CreatedAt":
+                <div class="crm-card-layout-field crm-card-layout-field--overview">
+                    <label class="form-label text-muted fw-bold">Создано</label>
+                    <div class="crm-card-layout-field__readonly">@Model.DetailsModel.CreatedAt.ToString("dd.MM.yyyy HH:mm")</div>
+                </div>
+                break;
+            case "SourceLeadId":
+                <div class="crm-card-layout-field crm-card-layout-field--overview">
+                    <label class="form-label text-muted fw-bold">Источник</label>
+                    <div class="crm-card-layout-field__readonly">@(Model.DetailsModel.SourceLeadName ?? "Без лида")</div>
+                </div>
+                break;
+            case "ConvertedAt":
+                <div class="crm-card-layout-field crm-card-layout-field--overview">
+                    <label class="form-label text-muted fw-bold">Дата конверсии</label>
+                    <div class="crm-card-layout-field__readonly">@(Model.DetailsModel.ConvertedAt?.ToString("dd.MM.yyyy HH:mm") ?? "—")</div>
+                </div>
+                break;
             case "Amount":
                 <div class="crm-card-layout-field">
                     <label class="form-label text-muted fw-bold">Сумма</label>
@@ -493,13 +517,13 @@
 <div class="crm-card-layout"
      data-crm-card-layout-root="true"
      data-prefix="@prefix">
-    <div class="crm-card-layout__toolbar">
-        <button type="button"
-                class="btn btn-outline-secondary btn-sm"
-                data-crm-card-layout-toggle="true">
-            <i class="bi bi-layout-three-columns me-1"></i> Конструктор карточки
-        </button>
-    </div>
+    <button type="button"
+            class="d-none"
+            tabindex="-1"
+            aria-hidden="true"
+            data-crm-card-layout-toggle="true"
+            data-prefix="@prefix">
+    </button>
 
     <div class="crm-card-layout__workspace">
         <div class="crm-card-layout__canvas">
@@ -594,7 +618,7 @@
 
             <div class="crm-card-layout__builder-footer">
                 <button type="button" class="btn btn-light border" data-crm-card-layout-cancel="true">Отмена</button>
-                <button type="button" class="btn btn-primary" data-crm-card-layout-save="true">Сохранить layout</button>
+                <button type="button" class="btn btn-primary" data-crm-card-layout-save="true">Сохранить</button>
             </div>
         </aside>
     </div>
@@ -687,39 +711,31 @@
 }))
 </script>
 
-<script src="~/js/crm-card-layout-builder.js?v=20260403e"></script>
+<script src="~/js/crm-card-layout-builder.js?v=20260406b"></script>
 
 <style>
-    .crm-card-layout__toolbar {
-        display: flex;
-        justify-content: flex-end;
-        margin-bottom: 12px;
-    }
-
     .crm-card-layout__workspace {
         display: grid;
         grid-template-columns: minmax(0, 1fr);
-        gap: 20px;
     }
 
     .crm-card-layout__builder {
         display: none;
-        position: sticky;
-        top: 0;
-        align-self: start;
+        width: 100%;
+        min-width: 0;
         border: 1px solid rgba(148, 163, 184, 0.22);
-        border-radius: 18px;
+        border-radius: 16px;
         background: #fff;
         box-shadow: 0 14px 34px rgba(15, 23, 42, 0.08);
-        padding: 18px;
+        padding: 20px;
         gap: 14px;
     }
 
-    .crm-card-layout.is-builder-active .crm-card-layout__workspace {
-        grid-template-columns: minmax(0, 1fr) 320px;
+    .crm-card-layout.is-builder-active .crm-card-layout__builder {
+        display: grid;
     }
 
-    .crm-card-layout.is-builder-active .crm-card-layout__builder {
+    .crm-process-workspace.is-builder-active .crm-card-layout__builder {
         display: grid;
     }
 
@@ -794,7 +810,8 @@
         display: inline-flex;
     }
 
-    .crm-card-layout__section.is-selected {
+    .crm-card-layout.is-builder-active .crm-card-layout__section.is-selected,
+    .crm-process-workspace.is-builder-active .crm-card-layout__section.is-selected {
         outline: 2px solid rgba(59, 130, 246, 0.7);
     }
 
@@ -806,6 +823,11 @@
     .crm-card-layout__item {
         position: relative;
         padding-top: 4px;
+    }
+
+    .crm-card-layout__section[data-section-id="overview"] .crm-card-layout__items {
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 18px 22px;
     }
 
     .crm-card-layout__item.sortable-ghost,
@@ -838,7 +860,8 @@
         cursor: grab;
     }
 
-    .crm-card-layout__section.is-selected .crm-card-layout__section-title {
+    .crm-card-layout.is-builder-active .crm-card-layout__section.is-selected .crm-card-layout__section-title,
+    .crm-process-workspace.is-builder-active .crm-card-layout__section.is-selected .crm-card-layout__section-title {
         color: #2563eb;
     }
 
@@ -860,20 +883,22 @@
         background: rgba(245, 158, 11, 0.12);
     }
 
+    .crm-card-layout-field__readonly {
+        min-height: 44px;
+        padding: 10px 12px;
+        border: 1px solid rgba(148, 163, 184, 0.12);
+        border-radius: 12px;
+        background: rgba(248, 250, 252, 0.7);
+        color: #0f172a;
+        display: flex;
+        align-items: center;
+        line-height: 1.4;
+    }
+
     .crm-card-layout__section.is-empty .crm-card-layout__items::before {
         content: "Перетащите сюда поле или добавьте его из панели справа";
         color: #94a3b8;
         font-size: 0.92rem;
-    }
-
-    @@media (max-width: 1279.98px) {
-        .crm-card-layout.is-builder-active .crm-card-layout__workspace {
-            grid-template-columns: 1fr;
-        }
-
-        .crm-card-layout__builder {
-            position: static;
-        }
     }
 </style>
 
